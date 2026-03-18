@@ -1,0 +1,17 @@
+#!/usr/bin/make -f
+export DH_VERBOSE = 1
+
+%:
+	dh $@
+
+override_dh_auto_build:
+	@if [ -d ../bentopdf-main/dist ]; then \
+		rm -rf static/bento; \
+		mkdir -p static; \
+		cp -a ../bentopdf-main/dist static/bento; \
+	fi
+	@if [ ! -f static/bento/tools.html ] || [ ! -d static/bento/assets ]; then \
+		echo "ERROR: static/bento assets missing. Provide BentoPDF dist or pre-populate static/bento before packaging." >&2; \
+		exit 1; \
+	fi
+	dh_auto_build

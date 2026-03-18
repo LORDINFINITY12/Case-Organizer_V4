@@ -1,0 +1,10 @@
+app.py                         opt/case-organizer/
+caseorg_config.py              opt/case-organizer/
+requirements.txt               opt/case-organizer/
+templates                      opt/case-organizer/
+static/css                     opt/case-organizer/static/
+static/img                     opt/case-organizer/static/
+static/js                      opt/case-organizer/static/
+static/bento                   opt/case-organizer/static/
+services                       opt/case-organizer/
+debian/usr-bin-case-organizer  usr/bin/case-organizer

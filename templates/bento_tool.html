@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="color-scheme" content="light dark">
+  <script>
+      (function () {
+          try {
+              const KEY = 'caseOrg.theme';
+              const saved = localStorage.getItem(KEY);
+              const wantsDark = saved ? (saved === 'dark')
+                  : (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
+              const defaultDark = true;
+              const useDark = saved ? (saved === 'dark') : defaultDark || wantsDark;
+              if (useDark) document.documentElement.setAttribute('data-theme', 'dark');
+          } catch (e) {}
+      })();
+  </script>
+  <title>Case Organizer – {{ bento_title }}</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" />
+  <link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/regular/style.css" />
+  {% for tag in bento_head_tags %}
+    {{ tag | safe }}
+  {% endfor %}
+  <link rel="stylesheet" href="{{ static_url('css/style.css') }}" />
+  <link rel="icon" type="image/png" href="{{ url_for('static', filename='img/Case_Organizer_logo.png') }}" />
+</head>
+<body data-role="{{ current_user.role if current_user else '' }}">
+  <div class="app-shell">
+    <header class="topbar">
+      <a href="{{ url_for('home') }}" class="brand">Case Organizer</a>
+      <div class="spacer"></div>
+      {% if current_user %}
+        <div class="user" data-user-menu>
+          <span class="user-menu-toggle"
+                role="button"
+                tabindex="0"
+                data-user-menu-toggle
+                aria-haspopup="menu"
+                aria-expanded="false"
+                aria-label="Toggle account menu"
+                title="Account menu">
+            <span class="user-email-display">{{ current_user.email }}</span>
+            <i class="fa-solid fa-chevron-down" aria-hidden="true"></i>
+          </span>
+          <div class="user-menu-panel" data-user-menu-panel role="menu" hidden>
+            <a href="{{ url_for('messages_home') }}" class="user-menu-item" role="menuitem">
+              <i class="fa-solid fa-envelope" aria-hidden="true"></i>
+              <span class="user-menu-label">Mail</span>
+              {% if unread_count %}
+                <span class="badge">{{ unread_count }}</span>
+              {% endif %}
+            </a>
+            <a href="{{ url_for('account') }}" class="user-menu-item" role="menuitem">
+              <i class="fa-solid fa-user" aria-hidden="true"></i>
+              <span class="user-menu-label">My Account</span>
+            </a>
+            <a href="{{ url_for('pdf_tools_home') }}" class="user-menu-item" role="menuitem">
+              <i class="fa-solid fa-file-pdf" aria-hidden="true"></i>
+              <span class="user-menu-label">PDF Editing Tools</span>
+            </a>
+            <a href="{{ url_for('invoice_form') }}" class="user-menu-item" role="menuitem">
+              <i class="fa-solid fa-file-invoice-dollar" aria-hidden="true"></i>
+              <span class="user-menu-label">Generate Invoice</span>
+            </a>
+            {% if current_user.role == 'admin' %}
+              <a href="{{ url_for('admin_settings') }}" class="user-menu-item" role="menuitem">
+                <i class="fa-solid fa-gear" aria-hidden="true"></i>
+                <span class="user-menu-label">Settings</span>
+              </a>
+            {% endif %}
+          </div>
+        </div>
+      {% endif %}
+      {% if not current_user %}
+        <div class="user">Guest</div>
+      {% endif %}
+      <button id="theme-toggle" class="theme-toggle" title="Toggle theme" aria-label="Toggle theme">
+        <i class="fa-solid fa-moon"></i>
+      </button>
+      <a href="{{ url_for('logout') }}" class="logout" title="Logout">
+        <i class="fa-solid fa-right-from-bracket"></i>
+      </a>
+    </header>
+
+    <main class="home enter-animate bento-tool-page">
+      {% include "_flash.html" %}
+
+      <section class="bento-tool-shell {{ bento_body_class }}" aria-label="{{ bento_title }}">
+        {{ bento_body }}
+      </section>
+    </main>
+  </div>
+
+  <script>
+    window.CaseOrg = Object.assign(window.CaseOrg || {}, {
+      isAdmin: {{ (current_user and current_user.role == 'admin') | tojson }}
+    });
+  </script>
+  <script src="{{ static_url('js/main.js') }}"></script>
+  <script>
+    document.addEventListener("DOMContentLoaded", () => {
+      const backBtn = document.getElementById("back-to-tools");
+      if (backBtn) {
+        backBtn.addEventListener("click", (event) => {
+          event.preventDefault();
+          event.stopImmediatePropagation();
+          window.location.href = {{ bento_back_url | tojson }};
+        }, true);
+      }
+    });
+  </script>
+</body>
+</html>
