@@ -1,0 +1,1 @@
+import{W as n}from"./wasm-provider-CogQP8mP.js";function e(r){const o=n.getUrl(r);if(o)return console.log(`[WASM Config] Using configured URL for ${r}: ${o}`),o;console.warn(`[WASM Config] No URL configured for ${r}. Feature unavailable.`)}function s(r){return n.isConfigured(r)}export{e as g,s as i};

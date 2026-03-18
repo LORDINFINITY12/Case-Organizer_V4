@@ -1,0 +1,103 @@
+case-organizer (4.1.0) stable; urgency=high
+
+  * Added session cookie security flags (HttpOnly, SameSite) to harden
+    authentication handling.
+  * Added standard security response headers including CSP and
+    X-Frame-Options.
+  * Removed hardcoded debug=True and enforced proper production configuration.
+  * Implemented persistent login sessions (Gmail-style) with 30-day duration,
+    database-backed storage, and sliding expiry.
+  * Added comprehensive automated test suite (75 tests passing).
+  * Prepared production WSGI server configuration using waitress.
+  * Addressed datetime.utcnow() deprecation across codebase; remaining
+    instances pending cleanup.
+  * Identified unauthenticated access in API routes (/api/years,
+    /api/months, /api/cases, /api/cases/search, /create-case); login
+    enforcement pending.
+  * Noted residual cleanup items including improper stdout logging,
+    silent exception handling, lack of systemd sandboxing, and minor
+    thread-safety concerns.
+
+ -- Izumi <swarajswarupaggarwal@gmail.com>  Tue, 18 Mar 2026 12:00:00 +0530
+
+case-organizer (4.0.3) stable; urgency=medium
+
+  * Added Court/Forum selection to Case Law (Supreme Court, Federal Court,
+    Privy Council, High Court with searchable dropdown for all current and
+    historical Indian High Courts).
+  * Added structured citation system with support for INSC, SCC, SCC Online,
+    SCR, and AIR journal formats, replacing free-text citation input.
+  * Added Edit Case Law form (via View/Edit Note) allowing full metadata
+    editing including court, citations, classification, and notes.
+  * Added migration logic to parse existing free-text citations into
+    structured rows; legacy citations shown with banner for manual correction.
+  * Added new API endpoints: GET /case-law/courts, GET /case-law/<id>/detail,
+    PUT /case-law/<id>/edit for court data, full case detail, and metadata
+    editing respectively.
+  * Added Citation search tab in Search Case Law, querying the normalized
+    case_law_citations table by journal, year, volume, and page.
+  * Replaced all native <select> dropdowns (except Advanced Search bar) with
+    custom Long-List Dropdown component for consistent styling and controlled
+    scroll height across light and dark themes.
+  * Replaced "We're Representing" dropdown in Create Case with tab-style
+    toggle buttons (Petitioner / Respondent).
+  * Added auto flip-up positioning for dropdown panels when near the bottom
+    of the viewport, preventing page scroll push-down.
+  * Added bidirectional year sync between Decision Year and citation row year
+    fields; new citation rows auto-populate year from existing context.
+  * Enforced integer-only input on citation Year, Volume, and Page/Entry
+    fields via keydown filtering, paste validation, and input sanitization.
+  * Added "Constitutional" sub-type to Commercial cases on both Create Case
+    and Case Law sides.
+
+ -- Izumi <swarajswarupaggarwal@gmail.com>  Tue, 17 Mar 2026 12:00:00 +0530
+
+case-organizer (4.0.2) stable; urgency=high
+
+  * Improved Note.json edit modal layout by tightening field spacing and
+    reducing scrollbar interference with note textarea controls.
+  * Added a left-edge resize handle for Case Notes and Case Law note textareas,
+    while keeping native bottom-right resize support.
+  * Increased default note editor textarea height and constrained Create Case
+    "Additional Notes" resizing to stay within form bounds.
+  * Added "Office Reports" as a Manage Case subcategory (alongside
+    Orders/Judgments and Primary Documents) for Criminal, Civil, and Commercial.
+  * Standardized invoice date handling to DD-MM-YYYY in UI and backend, with
+    validation/normalization at save time.
+  * Increased generated invoice top margin by an additional inch to better fit
+    larger printed letterheads.
+  * Added AFK-aware session keepalive so active typing/editing and in-browser
+    processing no longer trigger premature auto logout.
+
+ -- Izumi <swarajswarupaggarwal@gmail.com>  Thu, 20 Feb 2025 15:00:00 +0530
+
+case-organizer (4.0.1) stable; urgency=high
+
+  * Fixed Manage Case uploads returning "Bad JSON" for large/merged PDFs in
+    deployed environments by hardening upload handling and response paths.
+  * Added JSON-safe upload error handling for /manage-case/upload and
+    /case-law/upload (400/413/500), with clearer operator-facing diagnostics.
+  * Removed Flask/Werkzeug body-size caps for uploads and introduced dedicated
+    upload spooling via CASEORG_UPLOAD_TMP_DIR.
+  * Updated Debian defaults to use /var/lib/case-organizer/upload_spool for
+    upload temp storage.
+  * Fixed homepage horizontal overflow that created a blank scrollable area on
+    the right side of the UI.
+  * Added markdown rendering for Case Notes ("Additional Notes") and Case Law
+    notes ("Brief/Note") in the UI, while keeping existing JSON note storage.
+  * Extended markdown rendering to the Search Case Law preview card ("Note
+    preview") and preserved markdown structure in generated note summaries.
+  * Fixed duplicate/raw preface text above markdown previews in Search Case Law
+    by removing note-text fallback from `text_preview` and hiding empty snippets.
+
+ -- Izumi <swarajswarupaggarwal@gmail.com>  Tue, 17 Feb 2026 18:30:00 +0530
+
+case-organizer (4.0.0) stable; urgency=medium
+
+  * Replaced the PDF tools hub with the BentoPDF suite and integrated tool search.
+  * Wrapped Bento tool pages with the Case Organizer top bar and unified theming.
+  * Stripped Bento "How It Works", related tools, FAQ, and footer sections from tool pages.
+  * Served PDF.js viewer pages directly to restore tool-specific toolbars (e.g., Add Stamps).
+  * Improved /bento routing and PDF tool navigation back to Case Organizer.
+
+ -- Izumi <swarajswarupaggarwal@gmail.com>  Fri, 06 Feb 2026 12:00:00 +0530

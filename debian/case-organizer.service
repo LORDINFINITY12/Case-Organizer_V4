@@ -1,0 +1,23 @@
+[Unit]
+Description=Case Organizer
+After=network.target
+
+[Service]
+Type=simple
+User=caseorg
+Group=caseorg
+EnvironmentFile=-/etc/case-organizer/case-organizer.env
+WorkingDirectory=/opt/case-organizer
+ExecStart=/usr/bin/python3 /opt/case-organizer/app.py
+Restart=on-failure
+
+# Sandboxing — PrivateTmp/NoNewPrivileges lock down privilege escalation,
+# ProtectSystem=full makes /usr and /boot read-only.  Data paths under
+# /var/lib and user-chosen mounts remain writable.
+PrivateTmp=yes
+NoNewPrivileges=yes
+ProtectSystem=full
+
+[Install]
+WantedBy=multi-user.target
+
