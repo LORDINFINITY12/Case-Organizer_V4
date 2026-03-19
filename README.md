@@ -186,10 +186,10 @@ http://localhost:5000
 
 ```bash
 # Download the latest release
-wget https://github.com/LORDINFINITY12/case-organizer-v3/releases/download/v4.0.3/case-organizer_4.0.3_all.deb
+wget https://github.com/LORDINFINITY12/case-organizer-v3/releases/download/v4.2/case-organizer_4.2_all.deb
 
 # Install the package
-sudo dpkg -i case-organizer_4.0.3_all.deb
+sudo dpkg -i case-organizer_4.2_all.deb
 
 # Enable and start the service
 sudo systemctl enable --now case-organizer.service
@@ -241,4 +241,4 @@ The PDF editing tools integrated into Case Organizer (Merge, Split, Compress, OC
 ---
 
 **License:** GNU AGPL v3.0 with Additional Terms (see LICENSE for details)
-**Current Release:** v4.0.3 (March 2026)
+**Current Release:** v4.2 (March 2026)

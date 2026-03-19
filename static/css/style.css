@@ -19,6 +19,7 @@ body {
 }
 body {
     margin: 0;
+    font-size: 14px;
     font-family:
         Inter,
         system-ui,
@@ -29,6 +30,12 @@ body {
         Arial;
     color: var(--text);
     background: var(--bg);
+}
+/* Force all native form controls to use the page font instead of the
+   browser UA stylesheet (which uses a different system-UI size). */
+input, select, textarea {
+    font-size: inherit;
+    font-family: inherit;
 }
 
 /* Login */
@@ -933,7 +940,7 @@ body {
     gap: 12px;
 }
 .cls-cite-row .ll-dropdown-panel {
-    max-height: 100px;
+    max-height: 340px;
 }
 .cls-mode-panel[data-mode="advanced"] textarea {
     width: 100%;
@@ -2842,7 +2849,7 @@ input[type="number"].year-input {
   padding-right: 32px;
   border-radius: 12px;
   border: 1px solid #e6e8ef;
-  font-size: 14px;
+  font-size: inherit;
   color: var(--text);
   cursor: pointer;
   user-select: none;
@@ -2883,7 +2890,7 @@ input[type="number"].year-input {
 }
 .ll-dropdown-panel .ll-option {
   padding: 8px 12px;
-  font-size: 14px;
+  font-size: inherit;
   cursor: pointer;
   color: var(--text);
 }

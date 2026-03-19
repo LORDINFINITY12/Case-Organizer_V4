@@ -1,3 +1,16 @@
+case-organizer (4.2.0) stable; urgency=high
+
+  * Deleted the legacy 9-tool server-side PDF suite (~1,800 lines of dead
+    code including all routes, helpers, templates, and static JS). The
+    client-side BentoPDF suite at /bento/ replaces it entirely.
+  * Reorganised and overhauled app.py: consolidated into 17 logical sections,
+    replaced print() with logging, DRY'd duplicated error handlers, and added
+    comprehensive inline comments. Net reduction of ~2,000 lines.
+  * Fixed subsequent bugs introduced by the overhaul across BentoPDF
+    integration, CSP headers, dropdown components, and form logic.
+
+ -- Izumi <swarajswarupaggarwal@gmail.com>  Thu, 19 Mar 2026 12:00:00 +0530
+
 case-organizer (4.1.0) stable; urgency=high
 
   * Added session cookie security flags (HttpOnly, SameSite) to harden
@@ -9,16 +22,15 @@ case-organizer (4.1.0) stable; urgency=high
     database-backed storage, and sliding expiry.
   * Added comprehensive automated test suite (75 tests passing).
   * Prepared production WSGI server configuration using waitress.
-  * Addressed datetime.utcnow() deprecation across codebase; remaining
-    instances pending cleanup.
-  * Identified unauthenticated access in API routes (/api/years,
-    /api/months, /api/cases, /api/cases/search, /create-case); login
-    enforcement pending.
-  * Noted residual cleanup items including improper stdout logging,
-    silent exception handling, lack of systemd sandboxing, and minor
-    thread-safety concerns.
+  * Fully addressed datetime.utcnow() deprecation across the codebase.
+  * Enforced authentication checks across all API routes including /api/years,
+    /api/months, /api/cases, /api/cases/search, and /create-case.
+  * Replaced stdout path printing with proper logging mechanisms.
+  * Removed silent exception handling and introduced explicit error logging.
+  * Added systemd service sandboxing for improved process isolation.
+  * Resolved minor thread-safety issues in timer variables.
 
- -- Izumi <swarajswarupaggarwal@gmail.com>  Tue, 18 Mar 2026 12:00:00 +0530
+ -- Izumi <swarajswarupaggarwal@gmail.com>  Wed, 18 Mar 2026 12:00:00 +0530
 
 case-organizer (4.0.3) stable; urgency=medium
 

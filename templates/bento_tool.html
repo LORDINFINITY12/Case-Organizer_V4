@@ -22,6 +22,14 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" />
   <link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/regular/style.css" />
+  <style>
+    /* Critical inline styles – prevent FOUC while bento CSS + i18n JS load */
+    .bento-tool-shell {
+      background: #111827; min-height: 100vh; color: #e5e7eb;
+      opacity: 0; transition: opacity .2s ease;
+    }
+    .bento-tool-shell.bento-ready { opacity: 1; }
+  </style>
   {% for tag in bento_head_tags %}
     {{ tag | safe }}
   {% endfor %}
@@ -58,7 +66,7 @@
               <i class="fa-solid fa-user" aria-hidden="true"></i>
               <span class="user-menu-label">My Account</span>
             </a>
-            <a href="{{ url_for('pdf_tools_home') }}" class="user-menu-item" role="menuitem">
+            <a href="{{ url_for('bento_tools') }}" class="user-menu-item" role="menuitem">
               <i class="fa-solid fa-file-pdf" aria-hidden="true"></i>
               <span class="user-menu-label">PDF Editing Tools</span>
             </a>
@@ -103,6 +111,9 @@
   <script src="{{ static_url('js/main.js') }}"></script>
   <script>
     document.addEventListener("DOMContentLoaded", () => {
+      const shell = document.querySelector(".bento-tool-shell");
+      if (shell) shell.classList.add("bento-ready");
+
       const backBtn = document.getElementById("back-to-tools");
       if (backBtn) {
         backBtn.addEventListener("click", (event) => {

@@ -750,6 +750,7 @@ function convertSelectToLLD(sel) {
   wrapper.appendChild(panel);
 
   let activeIdx = -1;
+  let _scrollCloseFn = null;
 
   function syncTriggerText() {
     const opt = sel.options[sel.selectedIndex];
@@ -785,20 +786,51 @@ function convertSelectToLLD(sel) {
   function open() {
     if (sel.disabled) return;
     buildOptions();
-    // Show panel first to measure actual height
     panel.classList.remove('flip-up');
-    panel.classList.add('open');
+
+    // Use fixed positioning to escape all ancestor overflow clipping
     const rect = trigger.getBoundingClientRect();
+    panel.style.position = 'fixed';
+    panel.style.left = rect.left + 'px';
+    panel.style.width = rect.width + 'px';
+    panel.style.right = 'auto';
+
+    panel.classList.add('open');
+
     const panelH = panel.offsetHeight;
-    const spaceBelow = window.innerHeight - rect.bottom;
+    const spaceBelow = window.innerHeight - rect.bottom - 2;
+
     if (spaceBelow < panelH && rect.top > spaceBelow) {
+      panel.style.top = 'auto';
+      panel.style.bottom = (window.innerHeight - rect.top + 2) + 'px';
       panel.classList.add('flip-up');
+    } else {
+      panel.style.top = (rect.bottom + 2) + 'px';
+      panel.style.bottom = 'auto';
     }
+
     const cur = panel.querySelector('.ll-option.selected');
-    if (cur) cur.scrollIntoView({ block: 'center' });
+    if (cur) panel.scrollTop = cur.offsetTop - (panel.offsetHeight - cur.offsetHeight) / 2;
+
+    // Close if anything scrolls — fixed panel would detach from trigger
+    _scrollCloseFn = () => { close(); trigger.blur(); };
+    window.addEventListener('scroll', _scrollCloseFn, { capture: true, once: true, passive: true });
   }
 
-  function close() { panel.classList.remove('open', 'flip-up'); activeIdx = -1; }
+  function close() {
+    panel.classList.remove('open', 'flip-up');
+    panel.style.position = '';
+    panel.style.left = '';
+    panel.style.width = '';
+    panel.style.right = '';
+    panel.style.top = '';
+    panel.style.bottom = '';
+    if (_scrollCloseFn) {
+      window.removeEventListener('scroll', _scrollCloseFn, { capture: true });
+      _scrollCloseFn = null;
+    }
+    activeIdx = -1;
+  }
   function isOpen() { return panel.classList.contains('open'); }
 
   function pickIndex(i) {
@@ -1026,6 +1058,7 @@ function wireCourtFields(courtTypeSel, courtNameContainer, searchDropdown) {
   function update() {
     const val = courtTypeSel.value;
     courtNameContainer.innerHTML = '';
+    courtNameContainer._searchDropdown = null;
     if (TOP_COURTS[val]) {
       const info = TOP_COURTS[val];
       const fixed = document.createElement('input');
@@ -1714,13 +1747,11 @@ function createCaseForm(){
         </div>
       </div>
 
-      <!-- Domain -> Subcategory -->
+      <!-- Domain -> Case Type -> Subcategory -->
       <select id="cat"><option value="">Case Category</option><option>Criminal</option><option>Civil</option><option>Commercial</option></select>
-      <select id="subcat" disabled><option value="">Subcategory</option></select>
-
-      <!-- Case Type (domain-specific) -->
       <select id="ctype" disabled><option value="">Case Type</option></select>
       <input type="text" id="ctype-other" placeholder="Case Type (Other)" style="display:none;" />
+      <select id="subcat" disabled><option value="">Subcategory</option></select>
       
       <!-- Courts -->
       <input type="text" id="os" placeholder="Origin State" />
@@ -1770,7 +1801,8 @@ function createCaseForm(){
   $('#cat')?.addEventListener('change', () => {
     const dom = $('#cat').value || '';
     if (dom && SUBCATS[dom]) {
-      populateOptions($('#subcat'), SUBCATS[dom], "Subcategory");
+      const _ccExclude = new Set(["Orders/Judgments", "Office Reports", "Primary Documents"]);
+      populateOptions($('#subcat'), SUBCATS[dom].filter(s => !_ccExclude.has(s)), "Subcategory");
       populateOptions($('#ctype'), CASE_TYPES[dom], "Case Type");
       $('#ctype').disabled = false;
     } else {
@@ -2496,6 +2528,7 @@ function caseLawUploadForm(){
         const elField = document.getElementById(id);
         if (elField) elField.value = '';
       });
+      updateCaseName();
       if (primarySel) primarySel.selectedIndex = 0;
       if (caseTypeSel) {
         caseTypeSel.innerHTML = '<option value="">Case Type</option>';
