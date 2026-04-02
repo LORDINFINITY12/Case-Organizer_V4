@@ -4271,9 +4271,30 @@ def bento_tools(filename: str = ""):
             if not body_html:
                 body_html = _extract_bento_body(html)
             if body_html:
+                title = _bento_title_from_filename(filename)
+                # FIX (v4.2.1): Long title flash — bento tool HTML pages
+                # contain full SEO <h1> titles (e.g. "Compress PDF Free
+                # Online - Reduce File Size Fast").  The i18n JS that
+                # shortens them loads asynchronously after DOMContentLoaded,
+                # causing a visible flash of the long title.  We replace
+                # the <h1> content server-side with the short `bento_title`
+                # we already derive from the filename, AND strip the
+                # data-i18n attribute so the bento i18n JS does not
+                # re-process the heading (which would cause a second flash
+                # as it clears and re-sets the text content).
+                def _replace_h1(m):
+                    return m.group(1) + m.group(2) + m.group(3) + title + m.group(4)
+
+                body_html = re.sub(
+                    r"(<h1\b)([^>]*)\s*data-i18n=\"[^\"]*\"([^>]*>)[^<]*(</h1>)",
+                    _replace_h1,
+                    body_html,
+                    count=1,
+                    flags=re.IGNORECASE,
+                )
                 return render_template(
                     "bento_tool.html",
-                    bento_title=_bento_title_from_filename(filename),
+                    bento_title=title,
                     bento_head_tags=_extract_bento_head_tags(html),
                     bento_body=Markup(body_html),
                     bento_body_class=body_class,

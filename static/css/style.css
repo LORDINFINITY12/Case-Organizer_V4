@@ -2113,6 +2113,23 @@ input[type="number"].year-input {
     padding: 0;
 }
 
+/* FIX (v4.2.1): Vertically-centered tool layout — 7 upstream bento tool
+   pages (pdf-to-text, json-to-pdf, etc.) use `justify-center` and
+   `items-center` without `flex-col` on their outer wrapper, which
+   vertically centres the uploader in a full-viewport container.  Inside
+   our shell (with a topbar above), this pushes the upload box halfway
+   down.  The working 102 tools use `flex-col items-center justify-start`.
+   We normalise all tools to match that pattern and cap the min-height so
+   the container doesn't inflate to 100vh. */
+.bento-tool-shell > .min-h-screen {
+    flex-direction: column !important;
+    align-items: center !important;
+    justify-content: flex-start !important;
+    min-height: auto !important;
+    padding-top: 48px;
+    padding-bottom: 48px;
+}
+
 .bento-tool-card {
     position: relative;
     min-height: 190px;

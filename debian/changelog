@@ -1,3 +1,13 @@
+case-organizer (4.2.1) stable; urgency=medium
+
+  * Fixed dropdown scroll closing immediately on subcategory menus in
+    Manage Case and all Long-List Dropdown converted selects.
+  * Fixed long SEO title flash when loading individual PDF tools.
+  * Fixed jittery fade-in on PDF Editing Tools pages.
+  * Fixed upload box positioned halfway down the page on 7 PDF tools.
+
+ -- Izumi <swarajswarupaggarwal@gmail.com>  Thu, 02 Apr 2026 12:00:00 +0530
+
 case-organizer (4.2.0) stable; urgency=high
 
   * Deleted the legacy 9-tool server-side PDF suite (~1,800 lines of dead

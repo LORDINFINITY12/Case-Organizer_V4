@@ -812,9 +812,15 @@ function convertSelectToLLD(sel) {
     const cur = panel.querySelector('.ll-option.selected');
     if (cur) panel.scrollTop = cur.offsetTop - (panel.offsetHeight - cur.offsetHeight) / 2;
 
-    // Close if anything scrolls — fixed panel would detach from trigger
-    _scrollCloseFn = () => { close(); trigger.blur(); };
-    window.addEventListener('scroll', _scrollCloseFn, { capture: true, once: true, passive: true });
+    // FIX (v4.2.1): Dropdown scroll — the previous handler closed the panel on
+    // ANY scroll event, including scrolling *within* the dropdown panel itself.
+    // Now we check whether the scroll originated inside the panel and only close
+    // on external scrolls (e.g. the page body scrolling behind the fixed panel).
+    _scrollCloseFn = (evt) => {
+      if (evt.target === panel || panel.contains(evt.target)) return;
+      close(); trigger.blur();
+    };
+    window.addEventListener('scroll', _scrollCloseFn, { capture: true, passive: true });
   }
 
   function close() {

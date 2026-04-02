@@ -23,12 +23,17 @@
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" />
   <link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/regular/style.css" />
   <style>
-    /* Critical inline styles – prevent FOUC while bento CSS + i18n JS load */
+    /* Critical inline styles – prevent FOUC while bento CSS + i18n JS load.
+       FIX (v4.2.1): Jittery page load — the previous approach used
+       opacity: 0 with a 0.2s transition, producing 2-3 visible frames
+       of the page fading in.  Switching to visibility: hidden → visible
+       is instantaneous (single-frame reveal) while still preventing FOUC
+       and preserving layout during the hidden phase. */
     .bento-tool-shell {
       background: #111827; min-height: 100vh; color: #e5e7eb;
-      opacity: 0; transition: opacity .2s ease;
+      visibility: hidden;
     }
-    .bento-tool-shell.bento-ready { opacity: 1; }
+    .bento-tool-shell.bento-ready { visibility: visible; }
   </style>
   {% for tag in bento_head_tags %}
     {{ tag | safe }}
