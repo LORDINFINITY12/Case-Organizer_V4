@@ -1,3 +1,30 @@
+case-organizer (4.2.2) stable; urgency=medium
+
+  * Redesigned basic search to return matching case names instead of
+    individual files; clicking a case opens its full directory tree for
+    browsing.
+  * Added new POST /api/delete-item endpoint supporting deletion of both
+    files and directories (recursive via shutil.rmtree), with depth guard
+    preventing deletion of year/month top-level directories.
+  * Added admin-only delete buttons to case folders in search results and
+    to subdirectories within the directory tree browser.
+  * Added "Manage case" button (three-line icon) on search result case
+    rows that opens the case directly in the Manage Case form with
+    year/month/case pre-selected.
+  * Filtered Case Law directories from basic/advanced search results by
+    restricting the year-directory scan to 4-digit year names only.
+  * Updated /api/delete-item to accept relative paths (rel parameter) in
+    addition to absolute paths, used by directory tree delete buttons.
+  * Updated advanced search to also render case-name results when no
+    domain/subcategory is specified.
+  * Added dark-mode accent border for case result rows and dark-mode
+    folder hover styling.
+  * Styled all delete buttons red across light and dark themes.
+  * Fixed pre-existing XSS vector in directory tree rendering by escaping
+    directory names with escapeHtml().
+
+ -- Izumi <swarajswarupaggarwal@gmail.com>  Fri, 10 Apr 2026 12:00:00 +0530
+
 case-organizer (4.2.1) stable; urgency=medium
 
   * Fixed dropdown scroll closing immediately on subcategory menus in

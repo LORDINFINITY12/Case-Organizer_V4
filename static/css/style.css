@@ -1736,6 +1736,35 @@ input[type="number"].year-input {
 .result-item.folder:hover {
     background: #eef4ff;
 }
+:root[data-theme="dark"] .result-item.folder:hover {
+    background: #1a2233;
+}
+.result-item.case-result {
+    border-left: 3px solid var(--accent);
+    flex-wrap: wrap;
+}
+:root[data-theme="dark"] .result-item.case-result {
+    border-left: 3px solid var(--accent);
+}
+.case-meta {
+    font-size: 0.82em;
+    color: #6b7280;
+    margin-top: 6px;
+    padding-top: 2px;
+}
+:root[data-theme="dark"] .case-meta {
+    color: #9ca3af;
+}
+.result-item .icon-btn[title="Delete"],
+.result-item .icon-btn[title="Delete folder"],
+.result-item .icon-btn[title="Delete case folder"] {
+    color: #dc2626;
+}
+:root[data-theme="dark"] .result-item .icon-btn[title="Delete"],
+:root[data-theme="dark"] .result-item .icon-btn[title="Delete folder"],
+:root[data-theme="dark"] .result-item .icon-btn[title="Delete case folder"] {
+    color: #ef4444;
+}
 
 /* Messages */
 .messages-layout {

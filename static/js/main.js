@@ -1194,7 +1194,11 @@ async function runBasicSearch(){
   if (q) url.searchParams.set('q', q);
   const r = await fetch(url);
   const data = await r.json().catch(()=>({results:[]}));
-  renderResults(data.results || []);
+  if (data.mode === 'cases') {
+    renderCaseResults(data.results || [], q);
+  } else {
+    renderResults(data.results || []);
+  }
   activateSearchResetMode('basic');
 }
 
@@ -1218,7 +1222,11 @@ async function runAdvancedSearch(){
 
   const r = await fetch(`/search?${params.toString()}`);
   const data = await r.json().catch(()=>({results:[]}));
-  renderResults(data.results || []);
+  if (data.mode === 'cases') {
+    renderCaseResults(data.results || [], party || '');
+  } else {
+    renderResults(data.results || []);
+  }
   activateSearchResetMode('advanced');
 }
 
@@ -1516,7 +1524,7 @@ function buildResultItem(rec) {
       if (!ok) return;
 
       try {
-        const resp = await fetch('/api/delete-file', {
+        const resp = await fetch('/api/delete-item', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': _csrfToken() },
           body: JSON.stringify({ path: rec.path })
@@ -1555,7 +1563,10 @@ const SEARCH_DEFAULT_HINT = 'Use the search tools above to view results.';
 const dirSearchState = {
   active: false,
   previousScroll: 0,
-  currentPath: ''
+  currentPath: '',
+  searchRootPath: '',
+  savedCaseResults: null,
+  savedQuery: ''
 };
 
 const searchUiState = {
@@ -1603,6 +1614,9 @@ function resetSearchUi(){
   dirSearchState.active = false;
   dirSearchState.previousScroll = 0;
   dirSearchState.currentPath = '';
+  dirSearchState.searchRootPath = '';
+  dirSearchState.savedCaseResults = null;
+  dirSearchState.savedQuery = '';
 
   const dirBtn = document.getElementById('dir-search');
   if (dirBtn) {
@@ -1632,6 +1646,9 @@ function renderResults(list) {
     dirSearchState.active = false;
     dirSearchState.previousScroll = 0;
     dirSearchState.currentPath = '';
+    dirSearchState.searchRootPath = '';
+    dirSearchState.savedCaseResults = null;
+    dirSearchState.savedQuery = '';
     const dirBtn = document.getElementById('dir-search');
     if (dirBtn) {
       dirBtn.classList.remove('active');
@@ -1652,6 +1669,165 @@ function renderResults(list) {
   list.forEach(rec => host.appendChild(buildResultItem(rec)));
 }
 
+// ------------- Open a case in Manage Case form -------------------------
+function openCaseInManage(year, month, caseName) {
+  // Activate the Manage Case card
+  const manageCard = document.getElementById('card-manage');
+  if (manageCard) manageCard.click();
+
+  // Wait for the form to render, then pre-select year/month/case
+  requestAnimationFrame(async () => {
+    const yearSel  = document.getElementById('mc-year');
+    const monthSel = document.getElementById('mc-month');
+    const caseSel  = document.getElementById('mc-case');
+    if (!yearSel || !monthSel || !caseSel) return;
+
+    // Ensure years are loaded
+    if (!Array.from(yearSel.options).some(opt => opt.value === year)) {
+      const r = await fetch('/api/years');
+      const data = await r.json().catch(() => ({years:[]}));
+      yearSel.innerHTML = '<option value="">Year</option>';
+      (data.years || []).forEach(y => {
+        const o = document.createElement('option'); o.value = y; o.textContent = y; yearSel.append(o);
+      });
+    }
+    yearSel.value = year;
+
+    // Load months
+    const mResp = await fetch(`/api/months?${new URLSearchParams({year})}`);
+    const mData = await mResp.json().catch(() => ({months:[]}));
+    monthSel.innerHTML = '<option value="">Month</option>';
+    (mData.months || []).forEach(m => {
+      const o = document.createElement('option'); o.value = m; o.textContent = m; monthSel.append(o);
+    });
+    monthSel.disabled = false;
+    monthSel.value = month;
+
+    // Load cases
+    const cResp = await fetch(`/api/cases?${new URLSearchParams({year, month})}`);
+    const cData = await cResp.json().catch(() => ({cases:[]}));
+    caseSel.innerHTML = '<option value="">Case (Petitioner v. Respondent)</option>';
+    (cData.cases || []).forEach(cn => {
+      const o = document.createElement('option'); o.value = cn; o.textContent = cn; caseSel.append(o);
+    });
+    caseSel.disabled = false;
+    caseSel.value = caseName;
+    caseSel.dispatchEvent(new Event('change'));
+  });
+}
+
+// ------------- Case-name search results --------------------------------
+function renderCaseResults(list, query) {
+  const host = document.getElementById('results');
+  if (!host) return;
+
+  // Exit directory search mode if active
+  if (dirSearchState.active) {
+    dirSearchState.active = false;
+    dirSearchState.previousScroll = 0;
+    dirSearchState.currentPath = '';
+    dirSearchState.searchRootPath = '';
+    const dirBtn = document.getElementById('dir-search');
+    if (dirBtn) {
+      dirBtn.classList.remove('active');
+      dirBtn.textContent = 'Directory Search';
+      dirBtn.setAttribute('aria-pressed', 'false');
+    }
+  }
+
+  // Save for returning from directory browsing
+  dirSearchState.savedCaseResults = list;
+  dirSearchState.savedQuery = query || '';
+
+  host.innerHTML = '';
+  if (!list || !list.length) {
+    const empty = document.createElement('div');
+    empty.className = 'result-item';
+    empty.textContent = 'No results.';
+    host.appendChild(empty);
+    return;
+  }
+
+  list.forEach(rec => {
+    const row = document.createElement('div');
+    row.className = 'result-item folder case-result';
+    row.dataset.rel = rec.rel;
+
+    const nameEl = document.createElement('div');
+    nameEl.className = 'name';
+    nameEl.innerHTML = `<i class="fa-solid fa-folder-open" style="color: var(--accent); margin-right:6px;"></i>${escapeHtml(rec.case)}`;
+
+    const sub = document.createElement('div');
+    sub.className = 'case-meta';
+    sub.textContent = `${rec.month} ${rec.year}`;
+
+    const info = document.createElement('div');
+    info.style.cssText = 'flex:1;min-width:0;';
+    info.appendChild(nameEl);
+    info.appendChild(sub);
+
+    const actions = document.createElement('div');
+    actions.className = 'icon-row';
+
+    // Manage case button (open in Manage Case form)
+    const manage = document.createElement('button');
+    manage.type = 'button';
+    manage.className = 'icon-btn';
+    manage.setAttribute('title', 'Manage case');
+    manage.innerHTML = `<i class="fa-solid fa-bars" aria-hidden="true" style="line-height:1;"></i><span class="sr-only">Manage</span>`;
+    manage.addEventListener('click', (e) => {
+      e.stopPropagation();
+      openCaseInManage(rec.year, rec.month, rec.case);
+    });
+    actions.appendChild(manage);
+
+    // Admin delete button for the case folder
+    if (CASEORG_IS_ADMIN) {
+      const del = document.createElement('button');
+      del.type = 'button';
+      del.className = 'icon-btn';
+      del.setAttribute('title', 'Delete case folder');
+      del.innerHTML = `<i class="fa-solid fa-trash" aria-hidden="true"></i><span class="sr-only">Delete</span>`;
+      del.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        const ok = await openConfirm(`Delete entire case folder "${escapeHtml(rec.case)}"? This will remove ALL files inside.`);
+        if (!ok) return;
+        try {
+          const casePath = rec.path;
+          const resp = await fetch('/api/delete-item', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': _csrfToken() },
+            body: JSON.stringify({ path: casePath })
+          });
+          const data = await resp.json().catch(() => ({}));
+          if (!resp.ok || !data.ok) {
+            alert(`Delete failed: ${data.msg || 'HTTP ' + resp.status}`);
+            return;
+          }
+          row.remove();
+        } catch (err) {
+          alert(`Delete failed: ${err}`);
+        }
+      });
+      actions.appendChild(del);
+    }
+
+    row.appendChild(info);
+    row.appendChild(actions);
+
+    // Click the row to browse into the case directory
+    row.addEventListener('click', () => {
+      dirSearchState.active = true;
+      dirSearchState.searchRootPath = rec.rel;
+      dirSearchState.currentPath = rec.rel;
+      activateSearchResetMode('basic');
+      showDirLevel(rec.rel);
+    });
+
+    host.appendChild(row);
+  });
+}
+
 // ------------- Directory tree (optional button #dir-search) -------------
 async function showDirLevel(relPath) {
   if (!dirSearchState.active) return;
@@ -1669,28 +1845,76 @@ async function showDirLevel(relPath) {
     if (!dirSearchState.active) return;
     results.innerHTML = '';
 
-    // Up directory
+    // Up directory / back to case list
     if (relPath) {
       const up = document.createElement('div');
       up.className = 'result-item folder';
+      // If we're at the search root (a case folder opened from search), go back to case list
       up.innerHTML = `<i class="fa-solid fa-arrow-up" style="margin-right:6px;"></i> ..`;
-      up.addEventListener('click', () => {
-        const parts = relPath.split('/');
-        parts.pop();
-        showDirLevel(parts.join('/'));
-      });
+      if (dirSearchState.searchRootPath && relPath === dirSearchState.searchRootPath) {
+        up.addEventListener('click', () => {
+          dirSearchState.active = false;
+          dirSearchState.currentPath = '';
+          dirSearchState.searchRootPath = '';
+          if (dirSearchState.savedCaseResults) {
+            renderCaseResults(dirSearchState.savedCaseResults, dirSearchState.savedQuery);
+            activateSearchResetMode('basic');
+          }
+        });
+      } else {
+        up.addEventListener('click', () => {
+          const parts = relPath.split('/');
+          parts.pop();
+          showDirLevel(parts.join('/'));
+        });
+      }
       results.appendChild(up);
     }
 
-    // Directories
+    // Directories (strings from /api/dir-tree)
     (data.dirs || []).forEach(dir => {
+      const dirName = String(typeof dir === 'object' ? dir.name : dir);
+      const dirRelPath = relPath ? `${relPath}/${dirName}` : dirName;
+
       const row = document.createElement('div');
       row.className = 'result-item folder';
-      row.innerHTML = `<i class="fa-solid fa-folder-open" style="color: var(--accent); margin-right:6px;"></i> ${dir}`;
-      row.addEventListener('click', () => {
-        const newPath = relPath ? `${relPath}/${dir}` : dir;
-        showDirLevel(newPath);
-      });
+      const label = document.createElement('span');
+      label.className = 'name';
+      label.innerHTML = `<i class="fa-solid fa-folder-open" style="color: var(--accent); margin-right:6px;"></i>${escapeHtml(dirName)}`;
+      row.appendChild(label);
+      row.addEventListener('click', () => showDirLevel(dirRelPath));
+
+      // Admin delete button for directories (only depth >= 3: year/month/case level and below)
+      const dirDepth = dirRelPath.split('/').length;
+      if (CASEORG_IS_ADMIN && dirDepth >= 3) {
+        const del = document.createElement('button');
+        del.type = 'button';
+        del.className = 'icon-btn';
+        del.setAttribute('title', 'Delete folder');
+        del.innerHTML = `<i class="fa-solid fa-trash" aria-hidden="true"></i><span class="sr-only">Delete</span>`;
+        del.addEventListener('click', async (e) => {
+          e.stopPropagation();
+          const ok = await openConfirm(`Delete folder "${escapeHtml(dirName)}" and ALL its contents?`);
+          if (!ok) return;
+          try {
+            const r = await fetch('/api/delete-item', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': _csrfToken() },
+              body: JSON.stringify({ rel: dirRelPath })
+            });
+            const d = await r.json().catch(() => ({}));
+            if (!r.ok || !d.ok) {
+              alert(`Delete failed: ${d.msg || 'HTTP ' + r.status}`);
+              return;
+            }
+            row.remove();
+          } catch (err) {
+            alert(`Delete failed: ${err}`);
+          }
+        });
+        row.appendChild(del);
+      }
+
       results.appendChild(row);
     });
 

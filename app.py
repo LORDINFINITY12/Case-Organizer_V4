@@ -1969,6 +1969,9 @@ def search():
         for y in years:
             if not y.is_dir():
                 continue
+            # Only consider 4-digit year directories (skip "Case Law" etc.)
+            if not re.fullmatch(r"\d{4}", y.name):
+                continue
             months = [y / month] if month else [d for d in y.iterdir() if d.is_dir()]
             for m in months:
                 if m.is_dir():
@@ -2024,43 +2027,36 @@ def search():
 
         return jsonify({"results": results})
 
-    # FALLBACK: no subcategory provided -> optional broad search
-    # (Only if user didn't specify domain; if domain is provided we already early-returned empty)
-    for root, dirs, files in os.walk(FS_ROOT):
-        # Apply year/month filters by relative path segments
-        try:
-            rel = Path(root).relative_to(FS_ROOT)
-            parts = rel.parts  # e.g., ('2025','Jan','Case Name', 'Some Subdir'...)
-        except Exception:
-            parts = ()
-
-        if year and (len(parts) < 1 or parts[0] != year):
-            continue
-        if month and (len(parts) < 2 or parts[1] != month):
-            continue
-
-        # party filter checks the Case Name when available (3rd segment)
-        if party:
-            case_seg = parts[2] if len(parts) >= 3 else ""
-            if party.lower() not in case_seg.lower():
+    # FALLBACK: no subcategory -> return matching case FOLDERS (not individual files)
+    cases_seen: set[str] = set()
+    case_results: list[dict[str, str]] = []
+    for mdir in month_dirs():
+        for case_dir_path in sorted(mdir.iterdir(), key=lambda p: p.name.lower()):
+            if not case_dir_path.is_dir():
                 continue
-
-        for name in files:
-            if not allowed_file(name):
+            case_name = case_dir_path.name
+            if party and party.lower() not in case_name.lower():
                 continue
-            p = Path(root) / name
-            rel_file = p.relative_to(FS_ROOT)
-
-            if q and (q.lower() not in str(rel_file).lower()):
+            if q and q.lower() not in case_name.lower():
                 continue
-
-            results.append({
-                "file": name,
-                "path": str(p),
-                "rel":  str(rel_file),
+            rel = case_dir_path.relative_to(FS_ROOT)
+            key = str(rel)
+            if key in cases_seen:
+                continue
+            cases_seen.add(key)
+            parts = rel.parts
+            case_results.append({
+                "case": case_name,
+                "year": parts[0] if len(parts) > 0 else "",
+                "month": parts[1] if len(parts) > 1 else "",
+                "rel": key,
+                "path": str(case_dir_path),
             })
-
-    return jsonify({"results": results})
+            if len(case_results) >= 200:
+                break
+        if len(case_results) >= 200:
+            break
+    return jsonify({"mode": "cases", "results": case_results})
 
 
 # ---- delete-file --------------------------------
@@ -2090,6 +2086,57 @@ def api_delete_file():
         return jsonify({"ok": True})
     except FileNotFoundError:
         return jsonify({"ok": False, "msg": "File not found"}), 404
+    except Exception as e:
+        return jsonify({"ok": False, "msg": f"Delete failed: {e}"}), 500
+
+
+# ---- Delete item (file or directory) --------------------------
+
+@app.post("/api/delete-item")
+@require_admin_api
+def api_delete_item():
+    """
+    Delete a file or directory under FS_ROOT, given JSON:
+      {"path": "/full/path/inside/FS_ROOT/.."}
+      OR
+      {"rel": "relative/path/under/FS_ROOT"}
+    Directories are removed recursively.  Year and month directories
+    (depth < 3) are protected from deletion.
+    """
+    try:
+        data = request.get_json(silent=True) or {}
+        raw = (data.get("path") or "").strip()
+        rel_raw = (data.get("rel") or "").strip()
+        if not raw and not rel_raw:
+            return jsonify({"ok": False, "msg": "Missing 'path' or 'rel'"}), 400
+
+        try:
+            if raw:
+                target = _safe_path(Path(raw), FS_ROOT)
+            else:
+                target = _safe_path(FS_ROOT / rel_raw, FS_ROOT)
+        except ValueError:
+            return jsonify({"ok": False, "msg": "Not found"}), 404
+
+        # Prevent deleting FS_ROOT itself, year dirs, or month dirs
+        try:
+            rel = target.relative_to(FS_ROOT.resolve())
+            depth = len(rel.parts)
+        except ValueError:
+            return jsonify({"ok": False, "msg": "Invalid path"}), 400
+        if depth < 3:
+            return jsonify({"ok": False, "msg": "Cannot delete top-level directories"}), 403
+
+        if not target.exists():
+            return jsonify({"ok": False, "msg": "Not found"}), 404
+
+        if target.is_dir():
+            shutil.rmtree(target)
+        else:
+            target.unlink()
+        return jsonify({"ok": True})
+    except FileNotFoundError:
+        return jsonify({"ok": False, "msg": "Not found"}), 404
     except Exception as e:
         return jsonify({"ok": False, "msg": f"Delete failed: {e}"}), 500
 
