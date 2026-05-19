@@ -2,17 +2,29 @@
 
 from __future__ import annotations
 
+import os
 import time
 from typing import Optional
 
 from flask import request
 
+_TRUSTED_PROXY_HOPS = int(os.environ.get("CASEORG_TRUSTED_PROXY", "0"))
+
 
 def _get_client_ip() -> str:
-    """Best-effort client IP, respecting X-Forwarded-For behind a reverse proxy."""
-    forwarded = request.headers.get("X-Forwarded-For", "")
-    if forwarded:
-        return forwarded.split(",")[0].strip()
+    """Return the client IP address.
+
+    When ``CASEORG_TRUSTED_PROXY`` is set to a positive integer *N*, the
+    function trusts *N* proxy hops and extracts the real client IP from the
+    ``X-Forwarded-For`` header.  When unset or ``0`` (the default), only
+    ``request.remote_addr`` is used — safe for direct-to-server deployments.
+    """
+    if _TRUSTED_PROXY_HOPS > 0:
+        forwarded = request.headers.get("X-Forwarded-For", "")
+        if forwarded:
+            parts = [p.strip() for p in forwarded.split(",")]
+            idx = max(0, len(parts) - _TRUSTED_PROXY_HOPS)
+            return parts[idx]
     return request.remote_addr or "unknown"
 
 

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import secrets
 from typing import Any, List
 
 from services.settings import settings_manager
@@ -25,7 +26,7 @@ PASSWORD = _get_secret_legacy("legacy_shared_password")
 SECRET_KEY = (
     os.environ.get("CASEORG_SECRET_KEY")
     or _manager.get("flask_secret_key")
-    or "dev-local-secret-key"
+    or secrets.token_urlsafe(32)  # ephemeral — replaced permanently during /setup
 )
 
 ALLOWED_EXTENSIONS = {"pdf", "docx", "txt", "png", "jpg", "jpeg", "json"}

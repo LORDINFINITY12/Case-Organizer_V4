@@ -1,3 +1,42 @@
+case-organizer (4.3) stable; urgency=high
+
+  * Security: added _safe_path() traversal checks to all routes that
+    construct filesystem paths from user input (api_months, api_cases,
+    create_case, manage_case_upload, api_update_note, api_note,
+    _invoice_target_path).
+  * Security: replaced hardcoded SECRET_KEY fallback with ephemeral
+    secrets.token_urlsafe(32); app raises RuntimeError if no key is
+    configured.
+  * Security: added explicit @require_login / @require_login_api
+    decorators to all routes that previously relied solely on the
+    global setup hook (defense-in-depth).
+  * Security: fixed rate-limit bypass via X-Forwarded-For spoofing;
+    _get_client_ip() now trusts proxy hops only when
+    CASEORG_TRUSTED_PROXY is set.
+  * Security: set SESSION_COOKIE_SECURE in production and added HSTS
+    header (Strict-Transport-Security) when not in debug mode.
+  * Added POST /api/rename-case endpoint (admin-only) with _safe_path
+    validation on both source and target, path separator rejection,
+    depth guard, and conflict check.
+  * Replaced browser prompt() for case renaming with custom blur-overlay
+    modal dialog (Escape / click-outside to cancel).
+  * Replaced per-case hamburger + trash buttons with a unified dropdown
+    action menu (Manage Case, Edit Case Name, Delete Case) positioned
+    via getBoundingClientRect() to avoid container clipping.
+  * Repositioned date field in Create Case form to align with Case Name
+    preview row, pairing petitioner/respondent fields symmetrically.
+  * Unified tab selector styling (Manage Case and Search Case Law) into
+    a consistent segmented control with auto-width columns.
+  * Made Upload Case Law citation input heights uniform with standard
+    form fields.
+  * Removed redundant "We're Representing:" label from Create Case form.
+  * Fixed case-law SQLite "database is locked" errors on SMB/CIFS mounts
+    by moving schema initialisation to startup, adding busy_timeout, and
+    skipping schema setup when tables already exist.
+  * Fixed login box vertical centering regression.
+
+ -- Izumi <swarajswarupaggarwal@gmail.com>  Mon, 19 May 2026 22:00:00 +0530
+
 case-organizer (4.2.2) stable; urgency=medium
 
   * Redesigned basic search to return matching case names instead of

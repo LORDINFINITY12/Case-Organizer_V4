@@ -1479,6 +1479,49 @@ function openConfirm(message) {
   });
 }
 
+function openRenamePrompt(currentName) {
+  return new Promise((resolve) => {
+    const overlay = document.createElement('div');
+    overlay.className = 'rename-overlay';
+    const dialog = document.createElement('div');
+    dialog.className = 'rename-dialog';
+    dialog.innerHTML = `
+      <h3>Rename Case</h3>
+      <input type="text" class="rename-input" spellcheck="false" />
+      <div class="rename-actions">
+        <button type="button" class="btn-ghost rename-cancel">Cancel</button>
+        <button type="button" class="btn-primary rename-save">Rename</button>
+      </div>`;
+    overlay.appendChild(dialog);
+    document.body.appendChild(overlay);
+
+    const input = dialog.querySelector('.rename-input');
+    input.value = currentName || '';
+    requestAnimationFrame(() => {
+      overlay.classList.add('visible');
+      input.focus();
+      input.select();
+    });
+
+    const close = (val) => {
+      overlay.classList.remove('visible');
+      overlay.addEventListener('transitionend', () => overlay.remove(), { once: true });
+      resolve(val);
+    };
+
+    overlay.addEventListener('click', (e) => { if (e.target === overlay) close(null); });
+    dialog.querySelector('.rename-cancel').addEventListener('click', () => close(null));
+    dialog.querySelector('.rename-save').addEventListener('click', () => {
+      const v = input.value.trim();
+      close(v && v !== currentName ? v : null);
+    });
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') { e.preventDefault(); dialog.querySelector('.rename-save').click(); }
+      if (e.key === 'Escape') close(null);
+    });
+  });
+}
+
 function smartTruncate(filename, maxLen = 100) {
   if (!filename || filename.length <= maxLen) return filename || '';
   const extIndex = filename.lastIndexOf('.');
@@ -1739,6 +1782,7 @@ function renderCaseResults(list, query) {
   dirSearchState.savedCaseResults = list;
   dirSearchState.savedQuery = query || '';
 
+  document.querySelectorAll('.case-action-menu').forEach(m => m.remove());
   host.innerHTML = '';
   if (!list || !list.length) {
     const empty = document.createElement('div');
@@ -1769,48 +1813,94 @@ function renderCaseResults(list, query) {
     const actions = document.createElement('div');
     actions.className = 'icon-row';
 
-    // Manage case button (open in Manage Case form)
-    const manage = document.createElement('button');
-    manage.type = 'button';
-    manage.className = 'icon-btn';
-    manage.setAttribute('title', 'Manage case');
-    manage.innerHTML = `<i class="fa-solid fa-bars" aria-hidden="true" style="line-height:1;"></i><span class="sr-only">Manage</span>`;
-    manage.addEventListener('click', (e) => {
+    const menuBtn = document.createElement('button');
+    menuBtn.type = 'button';
+    menuBtn.className = 'icon-btn';
+    menuBtn.setAttribute('title', 'Case actions');
+    menuBtn.innerHTML = `<i class="fa-solid fa-bars" aria-hidden="true" style="line-height:1;"></i><span class="sr-only">Actions</span>`;
+
+    const menu = document.createElement('div');
+    menu.className = 'case-action-menu';
+
+    const manageOpt = document.createElement('button');
+    manageOpt.type = 'button';
+    manageOpt.innerHTML = `<i class="fa-solid fa-folder-open"></i> Manage Case`;
+    manageOpt.addEventListener('click', (e) => {
       e.stopPropagation();
+      menu.classList.remove('open');
       openCaseInManage(rec.year, rec.month, rec.case);
     });
-    actions.appendChild(manage);
+    menu.appendChild(manageOpt);
 
-    // Admin delete button for the case folder
     if (CASEORG_IS_ADMIN) {
-      const del = document.createElement('button');
-      del.type = 'button';
-      del.className = 'icon-btn';
-      del.setAttribute('title', 'Delete case folder');
-      del.innerHTML = `<i class="fa-solid fa-trash" aria-hidden="true"></i><span class="sr-only">Delete</span>`;
-      del.addEventListener('click', async (e) => {
+      const renameOpt = document.createElement('button');
+      renameOpt.type = 'button';
+      renameOpt.innerHTML = `<i class="fa-solid fa-pen"></i> Edit Case Name`;
+      renameOpt.addEventListener('click', async (e) => {
         e.stopPropagation();
+        menu.classList.remove('open');
+        const newName = await openRenamePrompt(rec.case);
+        if (!newName) return;
+        try {
+          const resp = await fetch('/api/rename-case', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': _csrfToken() },
+            body: JSON.stringify({ path: rec.path, new_name: newName })
+          });
+          const data = await resp.json().catch(() => ({}));
+          if (!resp.ok || !data.ok) {
+            alert(`Rename failed: ${data.msg || 'HTTP ' + resp.status}`);
+            return;
+          }
+          nameEl.innerHTML = `<i class="fa-solid fa-folder-open" style="color: var(--accent); margin-right:6px;"></i>${escapeHtml(newName)}`;
+          rec.case = newName;
+          rec.path = data.new_path || rec.path;
+        } catch (err) {
+          alert(`Rename failed: ${err}`);
+        }
+      });
+      menu.appendChild(renameOpt);
+
+      const deleteOpt = document.createElement('button');
+      deleteOpt.type = 'button';
+      deleteOpt.className = 'danger';
+      deleteOpt.innerHTML = `<i class="fa-solid fa-trash"></i> Delete Case`;
+      deleteOpt.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        menu.classList.remove('open');
         const ok = await openConfirm(`Delete entire case folder "${escapeHtml(rec.case)}"? This will remove ALL files inside.`);
         if (!ok) return;
         try {
-          const casePath = rec.path;
           const resp = await fetch('/api/delete-item', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': _csrfToken() },
-            body: JSON.stringify({ path: casePath })
+            body: JSON.stringify({ path: rec.path })
           });
           const data = await resp.json().catch(() => ({}));
           if (!resp.ok || !data.ok) {
             alert(`Delete failed: ${data.msg || 'HTTP ' + resp.status}`);
             return;
           }
+          menu.remove();
           row.remove();
         } catch (err) {
           alert(`Delete failed: ${err}`);
         }
       });
-      actions.appendChild(del);
+      menu.appendChild(deleteOpt);
     }
+
+    menuBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      document.querySelectorAll('.case-action-menu.open').forEach(m => { if (m !== menu) m.classList.remove('open'); });
+      const rect = menuBtn.getBoundingClientRect();
+      menu.style.top = (rect.bottom + 6) + 'px';
+      menu.style.left = (rect.right - menu.offsetWidth) + 'px';
+      menu.classList.toggle('open');
+    });
+
+    actions.appendChild(menuBtn);
+    document.body.appendChild(menu);
 
     row.appendChild(info);
     row.appendChild(actions);
@@ -1953,8 +2043,6 @@ function createCaseForm(){
   wrap.innerHTML = `
     <h3>Create Case</h3>
     <div class="form-grid">
-      <input type="date" id="cc-date" />
-
       <!-- Parties -->
       <input type="text" id="pn" placeholder="Petitioner Name" />
       <input type="text" id="rn" placeholder="Respondent Name" />
@@ -1963,13 +2051,13 @@ function createCaseForm(){
       <input type="text" id="pc" placeholder="Petitioner Contact" />
       <input type="text" id="rc" placeholder="Respondent Contact" />
 
-      <!-- Auto Case Name (preview) -->
+      <!-- Date + Auto Case Name (preview) -->
+      <input type="date" id="cc-date" />
       <input type="text" id="cc-name-preview" placeholder="Case Name (auto)" disabled />
       <input type="hidden" id="cc-name" />
 
       <!-- Representing -->
       <div style="grid-column: span 2;">
-        <label style="display:block;margin:6px 0 4px;">We’re Representing:</label>
         <input type="hidden" id="op" value="Petitioner" />
         <div class="op-tabs" role="tablist">
           <button type="button" class="op-tab active" data-value="Petitioner" role="tab" aria-selected="true">Petitioner</button>
@@ -4215,6 +4303,10 @@ function setupSessionKeepalive(){
 
 // -------------------- Startup wiring (single DOMContentLoaded) --------------------
 document.addEventListener('DOMContentLoaded', () => {
+  document.addEventListener('click', () => {
+    document.querySelectorAll('.case-action-menu.open').forEach(m => m.classList.remove('open'));
+  });
+
   autoDismissFlashes(3000);
 
   // Theme (attribute is bootstrapped inline in <head>; this just syncs UI + listeners)

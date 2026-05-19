@@ -88,7 +88,11 @@ except Exception as e:
 
 
 FS_ROOT = Path(config.FS_ROOT).resolve() if getattr(config, "FS_ROOT", None) else None  # user-defined storage root
-SECRET_KEY = getattr(config, "SECRET_KEY", "dev-local-secret-key")
+SECRET_KEY = getattr(config, "SECRET_KEY", None)
+if not SECRET_KEY:
+    raise RuntimeError(
+        "No SECRET_KEY configured. Run /setup or set CASEORG_SECRET_KEY."
+    )
 ALLOWED_EXTENSIONS = set(getattr(config, "ALLOWED_EXTENSIONS", []))  # e.g. {"pdf","docx","txt","json",...}
 
 POSTFIX_PREFILL_FILE = settings_manager.paths.config_dir / "postfix.json"  # Debian postfix auto-config
@@ -235,6 +239,8 @@ app.config["SEND_FILE_MAX_AGE_DEFAULT"] = STATIC_MAX_AGE
 app.config["MAX_CONTENT_LENGTH"] = None           # no server-side upload cap (proxy handles it)
 app.config["SESSION_COOKIE_HTTPONLY"] = True        # prevent JS access to session cookie
 app.config["SESSION_COOKIE_SAMESITE"] = "Lax"      # CSRF baseline protection
+_debug_mode = os.environ.get("FLASK_DEBUG", "0") == "1"
+app.config["SESSION_COOKIE_SECURE"] = not _debug_mode
 
 _SESSION_CLEANUP_INTERVAL = 3600.0   # purge expired DB sessions at most once per hour
 _SESSION_CLEANUP_LAST_RUN = 0.0
@@ -467,6 +473,8 @@ def _set_security_headers(response):
     response.headers["X-Frame-Options"] = "SAMEORIGIN"
     response.headers["X-XSS-Protection"] = "1; mode=block"
     response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    if not _debug_mode:
+        response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
     if request.path.startswith("/bento"):
         response.headers["Content-Security-Policy"] = _CSP_BENTO
     else:
@@ -998,14 +1006,46 @@ def _migrate_legacy_citations(conn: sqlite3.Connection) -> None:
                 pass  # already migrated
 
 
+def _case_law_schema_ready(conn: sqlite3.Connection) -> bool:
+    """Return True if all expected tables and columns already exist."""
+    tables = {r[0] for r in conn.execute(
+        "SELECT name FROM sqlite_master WHERE type='table'"
+    ).fetchall()}
+    if not {'case_law', 'case_law_fts', 'case_law_citations'}.issubset(tables):
+        return False
+    cols = {r[1] for r in conn.execute('PRAGMA table_info(case_law)').fetchall()}
+    return {'court_type', 'court_name', 'court_abbrev', 'citation_display'}.issubset(cols)
+
+
+def _init_case_law_db() -> None:
+    """Run schema setup once in the main thread before workers start."""
+    try:
+        path = _case_law_db_file()
+    except RuntimeError:
+        return
+    conn = sqlite3.connect(str(path), timeout=30)
+    try:
+        conn.execute('PRAGMA busy_timeout=30000')
+        if _case_law_schema_ready(conn):
+            return
+        _ensure_case_law_schema(conn)
+    except sqlite3.OperationalError as e:
+        if 'locked' in str(e):
+            log.warning("Case-law DB locked during schema init — skipping (schema likely already present)")
+        else:
+            raise
+    finally:
+        conn.close()
+
+
 def get_case_law_db() -> sqlite3.Connection:
     """Return (or create) a per-request connection to the case-law SQLite DB."""
     if 'case_law_db' not in g:
         path = _case_law_db_file()
-        conn = sqlite3.connect(path)
+        conn = sqlite3.connect(str(path), timeout=30)
         conn.row_factory = sqlite3.Row
+        conn.execute('PRAGMA busy_timeout=30000')
         conn.execute('PRAGMA foreign_keys = ON')
-        _ensure_case_law_schema(conn)
         g.case_law_db = conn
     return g.case_law_db
 
@@ -1532,6 +1572,7 @@ def account():
 
 
 @app.route("/")
+@require_login
 def home():
     try:
         return render_template("index.html")
@@ -1683,7 +1724,10 @@ def api_years():
 def api_months():
     year = (request.args.get("year") or "").strip()
     months = []
-    base = FS_ROOT / year
+    try:
+        base = _safe_path(FS_ROOT / year, FS_ROOT)
+    except ValueError:
+        return jsonify({"months": []}), 400
     if year and base.exists() and base.is_dir():
         for m in base.iterdir():
             if m.is_dir():
@@ -1699,7 +1743,10 @@ def api_cases():
     year  = (request.args.get("year") or "").strip()
     month = (request.args.get("month") or "").strip()
     cases = []
-    base = FS_ROOT / year / month
+    try:
+        base = _safe_path(FS_ROOT / year / month, FS_ROOT)
+    except ValueError:
+        return jsonify({"cases": []}), 400
     if base.exists() and base.is_dir():
         for d in base.iterdir():
             if d.is_dir():
@@ -1769,6 +1816,10 @@ def create_case():
     year = int(dt.strftime("%Y"))
     month = month_dir_name(dt)
     cdir = case_dir(year, month, case_name)
+    try:
+        cdir = _safe_path(cdir, FS_ROOT)
+    except ValueError:
+        return jsonify({"ok": False, "msg": "Invalid path"}), 400
     cdir.mkdir(parents=True, exist_ok=True)
 
     # Note.json payload (Title Case keys with spaces)
@@ -1825,7 +1876,10 @@ def manage_case_upload():
     if not files:
         return jsonify({"ok": False, "msg": "No files provided."}), 400
 
-    cdir = FS_ROOT / year_sel / month_sel / case_name
+    try:
+        cdir = _safe_path(FS_ROOT / year_sel / month_sel / case_name, FS_ROOT)
+    except ValueError:
+        return jsonify({"ok": False, "msg": "Invalid path"}), 400
     if not cdir.exists():
         return jsonify({"ok": False, "msg": "Case directory does not exist. Create the case first."}), 400
 
@@ -1915,6 +1969,7 @@ def manage_case_upload():
 # ---- Safe file serving (whitelist FS_ROOT) ------------------------------
 
 @app.get("/static-serve")
+@require_login
 def static_serve():
     raw = request.args.get("path", "")
     download = request.args.get("download") in {"1", "true", "yes"}
@@ -1934,6 +1989,7 @@ def static_serve():
 # ---- Search -------------------------------------------------------------
 
 @app.get("/search")
+@require_login_api
 def search():
     """
     Query params:
@@ -2090,6 +2146,48 @@ def api_delete_file():
         return jsonify({"ok": False, "msg": f"Delete failed: {e}"}), 500
 
 
+# ---- Rename case directory ------------------------------------
+
+@app.post("/api/rename-case")
+@require_admin_api
+def api_rename_case():
+    data = request.get_json(silent=True) or {}
+    raw_path = (data.get("path") or "").strip()
+    new_name = normalize_ws(data.get("new_name") or "")
+    if not raw_path or not new_name:
+        return jsonify({"ok": False, "msg": "Missing 'path' or 'new_name'"}), 400
+
+    if "/" in new_name or "\\" in new_name:
+        return jsonify({"ok": False, "msg": "Invalid case name"}), 400
+
+    try:
+        source = _safe_path(Path(raw_path), FS_ROOT)
+    except ValueError:
+        return jsonify({"ok": False, "msg": "Invalid path"}), 400
+
+    if not source.is_dir():
+        return jsonify({"ok": False, "msg": "Case directory not found"}), 404
+
+    try:
+        rel = source.relative_to(FS_ROOT.resolve())
+    except ValueError:
+        return jsonify({"ok": False, "msg": "Invalid path"}), 400
+    if len(rel.parts) < 3:
+        return jsonify({"ok": False, "msg": "Cannot rename top-level directories"}), 403
+
+    target = source.parent / new_name
+    try:
+        _safe_path(target, FS_ROOT)
+    except ValueError:
+        return jsonify({"ok": False, "msg": "Invalid new name"}), 400
+
+    if target.exists():
+        return jsonify({"ok": False, "msg": "A case with that name already exists"}), 409
+
+    source.rename(target)
+    return jsonify({"ok": True, "new_path": str(target)})
+
+
 # ---- Delete item (file or directory) --------------------------
 
 @app.post("/api/delete-item")
@@ -2144,6 +2242,7 @@ def api_delete_item():
 # ---- Directory Search --------------------------
 
 @app.get("/api/dir-tree")
+@require_login_api
 def api_dir_tree():
     """
     List directory contents starting from FS_ROOT.
@@ -2689,6 +2788,7 @@ def case_law_upload():
 
 # ---- GET /case-law/search — FTS5 full-text + faceted search --------------
 @app.get("/case-law/search")
+@require_login_api
 def case_law_search():
     if not FS_ROOT:
         return jsonify({"results": [], "filters": {}})
@@ -2870,6 +2970,7 @@ def case_law_delete(case_id: int):
 
 # ---- GET /case-law/<id>/download — stream the judgement file -------------
 @app.get("/case-law/<int:case_id>/download")
+@require_login
 def case_law_download(case_id: int):
     if not FS_ROOT:
         return "Not found", 404
@@ -2892,6 +2993,7 @@ def case_law_download(case_id: int):
 
 # ---- GET|POST /case-law/<id>/note — read or update Note.json -------------
 @app.route("/case-law/<int:case_id>/note", methods=["GET", "POST"])
+@require_login_api
 def case_law_note(case_id: int):
     if not FS_ROOT:
         return case_law_error("Storage root is not configured yet.")
@@ -2991,6 +3093,7 @@ def case_law_note(case_id: int):
 
 # ---- GET /case-law/courts — JSON list of courts for the form dropdowns ---
 @app.get("/case-law/courts")
+@require_login_api
 def case_law_courts():
     """Return all court/forum and citation journal metadata for the frontend."""
     return jsonify({
@@ -3007,6 +3110,7 @@ def case_law_courts():
 
 # ---- GET /case-law/<id>/detail — full record JSON for the edit modal -----
 @app.get("/case-law/<int:case_id>/detail")
+@require_login_api
 def case_law_detail(case_id: int):
     """Return full case data including structured citations for the edit form."""
     if not FS_ROOT:
@@ -3166,8 +3270,12 @@ def case_law_edit(case_id: int):
 # ---- API: fetch Note.json content (for modal) --------------------------
 # ---- Note.json CRUD for ordinary cases (non-case-law) --------------------
 @app.route("/api/note/<year>/<month>/<case_name>", methods=["POST"])
+@require_login_api
 def api_update_note(year, month, case_name):
-    cdir = FS_ROOT / year / month / case_name
+    try:
+        cdir = _safe_path(FS_ROOT / year / month / case_name, FS_ROOT)
+    except ValueError:
+        return jsonify({"ok": False, "msg": "Invalid path"}), 400
     note_path = cdir / "Note.json"
 
     if not note_path.exists():
@@ -3186,6 +3294,7 @@ def api_update_note(year, month, case_name):
 
 # ---- API: Create Note.json --------------------------------
 @app.post("/api/create-note")
+@require_login_api
 def api_create_note():
     data = request.get_json(silent=True) or {}
     case_path = (data.get("case_path") or "").strip()
@@ -3234,8 +3343,12 @@ def api_create_note():
         return jsonify({"ok": False, "msg": f"Write failed: {e}"}), 500
 
 @app.route("/api/note/<year>/<month>/<case_name>", methods=["GET", "POST"])
+@require_login_api
 def api_note(year, month, case_name):
-    cdir = FS_ROOT / year / month / case_name
+    try:
+        cdir = _safe_path(FS_ROOT / year / month / case_name, FS_ROOT)
+    except ValueError:
+        return jsonify({"ok": False, "msg": "Invalid path"}), 400
     note_path = cdir / "Note.json"
     if not note_path.exists():
         template = make_note_json({})
@@ -3786,7 +3899,10 @@ def _invoice_target_path(
 
     case_invoices_dir: Optional[Path] = None
     if case_year and case_month and case_name:
-        base_dir = FS_ROOT / case_year / case_month / case_name
+        try:
+            base_dir = _safe_path(FS_ROOT / case_year / case_month / case_name, FS_ROOT)
+        except ValueError:
+            raise InvoiceStorageError("Invalid case path.")
         if not base_dir.exists():
             raise InvoiceStorageError("Case directory not found on disk.")
         case_invoices_dir = base_dir / "Invoices"
@@ -4698,6 +4814,7 @@ def api_session_keepalive():
 
 if __name__ == "__main__":
     ensure_root()
+    _init_case_law_db()
     _host = os.environ.get("CASEORG_HOST", os.environ.get("FLASK_HOST", "0.0.0.0"))
     _port = int(os.environ.get("CASEORG_PORT", os.environ.get("FLASK_PORT", "5000")))
     _debug = os.environ.get("FLASK_DEBUG", "0") == "1"
