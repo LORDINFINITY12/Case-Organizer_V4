@@ -248,4 +248,3 @@ The PDF editing tools integrated into Case Organizer (Merge, Split, Compress, OC
 ---
 
 **License:** GNU AGPL v3.0 with Additional Terms (see LICENSE for details)
-**Current Release:** v4.2 (March 2026)
