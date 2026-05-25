@@ -4,7 +4,14 @@ Case Organizer is a full-stack legal case-management and document-organization p
 It helps law practices structure, archive, and retrieve their case files, generate invoices, and manage internal communication — all within a private, self-hosted environment.
 
 ---
+## AI Use Notice
 
+   ```
+   Version 4.2 onwards I have begun emplyoing the use of Claude Code to assist in bug fixes, patches and UI changes.
+   It has proven to be a rather useful tool, but rest assured, control and quality checks remain with me as the primary maintainer and developer.
+   This notice serves to add to, and maintain a standard of transparency for those who may stumble upon this project.
+   ```
+---
 ## Overview
 
 Version 3 introduced secure email-based authentication, internal messaging, integrated invoicing, and Debian-package deployment for seamless installation on Linux servers.
