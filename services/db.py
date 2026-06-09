@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import sqlite3
 from pathlib import Path
 from typing import Optional
@@ -13,7 +14,7 @@ from services.settings import settings_manager
 
 
 # Global schema version for the application database.
-_SCHEMA_VERSION = 3
+_SCHEMA_VERSION = 6
 
 
 def _app_db_path() -> Path:
@@ -54,6 +55,18 @@ def _ensure_schema(conn: sqlite3.Connection) -> None:
     if current_version < 3:
         _migrate_to_v3(conn)
         current_version = 3
+
+    if current_version < 4:
+        _migrate_to_v4(conn)
+        current_version = 4
+
+    if current_version < 5:
+        _migrate_to_v5(conn)
+        current_version = 5
+
+    if current_version < 6:
+        _migrate_to_v6(conn)
+        current_version = 6
 
     if current_version != _SCHEMA_VERSION:
         # Placeholder for future migrations.
@@ -222,6 +235,130 @@ def _migrate_to_v3(conn: sqlite3.Connection) -> None:
     )
     conn.execute(
         "INSERT INTO app_meta(key, value) VALUES('schema_version', '3') "
+        "ON CONFLICT(key) DO UPDATE SET value = excluded.value"
+    )
+
+
+def _migrate_to_v4(conn: sqlite3.Connection) -> None:
+    # Letterheads: admin-uploaded images used as PDF headers for invoices/certificates
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS letterheads (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            label TEXT NOT NULL,
+            filename TEXT NOT NULL UNIQUE,
+            uploaded_by INTEGER,
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY(uploaded_by) REFERENCES users(id) ON DELETE SET NULL
+        )
+        """
+    )
+
+    # Certificates: internship certificate generation (mirrors invoices table)
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS certificates (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            certificate_number TEXT NOT NULL UNIQUE,
+            intern_name TEXT NOT NULL,
+            file_path TEXT NOT NULL,
+            payload_json TEXT NOT NULL,
+            generated_by INTEGER,
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY(generated_by) REFERENCES users(id) ON DELETE SET NULL
+        )
+        """
+    )
+    conn.execute(
+        """
+        CREATE TRIGGER IF NOT EXISTS trg_certificates_updated_at
+        AFTER UPDATE ON certificates
+        BEGIN
+            UPDATE certificates SET updated_at = CURRENT_TIMESTAMP WHERE id = NEW.id;
+        END;
+        """
+    )
+    conn.execute(
+        """
+        INSERT INTO app_settings(key, value, protected)
+        VALUES('certificate_next_number', '1', 0)
+        ON CONFLICT(key) DO NOTHING
+        """
+    )
+
+    # Vakalatnamas: admin-uploaded PDF templates for download
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS vakalatnamas (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            label TEXT NOT NULL,
+            filename TEXT NOT NULL UNIQUE,
+            uploaded_by INTEGER,
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY(uploaded_by) REFERENCES users(id) ON DELETE SET NULL
+        )
+        """
+    )
+
+    conn.execute(
+        "INSERT INTO app_meta(key, value) VALUES('schema_version', '4') "
+        "ON CONFLICT(key) DO UPDATE SET value = excluded.value"
+    )
+
+
+def _migrate_to_v5(conn: sqlite3.Connection) -> None:
+    # Legal notices: user-uploaded notice PDFs stamped with letterhead + a
+    # recipient/notice header band.  Numbered N/LN/YY, reset yearly.
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS legal_notices (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            notice_number TEXT NOT NULL UNIQUE,
+            recipient_name TEXT NOT NULL,
+            file_path TEXT NOT NULL,
+            payload_json TEXT NOT NULL,
+            generated_by INTEGER,
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY(generated_by) REFERENCES users(id) ON DELETE SET NULL
+        )
+        """
+    )
+    conn.execute(
+        """
+        CREATE TRIGGER IF NOT EXISTS trg_legal_notices_updated_at
+        AFTER UPDATE ON legal_notices
+        BEGIN
+            UPDATE legal_notices SET updated_at = CURRENT_TIMESTAMP WHERE id = NEW.id;
+        END;
+        """
+    )
+
+    conn.execute(
+        "INSERT INTO app_meta(key, value) VALUES('schema_version', '5') "
+        "ON CONFLICT(key) DO UPDATE SET value = excluded.value"
+    )
+
+
+def _migrate_to_v6(conn: sqlite3.Connection) -> None:
+    # Store session tokens as SHA-256 hashes so read access to the database
+    # (backup leak, file exposure) cannot be used to hijack active sessions.
+    # Existing plaintext tokens are hashed in place, which keeps every
+    # current login valid — the client-side cookie token is unchanged.
+    conn.execute(
+        "ALTER TABLE user_sessions RENAME COLUMN session_token TO session_token_hash"
+    )
+    rows = conn.execute("SELECT id, session_token_hash FROM user_sessions").fetchall()
+    for row in rows:
+        digest = hashlib.sha256((row["session_token_hash"] or "").encode("utf-8")).hexdigest()
+        conn.execute(
+            "UPDATE user_sessions SET session_token_hash = ? WHERE id = ?",
+            (digest, row["id"]),
+        )
+
+    conn.execute(
+        "INSERT INTO app_meta(key, value) VALUES('schema_version', '6') "
         "ON CONFLICT(key) DO UPDATE SET value = excluded.value"
     )
 

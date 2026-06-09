@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta name="color-scheme" content="light dark">
-  <script>
+  <script nonce="{{ csp_nonce }}">
       (function () {
           try {
               const KEY = 'caseOrg.theme';
@@ -62,6 +62,22 @@
               <i class="fa-solid fa-file-invoice-dollar" aria-hidden="true"></i>
               <span class="user-menu-label">Generate Invoice</span>
             </a>
+            <a href="{{ url_for('certificate_form') }}" class="user-menu-item" role="menuitem">
+              <i class="fa-solid fa-certificate" aria-hidden="true"></i>
+              <span class="user-menu-label">Generate Certificate</span>
+            </a>
+            <a href="{{ url_for('vakalatnama_page') }}" class="user-menu-item" role="menuitem">
+              <i class="fa-solid fa-stamp" aria-hidden="true"></i>
+              <span class="user-menu-label">Vakalatnama</span>
+            </a>
+            <a href="{{ url_for('legal_notice_form') }}" class="user-menu-item" role="menuitem">
+              <i class="fa-solid fa-scroll" aria-hidden="true"></i>
+              <span class="user-menu-label">Legal Notices</span>
+            </a>
+            <a href="{{ url_for('letterhead_page') }}" class="user-menu-item" role="menuitem">
+              <i class="fa-solid fa-file-lines" aria-hidden="true"></i>
+              <span class="user-menu-label">Letterhead</span>
+            </a>
             <a href="{{ url_for('admin_settings') }}" class="user-menu-item" role="menuitem" aria-current="page">
               <i class="fa-solid fa-gear" aria-hidden="true"></i>
               <span class="user-menu-label">Settings</span>
@@ -75,58 +91,76 @@
       <button id="theme-toggle" class="theme-toggle" title="Toggle theme" aria-label="Toggle theme">
         <i class="fa-solid fa-moon"></i>
       </button>
-      <a href="{{ url_for('logout') }}" class="logout" title="Logout">
-        <i class="fa-solid fa-right-from-bracket"></i>
-      </a>
+      <form method="post" action="{{ url_for('logout') }}" class="logout-form">
+        <input type="hidden" name="_csrf_token" value="{{ csrf_token }}">
+        <button type="submit" class="logout" title="Logout">
+          <i class="fa-solid fa-right-from-bracket"></i>
+        </button>
+      </form>
     </header>
 
     <main class="home enter-animate">
       {% include "_flash.html" %}
 
       <h1>Administrator Settings</h1>
-      <div class="settings-grid">
-        <div class="settings-card">
-          <h2>Storage</h2>
-          <form method="post">
-            {{ csrf_input }}
-            <input type="hidden" name="form_name" value="fs_root">
-            <label for="fs_root">Case files root directory</label>
-            <input id="fs_root" name="fs_root" type="text" value="{{ fs_root }}" placeholder="/mnt/data/case-files" required>
-            <p class="form-help">The folder will be created if it does not exist. Moving existing files is your responsibility.</p>
-            <button type="submit" class="btn-primary">Update Storage</button>
-          </form>
+
+      <!-- ============ Glow Tabs ============ -->
+      <nav class="glow-tabs" role="tablist" aria-label="Settings sections">
+        <button class="glow-tab active" role="tab" aria-selected="true"  aria-controls="panel-system"      data-tab="system">System</button>
+        <button class="glow-tab"        role="tab" aria-selected="false" aria-controls="panel-users"       data-tab="users">Users</button>
+        <button class="glow-tab"        role="tab" aria-selected="false" aria-controls="panel-letterheads" data-tab="letterheads">Letterheads</button>
+        <button class="glow-tab"        role="tab" aria-selected="false" aria-controls="panel-vakalatnama" data-tab="vakalatnama">Vakalatnama</button>
+      </nav>
+
+      <!-- ============ Panel: System ============ -->
+      <div class="glow-panel active" id="panel-system" role="tabpanel">
+        <div class="settings-grid">
+          <div class="settings-card">
+            <h2>Storage</h2>
+            <form method="post">
+              {{ csrf_input }}
+              <input type="hidden" name="form_name" value="fs_root">
+              <label for="fs_root">Case files root directory</label>
+              <input id="fs_root" name="fs_root" type="text" value="{{ fs_root }}" placeholder="/mnt/data/case-files" required>
+              <p class="form-help">The folder will be created if it does not exist. Moving existing files is your responsibility.</p>
+              <button type="submit" class="btn-primary">Update Storage</button>
+            </form>
+          </div>
+
+          <div class="settings-card">
+            <h2>SMTP (Email)</h2>
+            <form method="post">
+              {{ csrf_input }}
+              <input type="hidden" name="form_name" value="smtp">
+              <label for="smtp_host">Host</label>
+              <input id="smtp_host" name="smtp_host" type="text" value="{{ smtp.host }}" required>
+
+              <label for="smtp_port">Port</label>
+              <input id="smtp_port" name="smtp_port" type="number" value="{{ smtp.port }}" required>
+
+              <label for="smtp_username">Username</label>
+              <input id="smtp_username" name="smtp_username" type="text" value="{{ smtp.username }}">
+
+              <label for="smtp_password">Password</label>
+              <input id="smtp_password" name="smtp_password" type="password" placeholder="{% if smtp_password_configured %}Leave blank to keep current{% else %}Password{% endif %}">
+
+              <label class="checkbox-inline">
+                <input type="checkbox" name="smtp_use_tls" value="1" {% if smtp.use_tls %}checked{% endif %}>
+                Use TLS/STARTTLS
+              </label>
+
+              <label for="smtp_from_email">From-address</label>
+              <input id="smtp_from_email" name="smtp_from_email" type="email" value="{{ smtp.from_email }}" required>
+
+              <button type="submit" class="btn-primary">Save SMTP Settings</button>
+            </form>
+          </div>
         </div>
+      </div>
 
-        <div class="settings-card">
-          <h2>SMTP (Email)</h2>
-          <form method="post">
-            {{ csrf_input }}
-            <input type="hidden" name="form_name" value="smtp">
-            <label for="smtp_host">Host</label>
-            <input id="smtp_host" name="smtp_host" type="text" value="{{ smtp.host }}" required>
-
-            <label for="smtp_port">Port</label>
-            <input id="smtp_port" name="smtp_port" type="number" value="{{ smtp.port }}" required>
-
-            <label for="smtp_username">Username</label>
-            <input id="smtp_username" name="smtp_username" type="text" value="{{ smtp.username }}">
-
-            <label for="smtp_password">Password</label>
-            <input id="smtp_password" name="smtp_password" type="password" placeholder="{% if smtp_password_configured %}Leave blank to keep current{% else %}Password{% endif %}">
-
-            <label class="checkbox-inline">
-              <input type="checkbox" name="smtp_use_tls" value="1" {% if smtp.use_tls %}checked{% endif %}>
-              Use TLS/STARTTLS
-            </label>
-
-            <label for="smtp_from_email">From-address</label>
-            <input id="smtp_from_email" name="smtp_from_email" type="email" value="{{ smtp.from_email }}" required>
-
-            <button type="submit" class="btn-primary">Save SMTP Settings</button>
-          </form>
-        </div>
-
-        <div class="settings-card">
+      <!-- ============ Panel: Users ============ -->
+      <div class="glow-panel" id="panel-users" role="tabpanel" hidden>
+        <div class="settings-card" style="margin-bottom:16px;">
           <h2>Create User</h2>
           <form method="post">
             {{ csrf_input }}
@@ -146,83 +180,319 @@
             <button type="submit" class="btn-secondary">Add User</button>
           </form>
         </div>
+
+        <section class="settings-card">
+          <h2>Existing Users</h2>
+          <div class="table-wrapper">
+            <table class="settings-table">
+              <thead>
+                <tr>
+                  <th>Email</th>
+                  <th>Role</th>
+                  <th>Status</th>
+                  <th>Created</th>
+                  <th>Last Login</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for user in users %}
+                  <tr class="{% if not user.is_active %}inactive{% endif %}">
+                    <td>{{ user.email }}</td>
+                    <td>{{ user.role|capitalize }}</td>
+                    <td>{{ 'Active' if user.is_active else 'Inactive' }}</td>
+                    <td>{{ user.created_at or '—' }}</td>
+                    <td>{{ user.last_login_at or 'Never' }}</td>
+                    <td>
+                      <form method="post" class="settings-inline-form">
+                        {{ csrf_input }}
+                        <input type="hidden" name="form_name" value="update_user">
+                        <input type="hidden" name="user_id" value="{{ user.id }}">
+                        <input type="email" name="new_email" value="{{ user.email }}" required>
+                        <select name="new_role">
+                          <option value="user" {% if user.role == 'user' %}selected{% endif %}>User</option>
+                          <option value="admin" {% if user.role == 'admin' %}selected{% endif %}>Administrator</option>
+                        </select>
+                        <button type="submit" class="btn-secondary">Update</button>
+                      </form>
+
+                      <form method="post" class="settings-inline-form">
+                        {{ csrf_input }}
+                        <input type="hidden" name="form_name" value="reset_password_user">
+                        <input type="hidden" name="user_id" value="{{ user.id }}">
+                        <button type="submit" class="btn-ghost">Send reset link</button>
+                      </form>
+
+                      {% set disable_toggle = False %}
+                      {% if user.id == current_user.id and user.is_active %}
+                        {% set disable_toggle = True %}
+                      {% endif %}
+                      {% if user.role == 'admin' and user.is_active and last_active_admin_id == user.id %}
+                        {% set disable_toggle = True %}
+                      {% endif %}
+                      <form method="post" style="display:inline-block;">
+                        {{ csrf_input }}
+                        <input type="hidden" name="form_name" value="toggle_user">
+                        <input type="hidden" name="user_id" value="{{ user.id }}">
+                        <input type="hidden" name="new_state" value="{{ 0 if user.is_active else 1 }}">
+                        <button type="submit"
+                                class="{% if user.is_active %}btn-danger{% else %}btn-secondary{% endif %}"
+                                {% if disable_toggle %}disabled{% endif %}>
+                          {{ 'Deactivate' if user.is_active else 'Activate' }}
+                        </button>
+                      </form>
+                    </td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </section>
       </div>
 
-      <section class="settings-card" style="margin-top:16px;">
-        <h2>Existing Users</h2>
-        <div class="table-wrapper">
-          <table class="settings-table">
-            <thead>
-              <tr>
-                <th>Email</th>
-                <th>Role</th>
-                <th>Status</th>
-                <th>Created</th>
-                <th>Last Login</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {% for user in users %}
-                <tr class="{% if not user.is_active %}inactive{% endif %}">
-                  <td>{{ user.email }}</td>
-                  <td>{{ user.role|capitalize }}</td>
-                  <td>{{ 'Active' if user.is_active else 'Inactive' }}</td>
-                  <td>{{ user.created_at or '—' }}</td>
-                  <td>{{ user.last_login_at or 'Never' }}</td>
-                  <td>
-                    <form method="post" class="settings-inline-form">
-                      {{ csrf_input }}
-                      <input type="hidden" name="form_name" value="update_user">
-                      <input type="hidden" name="user_id" value="{{ user.id }}">
-                      <input type="email" name="new_email" value="{{ user.email }}" required>
-                      <select name="new_role">
-                        <option value="user" {% if user.role == 'user' %}selected{% endif %}>User</option>
-                        <option value="admin" {% if user.role == 'admin' %}selected{% endif %}>Administrator</option>
-                      </select>
-                      <button type="submit" class="btn-secondary">Update</button>
-                    </form>
+      <!-- ============ Panel: Letterheads ============ -->
+      <div class="glow-panel" id="panel-letterheads" role="tabpanel" hidden>
+        <div class="settings-card">
+          <h2>Letterheads</h2>
+          <p class="form-help">Upload A4 letterheads (PNG, JPG or PDF). These appear in the invoice and certificate generators and are stamped behind every page.</p>
 
-                    <form method="post" class="settings-inline-form">
-                      {{ csrf_input }}
-                      <input type="hidden" name="form_name" value="reset_password_user">
-                      <input type="hidden" name="user_id" value="{{ user.id }}">
-                      <button type="submit" class="btn-ghost">Send reset link</button>
-                    </form>
+          <form id="letterhead-upload-form" class="letterhead-upload-row">
+            <label for="lh-label">Label</label>
+            <input id="lh-label" type="text" placeholder="e.g. Office Letterhead" maxlength="120" required>
 
-                    {% set disable_toggle = False %}
-                    {% if user.id == current_user.id and user.is_active %}
-                      {% set disable_toggle = True %}
-                    {% endif %}
-                    {% if user.role == 'admin' and user.is_active and last_active_admin_id == user.id %}
-                      {% set disable_toggle = True %}
-                    {% endif %}
-                    <form method="post" style="display:inline-block;">
-                      {{ csrf_input }}
-                      <input type="hidden" name="form_name" value="toggle_user">
-                      <input type="hidden" name="user_id" value="{{ user.id }}">
-                      <input type="hidden" name="new_state" value="{{ 0 if user.is_active else 1 }}">
-                      <button type="submit"
-                              class="{% if user.is_active %}btn-danger{% else %}btn-secondary{% endif %}"
-                              {% if disable_toggle %}disabled{% endif %}>
-                        {{ 'Deactivate' if user.is_active else 'Activate' }}
-                      </button>
-                    </form>
-                  </td>
-                </tr>
-              {% endfor %}
-            </tbody>
-          </table>
+            <label for="lh-file">File</label>
+            <input id="lh-file" type="file" accept=".png,.jpg,.jpeg,.pdf" required>
+
+            <button type="submit" class="btn-secondary">Upload</button>
+          </form>
+
+          <div id="letterheads-list" class="letterheads-grid">
+            <p class="empty-state">Loading…</p>
+          </div>
         </div>
-      </section>
+      </div>
+
+      <!-- ============ Panel: Vakalatnama ============ -->
+      <div class="glow-panel" id="panel-vakalatnama" role="tabpanel" hidden>
+        <div class="settings-card">
+          <h2>Vakalatnama Forms</h2>
+          <p class="form-help">Upload pre-formatted Vakalatnama PDF forms. All users can download them from the Vakalatnama page.</p>
+
+          <form id="vak-upload-form" class="letterhead-upload-row">
+            <label for="vak-label">Label</label>
+            <input id="vak-label" type="text" placeholder="e.g. High Court Vakalatnama" maxlength="120" required>
+
+            <label for="vak-file">PDF</label>
+            <input id="vak-file" type="file" accept=".pdf" required>
+
+            <button type="submit" class="btn-secondary">Upload</button>
+          </form>
+
+          <div id="vak-list" class="letterheads-grid">
+            <p class="empty-state">Loading…</p>
+          </div>
+        </div>
+      </div>
+
     </main>
   </div>
 
-  <script>
+  <script nonce="{{ csp_nonce }}">
     window.CaseOrg = Object.assign(window.CaseOrg || {}, {
       isAdmin: {{ 'true' if current_user and current_user.role == 'admin' else 'false' }}
     });
   </script>
   <script src="{{ static_url('js/main.js') }}"></script>
+
+  <script nonce="{{ csp_nonce }}">
+  (function () {
+    /* ---- Tab switching ---- */
+    const KEY = 'caseOrg.settingsTab';
+    const tabs = document.querySelectorAll('.glow-tab');
+    const panels = document.querySelectorAll('.glow-panel');
+
+    function activate(name) {
+      tabs.forEach(t => {
+        const on = t.dataset.tab === name;
+        t.classList.toggle('active', on);
+        t.setAttribute('aria-selected', on ? 'true' : 'false');
+      });
+      panels.forEach(p => {
+        const on = p.id === 'panel-' + name;
+        p.classList.toggle('active', on);
+        p.hidden = !on;
+      });
+      try { localStorage.setItem(KEY, name); } catch (_) {}
+    }
+
+    tabs.forEach(t => t.addEventListener('click', () => activate(t.dataset.tab)));
+
+    // Restore last tab (or default to "system")
+    try {
+      const saved = localStorage.getItem(KEY);
+      if (saved && document.getElementById('panel-' + saved)) activate(saved);
+    } catch (_) {}
+
+    /* ---- Shared helpers ---- */
+    const csrf = (document.querySelector('meta[name="csrf-token"]') || {}).content || '';
+
+    function escHtml(s) {
+      const d = document.createElement('div');
+      d.textContent = s;
+      return d.innerHTML;
+    }
+
+    /* ---- Letterheads CRUD ---- */
+    const lhList = document.getElementById('letterheads-list');
+    const lhForm = document.getElementById('letterhead-upload-form');
+
+    async function loadLetterheads() {
+      try {
+        const res = await fetch('/api/letterheads');
+        if (!res.ok) throw new Error(res.statusText);
+        const data = await res.json();
+        const items = (data && data.letterheads) || [];
+        if (!items.length) {
+          lhList.innerHTML = '<p class="empty-state">No letterheads uploaded yet.</p>';
+          return;
+        }
+        lhList.innerHTML = items.map(function (lh) {
+          var fallbackIcon = (lh.kind === 'pdf') ? 'fa-file-pdf' : 'fa-image';
+          var thumbUrl = lh.thumbnail_url || lh.image_url;
+          var preview = '<div class="lh-thumb">'
+            + '<img src="' + escHtml(thumbUrl) + '" alt="' + escHtml(lh.label) + '" loading="lazy" '
+            + 'onerror="this.style.display=\'none\';this.nextElementSibling.style.display=\'flex\';">'
+            + '<span class="lh-thumb-fallback" style="display:none;"><i class="fa-solid ' + fallbackIcon + '"></i></span>'
+            + '</div>';
+          return '<div class="lh-card">'
+            + preview
+            + '<span class="lh-card-label">' + escHtml(lh.label) + '</span>'
+            + '<button class="icon-btn icon-danger lh-delete" data-id="' + lh.id + '" title="Delete">'
+            + '<i class="fa-solid fa-trash"></i></button>'
+            + '</div>';
+        }).join('');
+      } catch (e) {
+        lhList.innerHTML = '<p class="empty-state">Failed to load letterheads.</p>';
+      }
+    }
+
+    lhList.addEventListener('click', async function (e) {
+      const btn = e.target.closest('.lh-delete');
+      if (!btn) return;
+      if (!confirm('Delete this letterhead?')) return;
+      const id = btn.dataset.id;
+      try {
+        const res = await fetch('/api/letterheads/' + id, {
+          method: 'DELETE',
+          headers: { 'X-CSRF-Token': csrf }
+        });
+        if (!res.ok) { const d = await res.json().catch(function () { return {}; }); alert(d.msg || 'Delete failed'); return; }
+        loadLetterheads();
+      } catch (err) { alert('Network error'); }
+    });
+
+    lhForm.addEventListener('submit', async function (e) {
+      e.preventDefault();
+      const fileInput = document.getElementById('lh-file');
+      const labelInput = document.getElementById('lh-label');
+      if (!fileInput.files.length) return;
+
+      const fd = new FormData();
+      fd.append('file', fileInput.files[0]);
+      fd.append('label', labelInput.value.trim());
+
+      try {
+        const res = await fetch('/api/letterheads/upload', {
+          method: 'POST',
+          headers: { 'X-CSRF-Token': csrf },
+          body: fd
+        });
+        const data = await res.json().catch(function () { return {}; });
+        if (!res.ok) { alert(data.msg || 'Upload failed'); return; }
+        lhForm.reset();
+        loadLetterheads();
+      } catch (err) { alert('Network error'); }
+    });
+
+    loadLetterheads();
+
+    /* ---- Vakalatnama CRUD ---- */
+    const vakList = document.getElementById('vak-list');
+    const vakForm = document.getElementById('vak-upload-form');
+
+    async function loadVakalatnamas() {
+      try {
+        const res = await fetch('/api/vakalatnamas');
+        if (!res.ok) throw new Error(res.statusText);
+        const data = await res.json();
+        const items = data.vakalatnamas || [];
+        if (!items.length) {
+          vakList.innerHTML = '<p class="empty-state">No Vakalatnama forms uploaded yet.</p>';
+          return;
+        }
+        vakList.innerHTML = items.map(function (v) {
+          var thumb = v.thumbnail_url
+            ? '<div class="lh-thumb">'
+              + '<img src="' + escHtml(v.thumbnail_url) + '" alt="' + escHtml(v.label) + '" loading="lazy" '
+              + 'onerror="this.style.display=\'none\';this.nextElementSibling.style.display=\'flex\';">'
+              + '<span class="lh-thumb-fallback" style="display:none;"><i class="fa-solid fa-file-pdf"></i></span>'
+              + '</div>'
+            : '<div class="lh-thumb"><span class="lh-thumb-fallback" style="display:flex;"><i class="fa-solid fa-file-pdf"></i></span></div>';
+          return '<div class="lh-card vak-admin-card">'
+            + thumb
+            + '<span class="lh-card-label">' + escHtml(v.label) + '</span>'
+            + '<div class="vak-admin-actions">'
+            + '<a href="' + escHtml(v.download_url) + '" class="icon-btn" title="Download"><i class="fa-solid fa-download"></i></a>'
+            + '<button class="icon-btn icon-danger vak-delete" data-id="' + v.id + '" title="Delete"><i class="fa-solid fa-trash"></i></button>'
+            + '</div>'
+            + '</div>';
+        }).join('');
+      } catch (e) {
+        vakList.innerHTML = '<p class="empty-state">Failed to load Vakalatnama forms.</p>';
+      }
+    }
+
+    vakList.addEventListener('click', async function (e) {
+      const btn = e.target.closest('.vak-delete');
+      if (!btn) return;
+      if (!confirm('Delete this Vakalatnama form?')) return;
+      const id = btn.dataset.id;
+      try {
+        const res = await fetch('/api/vakalatnamas/' + id, {
+          method: 'DELETE',
+          headers: { 'X-CSRF-Token': csrf }
+        });
+        const d = await res.json().catch(function () { return {}; });
+        if (!res.ok || !d.ok) { alert(d.msg || 'Delete failed'); return; }
+        loadVakalatnamas();
+      } catch (err) { alert('Network error'); }
+    });
+
+    vakForm.addEventListener('submit', async function (e) {
+      e.preventDefault();
+      const labelInput = document.getElementById('vak-label');
+      const fileInput = document.getElementById('vak-file');
+      if (!fileInput.files.length || !labelInput.value.trim()) return;
+
+      const fd = new FormData();
+      fd.append('label', labelInput.value.trim());
+      fd.append('file', fileInput.files[0]);
+
+      try {
+        const res = await fetch('/api/vakalatnamas/upload', {
+          method: 'POST',
+          headers: { 'X-CSRF-Token': csrf },
+          body: fd
+        });
+        const data = await res.json().catch(function () { return {}; });
+        if (!res.ok || !data.ok) { alert(data.msg || 'Upload failed'); return; }
+        vakForm.reset();
+        loadVakalatnamas();
+      } catch (err) { alert('Network error'); }
+    });
+
+    loadVakalatnamas();
+  })();
+  </script>
 </body>
 </html>

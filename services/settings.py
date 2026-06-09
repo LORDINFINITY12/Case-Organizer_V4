@@ -109,7 +109,7 @@ class SettingsManager:
         version = int(self._settings.get("schema_version", 0))
         if version < 1:
             self._settings.setdefault("schema_version", self.SETTINGS_SCHEMA_VERSION)
-            self._settings.setdefault("secret_iterations", 390_000)
+            self._settings.setdefault("secret_iterations", 600_000)
             if "secret_salt" not in self._settings:
                 salt = os.urandom(16)
                 self._settings["secret_salt"] = base64.urlsafe_b64encode(salt).decode("utf-8")
@@ -128,8 +128,13 @@ class SettingsManager:
         key_path.write_text(key, encoding="utf-8")
         try:
             key_path.chmod(0o600)
-        except Exception:
-            pass
+        except Exception as exc:
+            import logging
+
+            logging.getLogger("caseorg.settings").warning(
+                "Could not restrict master.key permissions: %s. "
+                "Ensure %s is not world-readable.", exc, key_path
+            )
         return key
 
     def _load_secrets(self, passphrase: Optional[str]) -> Optional[Dict[str, Any]]:
@@ -173,7 +178,7 @@ class SettingsManager:
         if not salt_b64:
             raise RuntimeError("Settings missing secret salt; try reinitialising configuration.")
         salt = base64.urlsafe_b64decode(salt_b64)
-        iterations = int(self._settings.get("secret_iterations", 390_000))
+        iterations = int(self._settings.get("secret_iterations", 600_000))
         kdf = PBKDF2HMAC(
             algorithm=hashes.SHA256(),
             length=32,

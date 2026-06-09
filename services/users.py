@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import secrets
 import sqlite3
 from datetime import datetime, timedelta, timezone
@@ -10,6 +11,10 @@ from typing import Optional
 from services.db import get_app_db
 from services.security import hash_password, verify_password
 from services.models import User, PasswordReset
+
+# Reference hash verified for unknown emails so login latency does not
+# reveal whether an address is registered (timing-oracle mitigation).
+_DUMMY_HASH = hash_password("caseorg-timing-equalizer-dummy")
 
 
 class UserExistsError(ValueError):
@@ -71,9 +76,11 @@ def get_user_by_id(user_id: int) -> Optional[User]:
 
 def authenticate_user(email: str, password: str) -> Optional[User]:
     user = get_user_by_email(email)
-    if not user or not user.is_active:
-        return None
-    if not verify_password(password, user.password_hash):
+    # Always run an Argon2 verification, even for unknown/inactive accounts,
+    # so the response time does not reveal whether the email exists.
+    ref_hash = user.password_hash if (user and user.is_active) else _DUMMY_HASH
+    ok = verify_password(password, ref_hash)
+    if not ok or not user or not user.is_active:
         return None
     return user
 
@@ -123,11 +130,16 @@ def get_password_reset(token: str) -> Optional[PasswordReset]:
     if not token:
         return None
     conn = get_app_db()
-    row = conn.execute(
-        "SELECT * FROM password_resets WHERE token = ?",
-        (token,),
-    ).fetchone()
-    if not row or row["consumed_at"] is not None:
+    # Scan unconsumed tokens and compare with constant-time equality instead
+    # of relying on the database's string comparison (timing-safe lookup).
+    rows = conn.execute(
+        "SELECT * FROM password_resets WHERE consumed_at IS NULL"
+    ).fetchall()
+    row = None
+    for candidate in rows:
+        if secrets.compare_digest(str(candidate["token"]), token):
+            row = candidate
+    if not row:
         return None
     expires_at_raw = row["expires_at"]
     try:
@@ -208,17 +220,23 @@ SESSION_DURATION_DAYS = 30
 SESSION_EXTEND_THRESHOLD_DAYS = 7
 
 
+def _hash_token(token: str) -> str:
+    """SHA-256 of a session token. Only the hash is stored in the database,
+    so read access to the DB cannot be used to hijack active sessions."""
+    return hashlib.sha256(token.encode("utf-8")).hexdigest()
+
+
 def create_session(user_id: int, user_agent: str = "", ip_address: str = "") -> str:
-    """Create a persistent session record and return the session token."""
+    """Create a persistent session record and return the (plaintext) session token."""
     token = secrets.token_urlsafe(48)
     expires_at = (datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(days=SESSION_DURATION_DAYS)).isoformat()
     conn = get_app_db()
     conn.execute(
         """
-        INSERT INTO user_sessions(user_id, session_token, user_agent, ip_address, expires_at)
+        INSERT INTO user_sessions(user_id, session_token_hash, user_agent, ip_address, expires_at)
         VALUES(?, ?, ?, ?, ?)
         """,
-        (user_id, token, user_agent or "", ip_address or "", expires_at),
+        (user_id, _hash_token(token), user_agent or "", ip_address or "", expires_at),
     )
     conn.commit()
     return token
@@ -234,8 +252,8 @@ def validate_session(token: str) -> Optional[int]:
         return None
     conn = get_app_db()
     row = conn.execute(
-        "SELECT id, user_id, expires_at FROM user_sessions WHERE session_token = ?",
-        (token,),
+        "SELECT id, user_id, expires_at FROM user_sessions WHERE session_token_hash = ?",
+        (_hash_token(token),),
     ).fetchone()
     if not row:
         return None
@@ -269,7 +287,7 @@ def delete_session(token: str) -> None:
     if not token:
         return
     conn = get_app_db()
-    conn.execute("DELETE FROM user_sessions WHERE session_token = ?", (token,))
+    conn.execute("DELETE FROM user_sessions WHERE session_token_hash = ?", (_hash_token(token),))
     conn.commit()
 
 
@@ -281,8 +299,8 @@ def invalidate_user_sessions(user_id: int, except_token: Optional[str] = None) -
     conn = get_app_db()
     if except_token:
         cur = conn.execute(
-            "DELETE FROM user_sessions WHERE user_id = ? AND session_token != ?",
-            (user_id, except_token),
+            "DELETE FROM user_sessions WHERE user_id = ? AND session_token_hash != ?",
+            (user_id, _hash_token(except_token)),
         )
     else:
         cur = conn.execute(

@@ -818,6 +818,10 @@ TESSERACT_LANGUAGE_NAMES: dict[str, str] = {
 }
 
 
+# Well-formed Tesseract language codes: "eng", "chi_sim", "script/Devanagari".
+_TESSERACT_LANG_CODE_RE = re.compile(r"(?:script/)?[A-Za-z][A-Za-z0-9_]{1,30}")
+
+
 def _tesseract_language_label(code: str) -> str:
     if not code:
         return code
@@ -910,9 +914,17 @@ def ocr_pdf(
     if not pdftoppm:
         raise RuntimeError("pdftoppm is required for OCR. Please install poppler-utils.")
 
-    lang_list = [str(lang).strip() for lang in languages if str(lang).strip()]
+    # Language codes are passed as a CLI argument, so arbitrary strings are
+    # not acceptable. Accept only well-formed Tesseract codes (covers every
+    # installed pack, incl. "chi_sim" and "script/Devanagari") — this blocks
+    # flag injection and tessdata path traversal.
+    lang_list = [
+        code
+        for lang in languages
+        if (code := str(lang).strip()) and _TESSERACT_LANG_CODE_RE.fullmatch(code)
+    ]
     if not lang_list:
-        raise ValueError("Select at least one OCR language.")
+        raise ValueError("Select at least one valid OCR language.")
 
     try:
         dpi_value = int(dpi)
@@ -1154,9 +1166,15 @@ def split_pdf_odd_even(input_pdf: Path, *, odd: bool, output_file: Path) -> None
             writer.write(out)
 
 
+MAX_ZIP_BYTES = 500 * 1024 * 1024  # 500 MB cap on total archive input
+
+
 def zip_paths(paths: list[Path], zip_path: Path) -> None:
     if not paths:
         raise ValueError("No files to add to the ZIP.")
+    total = sum(p.stat().st_size for p in paths if p.exists())
+    if total > MAX_ZIP_BYTES:
+        raise ValueError("Total size exceeds the archive limit (500 MB).")
     zip_path.parent.mkdir(parents=True, exist_ok=True)
     with zipfile.ZipFile(zip_path, "w", compression=zipfile.ZIP_DEFLATED) as zipf:
         for path in paths:

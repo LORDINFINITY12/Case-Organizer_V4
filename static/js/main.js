@@ -1894,9 +1894,24 @@ function renderCaseResults(list, query) {
       e.stopPropagation();
       document.querySelectorAll('.case-action-menu.open').forEach(m => { if (m !== menu) m.classList.remove('open'); });
       const rect = menuBtn.getBoundingClientRect();
+      menu.style.transformOrigin = 'top right';
       menu.style.top = (rect.bottom + 6) + 'px';
       menu.style.left = (rect.right - menu.offsetWidth) + 'px';
       menu.classList.toggle('open');
+    });
+
+    // Right-clicking the row opens the same action menu at the cursor
+    row.addEventListener('contextmenu', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      document.querySelectorAll('.case-action-menu.open').forEach(m => { if (m !== menu) m.classList.remove('open'); });
+      const pad = 8;
+      const left = Math.max(pad, Math.min(e.clientX, window.innerWidth - menu.offsetWidth - pad));
+      const top = Math.max(pad, Math.min(e.clientY + 4, window.innerHeight - menu.offsetHeight - pad));
+      menu.style.transformOrigin = 'top left';
+      menu.style.top = top + 'px';
+      menu.style.left = left + 'px';
+      menu.classList.add('open');
     });
 
     actions.appendChild(menuBtn);
@@ -2193,7 +2208,7 @@ function manageCaseForm(){
         <select id="mc-case" disabled><option value="">Case (Petitioner v. Respondent)</option></select>
         <select id="domain">
           <option value="">File Category</option>
-          <option>Criminal</option><option>Civil</option><option>Commercial</option><option>Case Law</option><option>Invoices</option>
+          <option>Criminal</option><option>Civil</option><option>Commercial</option><option>Case Law</option><option>Invoices</option><option>Legal Notices</option>
         </select>
         <select id="subcategory" disabled><option value="">Subcategory</option></select>
         <input type="text" id="main-type" placeholder="Main Type (e.g., Transfer Petition, Criminal Revision, Orders)" />
@@ -2503,6 +2518,11 @@ function manageCaseForm(){
     if (dom === 'Invoices') {
       if (subSel) { subSel.innerHTML = '<option value="">Subcategory (not used for Invoices)</option>'; subSel.disabled = true; }
       if (mt) mt.placeholder = 'Main Type (e.g., Transfer Petition, Criminal Revision, Orders)';
+      return;
+    }
+    if (dom === 'Legal Notices') {
+      if (subSel) { subSel.innerHTML = '<option value="">Subcategory (not used for Legal Notices)</option>'; subSel.disabled = true; }
+      if (mt) mt.placeholder = 'Notice title / reference (used as filename)';
       return;
     }
 
@@ -4306,6 +4326,11 @@ document.addEventListener('DOMContentLoaded', () => {
   document.addEventListener('click', () => {
     document.querySelectorAll('.case-action-menu.open').forEach(m => m.classList.remove('open'));
   });
+  // Right-clicking anywhere else also dismisses any open case menu
+  // (case rows stop propagation before this runs).
+  document.addEventListener('contextmenu', () => {
+    document.querySelectorAll('.case-action-menu.open').forEach(m => m.classList.remove('open'));
+  });
 
   autoDismissFlashes(3000);
 
@@ -4475,3 +4500,13 @@ document.addEventListener('DOMContentLoaded', () => {
     kickOff();
   }
 });
+
+/* ── Confirmation prompts (CSP-safe replacement for inline onclick) ───────
+   Any submit button with a data-confirm attribute asks for confirmation
+   before its form is submitted. */
+document.addEventListener('submit', (e) => {
+  const btn = e.submitter;
+  if (btn && btn.dataset && btn.dataset.confirm && !window.confirm(btn.dataset.confirm)) {
+    e.preventDefault();
+  }
+}, true);

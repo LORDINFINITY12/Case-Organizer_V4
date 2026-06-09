@@ -1,3 +1,118 @@
+case-organizer (4.5) stable; urgency=high
+
+  * Added Legal Notice module: new /legal-notice page to upload a notice
+    PDF and stamp it with a stored letterhead plus a recipient/notice
+    header band (recipient, relation, address, contact). Auto-numbered
+    N/LN/YY with yearly reset, stored under FS_ROOT with metadata in the
+    new `legal_notices` DB table (schema migration v4 -> v5).
+  * Added Legal Notice, Certificate, Letterhead, and Vakalatnama cards
+    and links to the homepage and user menus across all pages.
+  * Reworked the Settings page into a tabbed layout covering user
+    management, SMTP configuration, and the letterhead and vakalatnama
+    libraries.
+  * Invoice form: letterhead picker with live preview improvements.
+  * Search results: right-clicking a case now opens the same action
+    menu as the three-line button (Manage Case, and for admins Edit
+    Case Name / Delete Case), positioned at the cursor and clamped to
+    the viewport; right-clicking elsewhere dismisses it.
+  * Vendored Quill editor assets under static/vendor/quill (no CDN
+    dependency).
+  * Security: /logout is now POST-only with CSRF protection; the topbar
+    logout link was converted to a styled form so third-party pages can
+    no longer force-logout users via <img src="/logout">.
+  * Security: login latency no longer reveals whether an email address
+    is registered — a reference Argon2 verification always runs.
+  * Security: session tokens are stored as SHA-256 hashes (DB schema
+    migration v5 → v6, column renamed session_token → session_token_hash).
+    Existing tokens are hashed in place, so active logins are preserved.
+  * Security: main-app Content-Security-Policy is now nonce-based —
+    'unsafe-inline' and 'unsafe-eval' were removed from script-src and
+    every inline script carries a per-request nonce. Inline onclick
+    handlers were replaced with CSP-safe data-confirm attributes.
+  * Security: Bento CSP narrowed (default-src 'self'); new env var
+    CASEORG_BENTO_CDN=0 strips the cdn.jsdelivr.net origin entirely for
+    deployments that self-host the optional WASM engines.
+  * Security: case-law FTS5 search input is fully sanitised — terms are
+    quoted so FTS5 operator syntax (*, ^, :, NEAR()) cannot be injected;
+    query length capped at 500 chars, NEAR distance at 50; malformed
+    expressions can no longer 500 the search endpoint.
+  * Security: uniform password policy on /setup, /reset-password,
+    /account, and admin user creation: minimum stays at 8 characters
+    (compatible with existing passwords), new 128-character maximum
+    prevents Argon2 CPU exhaustion via multi-MB passwords.
+  * Security: password reset tokens are compared with
+    secrets.compare_digest() instead of SQL string equality.
+  * Security: error responses no longer leak internal paths or
+    exception details; full errors go to the server log instead.
+  * Security: CSRF failures redirect to the home page instead of the
+    client-controlled request URL (open redirect fix).
+  * Security: uploads reject masked double extensions (e.g.
+    report.html.txt) and txt/json content that is actually HTML/SVG.
+    Filenames with ordinary dots ("State v. Sharma.pdf") still work.
+  * Security: OCR language codes validated against a strict pattern
+    before being passed to Tesseract; ZIP exports capped at 500 MB.
+  * New env var CASEORG_COOKIE_SECURE: session cookies are Secure
+    (HTTPS-only) by default in production; set CASEORG_COOKIE_SECURE=0
+    for plain-HTTP LAN deployments without TLS, otherwise browsers will
+    not send the session cookie and login cannot work.
+  * Security: X-XSS-Protection set to "0" (deprecated auditor disabled;
+    CSP is the XSS mitigation), Argon2 parameters pinned explicitly,
+    PBKDF2 default raised to 600k iterations (new installs only —
+    existing installs keep their stored iteration count), PDF job IDs
+    raised to 256-bit entropy, master.key chmod failures now log a
+    warning instead of being silently ignored.
+  * DB schema migration v5 -> v6: user_sessions.session_token renamed to
+    session_token_hash with existing tokens hashed in place.
+  * Expanded test suite from 98 to 132 tests: schema v5->v6 upgrade with
+    live sessions, CSP nonce coverage of every authenticated page, FTS5
+    sanitisation, upload validation, timing-oracle mitigation, rate-limit
+    proxy trust, settings/PBKDF2/Argon2 hardening, and env-var override
+    behaviour (tests/test_config_env.py).
+  * debian: Recommend ttf-mscorefonts-installer so certificate PDFs can
+    render in genuine Times New Roman.
+
+ -- Izumi <swarajswarupaggarwal@gmail.com>  Wed, 10 Jun 2026 12:00:00 +0530
+
+case-organizer (4.4) stable; urgency=medium
+
+  * Added admin letterhead management: upload PNG/JPG letterhead images
+    via Settings page, stored in FS_ROOT/Letterheads/. New DB table
+    `letterheads` tracks metadata. API endpoints for list, upload,
+    delete, and image serving.
+  * Added letterhead picker UI to both Invoice and Certificate forms:
+    thumbnail strip to select a letterhead (or "None" for blank margin).
+    Selected letterhead is stamped behind the generated PDF.
+  * Added a dedicated Letterhead stamping page (/letterhead): pick a
+    stored letterhead, view its auto-detected top/bottom margins, upload
+    an existing PDF, and download the stamped result. Download-only — no
+    server-side persistence, numbering, or case association.
+  * Added Internship Certificate module: new /certificate page with a
+    contenteditable A4 document editor and custom formatting toolbar
+    (bold, italic, underline, alignment, font size, line spacing). PDF
+    generation via ReportLab with auto-incrementing certificate numbers
+    (CERT-XXXXX), stored in FS_ROOT/Certificates/<year>/. New DB table
+    `certificates` and `certificate_next_number` app setting.
+  * Certificate PDFs are now rendered entirely in Microsoft Times New
+    Roman (resolved via fc-match, falling back to ReportLab's built-in
+    Times only when the face is unavailable); the editor font-family
+    picker was removed since all fonts normalise to Times New Roman.
+  * Added Vakalatnama document library: admin uploads labelled PDF forms,
+    all users can browse and download. New /vakalatnama page with card
+    grid, new DB table `vakalatnamas`, stored in FS_ROOT/Vakalatnamas/.
+  * Added Vakalatnama card to homepage (fa-stamp icon).
+  * DB schema migration v3 → v4: three new tables (letterheads,
+    certificates, vakalatnamas) plus certificate numbering trigger and
+    app_settings entry.
+  * Updated user menu across all standalone templates (index, invoice,
+    certificate, vakalatnama, messages, message_detail, account,
+    bento_tool, settings, legal_notice) with Generate Certificate,
+    Vakalatnama, and Letterhead links.
+  * Added regression test suite tests/test_letterhead.py covering
+    letterhead PDF stamping, automatic margin measurement, the
+    /letterhead page, and the letterheads API.
+
+ -- Izumi <swarajswarupaggarwal@gmail.com>  Sat, 30 May 2026 22:00:00 +0530
+
 case-organizer (4.3) stable; urgency=high
 
   * Security: added _safe_path() traversal checks to all routes that

@@ -33,7 +33,8 @@ from typing import Dict, Any, Iterable, Optional
 from flask import (
     Request,
     Flask, request, jsonify, session, redirect, url_for,
-    render_template, render_template_string, flash, send_file, send_from_directory, g, abort
+    render_template, render_template_string, flash, send_file, send_from_directory, g, abort,
+    has_request_context,
 )
 from markupsafe import Markup
 from werkzeug.exceptions import BadRequest, InternalServerError, RequestEntityTooLarge
@@ -240,7 +241,14 @@ app.config["MAX_CONTENT_LENGTH"] = None           # no server-side upload cap (p
 app.config["SESSION_COOKIE_HTTPONLY"] = True        # prevent JS access to session cookie
 app.config["SESSION_COOKIE_SAMESITE"] = "Lax"      # CSRF baseline protection
 _debug_mode = os.environ.get("FLASK_DEBUG", "0") == "1"
-app.config["SESSION_COOKIE_SECURE"] = not _debug_mode
+# Secure cookies by default in production (HTTPS-only). Plain-HTTP LAN
+# deployments without TLS must set CASEORG_COOKIE_SECURE=0, otherwise
+# browsers will not send the session cookie and login cannot work.
+_cookie_secure_env = os.environ.get("CASEORG_COOKIE_SECURE")
+if _cookie_secure_env is not None:
+    app.config["SESSION_COOKIE_SECURE"] = _cookie_secure_env == "1"
+else:
+    app.config["SESSION_COOKIE_SECURE"] = not _debug_mode
 
 _SESSION_CLEANUP_INTERVAL = 3600.0   # purge expired DB sessions at most once per hour
 _SESSION_CLEANUP_LAST_RUN = 0.0
@@ -310,9 +318,28 @@ def _is_static_request() -> bool:
     return endpoint == "static" or (request.path or "").startswith("/static/")
 
 
+# Inner extensions that must never hide behind an allowed final extension
+# (e.g. "report.html.txt") — browsers or future serving changes could render
+# these as markup/script.
+_MASKED_EXTENSIONS = {
+    "html", "htm", "xhtml", "shtml", "svg", "xml",
+    "js", "mjs", "php", "phtml", "exe", "sh", "bat",
+}
+
+
 def allowed_file(filename: str) -> bool:
-    """Check extension against the whitelist from caseorg_config."""
-    return "." in filename and filename.rsplit(".", 1)[1].lower() in ALLOWED_EXTENSIONS
+    """Check the final extension against the whitelist and reject double
+    extensions that mask markup/script types (e.g. ``foo.html.txt``).
+
+    Dots inside the stem are otherwise legitimate here — case names such as
+    "State v. Sharma" routinely appear in stored filenames.
+    """
+    parts = filename.lower().split(".")
+    if len(parts) < 2 or parts[-1] not in ALLOWED_EXTENSIONS:
+        return False
+    if any(part.strip() in _MASKED_EXTENSIONS for part in parts[1:-1]):
+        return False
+    return True
 
 
 # Magic-byte signatures for MIME validation of uploaded files.
@@ -327,6 +354,11 @@ _MAGIC_SIGNATURES: dict[str, list[bytes]] = {
 }
 
 
+# HTML/markup markers — txt/json have no magic bytes, so reject content that
+# would render as a document if ever served with a markup content type.
+_HTML_CONTENT_MARKERS = (b"<!doctype", b"<html", b"<head", b"<body", b"<script", b"<svg", b"<?xml")
+
+
 def validate_upload(file_storage) -> Optional[str]:
     """Check extension AND magic bytes.  Returns an error string, or None if OK."""
     filename = file_storage.filename or ""
@@ -336,12 +368,38 @@ def validate_upload(file_storage) -> Optional[str]:
     ext = filename.rsplit(".", 1)[1].lower()
     sigs = _MAGIC_SIGNATURES.get(ext)
     if not sigs:
-        return None  # no magic-byte check for this type
+        # Plain-text types: make sure the content isn't a disguised HTML/SVG
+        # document (the double-extension/renamed-markup upload trick).
+        head = file_storage.stream.read(512)
+        file_storage.stream.seek(0)
+        probe = head.lstrip()[:16].lower()
+        if any(probe.startswith(marker) for marker in _HTML_CONTENT_MARKERS):
+            return f"File content does not match its .{ext} extension."
+        return None
 
     header = file_storage.stream.read(8)
     file_storage.stream.seek(0)
     if not any(header.startswith(sig) for sig in sigs):
         return f"File content does not match its .{ext} extension."
+    return None
+
+
+# ---- Password policy ------------------------------------------------------
+PASSWORD_MIN_LENGTH = 8
+PASSWORD_MAX_LENGTH = 128  # bounded so multi-MB passwords can't DoS Argon2
+
+
+def password_policy_error(password: str) -> Optional[str]:
+    """Validate a candidate password. Returns an error message or None.
+
+    Applied uniformly everywhere a password is set: /setup, /reset-password,
+    /account, and the admin user-creation form. Login is unaffected, so
+    accounts with older, shorter passwords keep working.
+    """
+    if not password or len(password) < PASSWORD_MIN_LENGTH:
+        return f"Password must be at least {PASSWORD_MIN_LENGTH} characters long."
+    if len(password) > PASSWORD_MAX_LENGTH:
+        return f"Password must be at most {PASSWORD_MAX_LENGTH} characters long."
     return None
 
 
@@ -436,11 +494,15 @@ def _log_slow_requests(response):
 
 
 # ---- Security headers & Content-Security-Policy --------------------------
-# Two CSP profiles: a strict default for the main app and a permissive one
-# for /bento/* routes (the integrated BentoPDF suite needs CDN WASM access).
-_CSP_DEFAULT = (
+# Two CSP profiles: a strict nonce-based default for the main app and a
+# permissive one for /bento/* routes (the integrated BentoPDF suite injects
+# inline scripts and optionally loads WASM engines from cdn.jsdelivr.net).
+#
+# The default profile carries no 'unsafe-inline'/'unsafe-eval': every inline
+# <script> in the app templates carries a per-request nonce instead.
+_CSP_DEFAULT_TEMPLATE = (
     "default-src 'self'; "
-    "script-src 'self' 'unsafe-inline' 'unsafe-eval' 'wasm-unsafe-eval'; "
+    "script-src 'self' 'nonce-{nonce}' 'wasm-unsafe-eval'; "
     "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com "
     "https://cdnjs.cloudflare.com https://unpkg.com; "
     "font-src 'self' https://fonts.gstatic.com https://cdnjs.cloudflare.com https://unpkg.com; "
@@ -451,15 +513,25 @@ _CSP_DEFAULT = (
     "object-src 'self'; "
     "base-uri 'self'"
 )
+
+# The Bento WASM engines (PyMuPDF, Ghostscript, CoherentPDF) are opt-in via
+# its WASM Settings page, which suggests cdn.jsdelivr.net URLs. Set
+# CASEORG_BENTO_CDN=0 to strip the CDN origin entirely (hardened deployments
+# self-hosting the WASM assets).
+_BENTO_CDN_ORIGIN = (
+    " https://cdn.jsdelivr.net"
+    if os.environ.get("CASEORG_BENTO_CDN", "1") != "0"
+    else ""
+)
 _CSP_BENTO = (
-    "default-src 'self' https://cdn.jsdelivr.net; "
-    "script-src 'self' 'unsafe-inline' 'unsafe-eval' 'wasm-unsafe-eval' "
-    "https://cdn.jsdelivr.net blob:; "
+    "default-src 'self'; "
+    "script-src 'self' 'unsafe-inline' 'unsafe-eval' 'wasm-unsafe-eval'"
+    f"{_BENTO_CDN_ORIGIN} blob:; "
     "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com "
-    "https://cdnjs.cloudflare.com https://unpkg.com https://cdn.jsdelivr.net; "
+    f"https://cdnjs.cloudflare.com https://unpkg.com{_BENTO_CDN_ORIGIN}; "
     "font-src 'self' https://fonts.gstatic.com https://cdnjs.cloudflare.com https://unpkg.com; "
     "img-src 'self' data: blob:; "
-    "connect-src 'self' https://cdn.jsdelivr.net blob: data:; "
+    f"connect-src 'self'{_BENTO_CDN_ORIGIN} blob: data:; "
     "frame-src 'self' blob:; "
     "worker-src 'self' blob:; "
     "object-src 'self'; "
@@ -467,18 +539,43 @@ _CSP_BENTO = (
 )
 
 
+def _csp_nonce() -> str:
+    """Per-request nonce for inline <script> tags under the default CSP."""
+    if has_request_context():
+        nonce = request.environ.get("caseorg.csp_nonce")
+        if nonce is None:
+            nonce = secrets.token_urlsafe(16)
+            request.environ["caseorg.csp_nonce"] = nonce
+        return nonce
+    # App-context-only renders (no request) still get a usable nonce.
+    nonce = getattr(g, "_csp_nonce", None)
+    if nonce is None:
+        nonce = secrets.token_urlsafe(16)
+        g._csp_nonce = nonce
+    return nonce
+
+
+@app.context_processor
+def _inject_csp_nonce():
+    return {"csp_nonce": _csp_nonce()}
+
+
 @app.after_request
 def _set_security_headers(response):
     response.headers["X-Content-Type-Options"] = "nosniff"
     response.headers["X-Frame-Options"] = "SAMEORIGIN"
-    response.headers["X-XSS-Protection"] = "1; mode=block"
+    # Explicitly disabled: the legacy XSS auditor is deprecated and can be
+    # abused in old browsers. CSP is the actual XSS mitigation.
+    response.headers["X-XSS-Protection"] = "0"
     response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
     if not _debug_mode:
         response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
     if request.path.startswith("/bento"):
         response.headers["Content-Security-Policy"] = _CSP_BENTO
     else:
-        response.headers["Content-Security-Policy"] = _CSP_DEFAULT
+        response.headers["Content-Security-Policy"] = _CSP_DEFAULT_TEMPLATE.format(
+            nonce=_csp_nonce()
+        )
     return response
 
 
@@ -761,7 +858,9 @@ def _validate_csrf_token():
         if wants_json:
             return jsonify({"ok": False, "msg": "CSRF validation failed. Please refresh and try again."}), 403
         flash("Your session token expired or was invalid. Please try again.", "error")
-        return redirect(request.url)
+        # request.url is client-controlled (Host header) — redirect to a
+        # fixed internal endpoint to avoid an open redirect.
+        return redirect(url_for("home"))
 
 
 # ---- Load authenticated user into Flask g --------------------------------
@@ -1189,8 +1288,9 @@ def setup():
         if not form_state["admin_email"]:
             errors.append("Administrator email is required.")
 
-        if not admin_password or len(admin_password) < 8:
-            errors.append("Administrator password must be at least 8 characters long.")
+        password_error = password_policy_error(admin_password)
+        if password_error:
+            errors.append(f"Administrator password: {password_error}")
         elif admin_password != admin_password2:
             errors.append("Administrator password confirmation does not match.")
 
@@ -1200,7 +1300,8 @@ def setup():
                 fs_root_path = Path(form_state["fs_root"]).expanduser().resolve()
                 fs_root_path.mkdir(parents=True, exist_ok=True)
             except Exception as exc:
-                errors.append(f"Failed to prepare storage directory: {exc}")
+                log.error("Setup: failed to prepare storage directory: %s", exc, exc_info=True)
+                errors.append("Failed to prepare the storage directory. Check the path and its permissions.")
 
         admin_id = None
         if not errors:
@@ -1237,7 +1338,8 @@ def setup():
             except UserExistsError:
                 errors.append("An account with that email already exists.")
             except Exception as exc:
-                errors.append(f"Failed to finalise setup: {exc}")
+                log.error("Setup: failed to finalise: %s", exc, exc_info=True)
+                errors.append("Failed to finalise setup. Check the server log for details.")
 
         if errors:
             for err in errors:
@@ -1384,8 +1486,10 @@ def login():
         """, email=email_value)
 
 
-# ---- GET /logout — destroy session and redirect to login -----------------
-@app.route("/logout")
+# ---- POST /logout — destroy session and redirect to login ----------------
+# POST-only (with CSRF token) so third-party pages cannot force-logout users
+# via <img src="/logout">.
+@app.post("/logout")
 def logout():
     logout_user_session()
     flash("Logged out.", "info")
@@ -1475,8 +1579,9 @@ def reset_password(token: str):
         else:
             password = request.form.get("password") or ""
             password2 = request.form.get("password2") or ""
-            if len(password) < 8:
-                flash("Password must be at least 8 characters long.", "error")
+            password_error = password_policy_error(password)
+            if password_error:
+                flash(password_error, "error")
             elif password != password2:
                 flash("Passwords do not match.", "error")
             else:
@@ -1531,16 +1636,18 @@ def account():
                 except EmailInUseError:
                     flash("That email is already registered.", "error")
                 except Exception as exc:
-                    flash(f"Failed to update email: {exc}", "error")
+                    log.error("Failed to update email for user %s: %s", user['id'], exc, exc_info=True)
+                    flash("Failed to update email. Please try again.", "error")
 
         elif form_name == "update_password":
             current_password = request.form.get("current_password") or ""
             new_password = request.form.get("new_password") or ""
             confirm_password = request.form.get("confirm_password") or ""
+            password_error = password_policy_error(new_password)
             if authenticate_user(user['email'], current_password) is None:
                 flash("Current password is incorrect.", "error")
-            elif len(new_password) < 8:
-                flash("New password must be at least 8 characters long.", "error")
+            elif password_error:
+                flash(f"New password: {password_error}", "error")
             elif new_password != confirm_password:
                 flash("Confirmation password does not match.", "error")
             else:
@@ -1923,7 +2030,8 @@ def manage_case_upload():
             try:
                 f.save(final_dest)
             except OSError as exc:
-                return jsonify({"ok": False, "msg": f"Failed to save uploaded file: {exc}"}), 500
+                log.error("Failed to save uploaded file: %s", exc, exc_info=True)
+                return jsonify({"ok": False, "msg": "Failed to save the uploaded file."}), 500
             saved_paths.append(str(final_dest))
 
         if not saved_paths:
@@ -1931,6 +2039,38 @@ def manage_case_upload():
 
         return jsonify({"ok": True, "saved_as": saved_paths})
     # ---------- END Case Law handling ----------
+
+    # ---------- Legal Notices handling ----------
+    # Plain document upload into the case's "Legal Notices" subfolder.
+    # (The dedicated /legal-notice page handles letterhead + header stamping;
+    # here we just file an existing notice PDF alongside the case.)
+    if domain.lower() == "legal notices":
+        target_dir = cdir / "Legal Notices"
+        target_dir.mkdir(parents=True, exist_ok=True)
+
+        for f in files:
+            if not f or f.filename == "":
+                continue
+            upload_err = validate_upload(f)
+            if upload_err:
+                continue
+            ext = f.filename.rsplit(".", 1)[1].lower()
+            base = (main_type or "").strip() or safe_stem(f.filename)
+            base = re.sub(r"\s+", " ", base).strip()
+            new_name = f"{base}.{ext}"
+            final_dest = resolve_unique_destination(target_dir, new_name)
+            try:
+                f.save(final_dest)
+            except OSError as exc:
+                log.error("Failed to save uploaded file: %s", exc, exc_info=True)
+                return jsonify({"ok": False, "msg": "Failed to save the uploaded file."}), 500
+            saved_paths.append(str(final_dest))
+
+        if not saved_paths:
+            return jsonify({"ok": False, "msg": "No files were saved (unsupported type?)"}), 400
+
+        return jsonify({"ok": True, "saved_as": saved_paths})
+    # ---------- END Legal Notices handling ----------
 
     # Regular categories (Criminal/Civil/Commercial)
     target_dir = cdir / subcategory if subcategory else cdir
@@ -2143,7 +2283,8 @@ def api_delete_file():
     except FileNotFoundError:
         return jsonify({"ok": False, "msg": "File not found"}), 404
     except Exception as e:
-        return jsonify({"ok": False, "msg": f"Delete failed: {e}"}), 500
+        log.error("Delete failed: %s", e, exc_info=True)
+        return jsonify({"ok": False, "msg": "Delete failed."}), 500
 
 
 # ---- Rename case directory ------------------------------------
@@ -2236,7 +2377,8 @@ def api_delete_item():
     except FileNotFoundError:
         return jsonify({"ok": False, "msg": "Not found"}), 404
     except Exception as e:
-        return jsonify({"ok": False, "msg": f"Delete failed: {e}"}), 500
+        log.error("Delete failed: %s", e, exc_info=True)
+        return jsonify({"ok": False, "msg": "Delete failed."}), 500
 
 
 # ---- Directory Search --------------------------
@@ -2272,7 +2414,8 @@ def api_dir_tree():
                     files.append({"name": entry.name, "path": str(entry)})
         return jsonify({"dirs": dirs, "files": files})
     except Exception as e:
-        return jsonify({"dirs": [], "files": [], "error": str(e)}), 500
+        log.error("Directory listing failed: %s", e, exc_info=True)
+        return jsonify({"dirs": [], "files": [], "error": "Unable to list directory."}), 500
 
 
 # ════════════════════════════════════════════════════════════════════
@@ -2564,29 +2707,72 @@ def refresh_case_law_index(
     )
 
 
-_NEAR_RE = re.compile(r'("[^"]+"|\S+)\s+NEAR/(\d+)\s+("[^"]+"|\S+)', re.IGNORECASE)
-_BOOLEAN_OPERATORS = {
-    "and": "AND",
-    "or": "OR",
-    "not": "NOT",
-    "near": "NEAR",
-}
+_FTS_MAX_QUERY_LEN = 500
+_FTS_MAX_NEAR_DISTANCE = 50
+_FTS_TOKEN_RE = re.compile(r'"[^"]*"|\S+')
+_FTS_NEAR_RE = re.compile(r"NEAR/(\d+)", re.IGNORECASE)
+
+
+def _fts5_quote_term(token: str) -> str:
+    """Wrap a term/phrase in double quotes so FTS5 operator characters
+    (*, ^, :, parentheses, NEAR) inside it are treated as literal text."""
+    if len(token) >= 2 and token.startswith('"') and token.endswith('"'):
+        token = token[1:-1]
+    token = token.replace('"', " ").strip()
+    return f'"{token}"' if token else ""
 
 
 def normalize_boolean_query(raw: str) -> str:
-    """Convert a human-typed search query into FTS5 boolean syntax."""
-    query = normalize_ws(raw)
+    """Convert a human-typed search query into safe FTS5 boolean syntax.
+
+    Supports quoted phrases, AND/OR/NOT, and infix ``term NEAR/n term``.
+    Every bare term is double-quoted so user input can never inject FTS5
+    operator syntax; the result is always a syntactically valid MATCH
+    expression (term, then operators only *between* terms).
+    """
+    query = normalize_ws(raw)[:_FTS_MAX_QUERY_LEN]
     if not query:
         return ""
 
-    def _near_sub(match: re.Match) -> str:
-        left, distance, right = match.groups()
-        return f"NEAR({left} {right}, {distance})"
+    tokens = _FTS_TOKEN_RE.findall(query)
+    parts: list[str] = []
+    i = 0
+    while i < len(tokens):
+        token = tokens[i]
 
-    query = _NEAR_RE.sub(_near_sub, query)
-    for lower, upper in _BOOLEAN_OPERATORS.items():
-        query = re.sub(rf"\b{lower}\b", upper, query, flags=re.IGNORECASE)
-    return query
+        near = _FTS_NEAR_RE.fullmatch(token)
+        if near and parts and parts[-1].startswith('"') and i + 1 < len(tokens):
+            right = _fts5_quote_term(tokens[i + 1])
+            if right:
+                distance = min(int(near.group(1)), _FTS_MAX_NEAR_DISTANCE)
+                left = parts.pop()
+                parts.append(f"NEAR({left} {right}, {distance})")
+                i += 2
+                continue
+
+        upper = token.upper()
+        if upper in ("AND", "OR", "NOT"):
+            parts.append(upper)
+        else:
+            quoted = _fts5_quote_term(token)
+            if quoted:
+                parts.append(quoted)
+        i += 1
+
+    # Enforce term (operator term)* shape: drop leading/trailing operators
+    # and collapse runs of operators so the query cannot raise a syntax error.
+    result: list[str] = []
+    pending_op: Optional[str] = None
+    for part in parts:
+        if part in ("AND", "OR", "NOT"):
+            if result:
+                pending_op = part
+        else:
+            if result and pending_op:
+                result.append(pending_op)
+            result.append(part)
+            pending_op = None
+    return " ".join(result)
 
 
 # ---- Case Law Upload & Search -------------------------------------------
@@ -2917,7 +3103,12 @@ def case_law_search():
     sql += " ORDER BY c.decision_year DESC, c.created_at DESC LIMIT ?"
     params.append(limit)
 
-    rows = conn.execute(sql, params).fetchall()
+    try:
+        rows = conn.execute(sql, params).fetchall()
+    except sqlite3.OperationalError:
+        # Defensive: a malformed FTS5 expression must not produce a 500.
+        log.warning("Case law search query rejected: %r", text_query_raw)
+        return jsonify({"results": [], "filters": {}})
     results = [
         serialize_case_law(row, row["fts_content"]) for row in rows
     ]
@@ -2948,7 +3139,8 @@ def case_law_delete(case_id: int):
     try:
         folder_path = case_law_folder_path(row)
     except Exception as exc:
-        return case_law_error(f"Invalid case law folder: {exc}", 500)
+        log.error("Invalid case law folder for id %s: %s", case_id, exc, exc_info=True)
+        return case_law_error("Invalid case law folder.", 500)
 
     try:
         if folder_path.exists():
@@ -2956,14 +3148,16 @@ def case_law_delete(case_id: int):
     except FileNotFoundError:
         pass
     except Exception as exc:
-        return case_law_error(f"Failed to remove case files: {exc}", 500)
+        log.error("Failed to remove case law files for id %s: %s", case_id, exc, exc_info=True)
+        return case_law_error("Failed to remove case files.", 500)
 
     try:
         conn.execute("DELETE FROM case_law WHERE id = ?", (case_id,))
         conn.execute("DELETE FROM case_law_fts WHERE rowid = ?", (case_id,))
         conn.commit()
     except Exception as exc:
-        return case_law_error(f"Failed to remove database record: {exc}", 500)
+        log.error("Failed to remove case law DB record %s: %s", case_id, exc, exc_info=True)
+        return case_law_error("Failed to remove the database record.", 500)
 
     return jsonify({"ok": True, "deleted_id": case_id})
 
@@ -3288,7 +3482,8 @@ def api_update_note(year, month, case_name):
         note_path.write_text(content, encoding="utf-8")
         return jsonify({"ok": True})
     except Exception as e:
-        return jsonify({"ok": False, "msg": f"Write failed: {e}"}), 500
+        log.error("Note write failed: %s", e, exc_info=True)
+        return jsonify({"ok": False, "msg": "Write failed."}), 500
 
 
 
@@ -3340,7 +3535,8 @@ def api_create_note():
         note_file.write_text(text_out, encoding="utf-8")
         return jsonify({"ok": True, "path": str(note_file)})
     except Exception as e:
-        return jsonify({"ok": False, "msg": f"Write failed: {e}"}), 500
+        log.error("Note write failed: %s", e, exc_info=True)
+        return jsonify({"ok": False, "msg": "Write failed."}), 500
 
 @app.route("/api/note/<year>/<month>/<case_name>", methods=["GET", "POST"])
 @require_login_api
@@ -3364,7 +3560,8 @@ def api_note(year, month, case_name):
         note_path.write_text(content, encoding="utf-8")
         return jsonify({"ok": True})
     except Exception as e:
-        return jsonify({"ok": False, "msg": f"Write failed: {e}"}), 500
+        log.error("Note write failed: %s", e, exc_info=True)
+        return jsonify({"ok": False, "msg": "Write failed."}), 500
 
 
 # ════════════════════════════════════════════════════════════════════
@@ -3418,7 +3615,8 @@ def messages_home():
                     try:
                         message_id = create_message(user['id'], recipient_id, subject, body)
                     except Exception as exc:
-                        flash(f"Unable to send message: {exc}", "error")
+                        log.error("Unable to send message: %s", exc, exc_info=True)
+                        flash("Unable to send message. Please try again.", "error")
                     else:
                         try:
                             message_url = url_for("message_detail", message_id=message_id, _external=True)
@@ -3540,7 +3738,8 @@ def delete_message_action(message_id: int):
     try:
         removed = delete_message(message_id, user['id'])
     except Exception as exc:
-        flash(f"Unable to delete message: {exc}", "error")
+        log.error("Unable to delete message %s: %s", message_id, exc, exc_info=True)
+        flash("Unable to delete message. Please try again.", "error")
     else:
         if removed:
             flash("Message deleted.", "success")
@@ -3577,17 +3776,28 @@ def generate_invoice_pdf(invoice: Dict[str, Any]) -> tuple[BytesIO, str]:
         ) from exc
 
     pdf_buffer = BytesIO()
+    letterhead_path = _resolve_letterhead_path(invoice.get("letterhead_id"))
     letterhead_margin = 12.7 * mm  # existing half-inch allowance for printed letterhead
     extra_letterhead_margin = 25.4 * mm  # add one more inch for larger letterheads
+    top_margin = (24 * mm) + letterhead_margin + extra_letterhead_margin
+    page_w, page_h = A4
     doc = SimpleDocTemplate(
         pdf_buffer,
         pagesize=A4,
         leftMargin=18 * mm,
         rightMargin=18 * mm,
-        topMargin=(24 * mm) + letterhead_margin + extra_letterhead_margin,
+        topMargin=top_margin,
         bottomMargin=20 * mm,
         title=f"Invoice {invoice.get('invoice_number') or ''}".strip() or "Invoice",
     )
+
+    def _on_invoice_page(canvas, doc_inner):
+        # Letterhead (image or PDF) is stamped behind every page after the
+        # document is built — see _apply_letterhead_to_pdf below.  The top
+        # margin reserved above keeps content clear of the letterhead band
+        # on every page, including subsequent pages of multi-page invoices.
+        pass
+
     AVAILABLE_MARGIN = 24  # ensure tables stay comfortably within the frame
     available_width = max(doc.width - AVAILABLE_MARGIN, doc.width * 0.9)
 
@@ -3750,6 +3960,8 @@ def generate_invoice_pdf(invoice: Dict[str, Any]) -> tuple[BytesIO, str]:
         table_data,
         colWidths=item_col_widths,
         repeatRows=1,
+        splitByRow=1,
+        splitInRow=1,
     )
     items_table.setStyle(
         TableStyle(
@@ -3774,10 +3986,11 @@ def generate_invoice_pdf(invoice: Dict[str, Any]) -> tuple[BytesIO, str]:
     story.append(items_table)
     story.append(Spacer(1, 12))
 
-    doc.build(story)
+    doc.build(story, onFirstPage=_on_invoice_page, onLaterPages=_on_invoice_page)
     pdf_buffer.seek(0)
+    final_buffer = _apply_letterhead_to_pdf(pdf_buffer, letterhead_path)
     filename = _build_invoice_filename(invoice)
-    return pdf_buffer, filename
+    return final_buffer, filename
 
 
 # ---- Invoice metadata & numbering helpers --------------------------------
@@ -4058,6 +4271,7 @@ def invoice_save():
         "issuer_lines": _clean_lines(payload.get("issuer_lines") or []),
         "recipient_lines": _clean_lines(payload.get("recipient_lines") or []),
         "generated_at": payload.get("generated_at") or datetime.now(timezone.utc).replace(tzinfo=None).isoformat(),
+        "letterhead_id": payload.get("letterhead_id"),
     }
 
     two_places = Decimal("0.01")
@@ -4122,7 +4336,8 @@ def invoice_save():
             except RuntimeError as exc:
                 raise RuntimeError(str(exc)) from exc
             except Exception as exc:
-                raise InvoiceStorageError(f"Failed to render invoice: {exc}") from exc
+                log.error("Failed to render invoice PDF: %s", exc, exc_info=True)
+                raise InvoiceStorageError("Failed to render the invoice PDF.") from exc
 
             pdf_bytes = pdf_buffer.getvalue()
             primary_path, case_copy_path = _invoice_target_path(
@@ -4138,7 +4353,8 @@ def invoice_save():
                 if case_copy_path:
                     with suppress(FileNotFoundError):
                         case_copy_path.unlink()
-                raise InvoiceStorageError(f"Unable to write invoice PDF: {exc}") from exc
+                log.error("Unable to write invoice PDF: %s", exc, exc_info=True)
+                raise InvoiceStorageError("Unable to write the invoice PDF to storage.") from exc
 
             try:
                 relative_path = (
@@ -4188,7 +4404,8 @@ def invoice_save():
     except InvoiceStorageError as exc:
         return jsonify({"ok": False, "msg": str(exc)}), 500
     except Exception as exc:  # pragma: no cover - defensive
-        return jsonify({"ok": False, "msg": f"Failed to save invoice: {exc}"}), 500
+        log.error("Failed to save invoice: %s", exc, exc_info=True)
+        return jsonify({"ok": False, "msg": "Failed to save the invoice."}), 500
 
     if pdf_bytes is None or primary_path is None or final_number is None:
         return jsonify({"ok": False, "msg": "Invoice could not be generated."}), 500
@@ -4213,8 +4430,1764 @@ def api_invoice_next_number():
     try:
         suggestion = _suggest_invoice_number(conn)
     except Exception as exc:  # pragma: no cover - defensive
-        return jsonify({"ok": False, "msg": f"Unable to determine invoice number: {exc}"}), 500
+        log.error("Unable to determine next invoice number: %s", exc, exc_info=True)
+        return jsonify({"ok": False, "msg": "Unable to determine the next invoice number."}), 500
     return jsonify({"ok": True, "invoice_number": suggestion})
+
+
+# ════════════════════════════════════════════════════════════════════
+# LETTERHEADS
+# ════════════════════════════════════════════════════════════════════
+#
+# Admin-uploaded A4 letterheads (PNG/JPG image or PDF) stamped behind
+# every page of generated invoices and certificates.  Stored in
+# FS_ROOT/Letterheads/.
+#
+# Routes: /api/letterheads, /api/letterheads/upload,
+#         /api/letterheads/<id>, /api/letterheads/<id>/image
+# ════════════════════════════════════════════════════════════════════
+
+_LETTERHEAD_EXTENSIONS = {"png", "jpg", "jpeg", "pdf"}
+_LETTERHEAD_MAX_BYTES = 5 * 1024 * 1024  # 5 MB
+
+
+def _letterhead_kind(filename: str) -> str:
+    """Return 'pdf' for PDF letterheads, otherwise 'image'."""
+    ext = filename.rsplit(".", 1)[-1].lower() if "." in filename else ""
+    return "pdf" if ext == "pdf" else "image"
+
+
+def _letterheads_dir() -> Path:
+    """Return (and lazily create) the FS_ROOT/Letterheads directory."""
+    d = FS_ROOT / "Letterheads"
+    d.mkdir(parents=True, exist_ok=True)
+    return d
+
+
+# ---- Thumbnail rendering (shared by letterheads + vakalatnamas) ----------
+# Letterhead images, letterhead PDFs and Vakalatnama PDFs are all A4 sized.
+# We render a small PNG preview (cached on disk) so the UI can show an
+# actual thumbnail instead of a generic file-type icon.
+
+_THUMB_WIDTH = 1240  # px (A4 @ ~150 DPI); height follows the source aspect ratio
+
+
+def _render_pdf_first_page_png(pdf_path: Path, dest: Path, width: int = _THUMB_WIDTH) -> bool:
+    """Render the first page of a PDF to *dest* (PNG) via poppler's pdftoppm.
+
+    Returns True on success.  Degrades gracefully (returns False) when
+    poppler is unavailable or rendering fails.
+    """
+    import subprocess
+
+    exe = shutil.which("pdftoppm")
+    if not exe:
+        return False
+    # With -singlefile, pdftoppm writes "<prefix>.png"; pass the dest path
+    # without its .png suffix as the prefix so output lands exactly on dest.
+    prefix = dest.with_suffix("")
+    try:
+        subprocess.run(
+            [
+                exe, "-png", "-singlefile",
+                "-f", "1", "-l", "1",
+                "-scale-to-x", str(width), "-scale-to-y", "-1",
+                str(pdf_path), str(prefix),
+            ],
+            check=True, timeout=30,
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+        )
+    except Exception:
+        return False
+    return dest.exists()
+
+
+def _render_image_thumbnail(img_path: Path, dest: Path, width: int = _THUMB_WIDTH) -> bool:
+    """Resize a raster image down to *width* px and save as PNG at *dest*."""
+    try:
+        from PIL import Image
+    except ImportError:
+        return False
+    try:
+        with Image.open(img_path) as im:
+            im = im.convert("RGB")
+            if im.width > width:
+                ratio = width / float(im.width)
+                height = max(1, int(im.height * ratio))
+                im = im.resize((width, height), Image.LANCZOS)
+            im.save(str(dest), "PNG")
+        return dest.exists()
+    except Exception:
+        return False
+
+
+def _get_or_create_thumbnail(source_path: Path, thumbs_dir: Path,
+                             item_id: int, kind: str,
+                             width: int = _THUMB_WIDTH) -> Optional[Path]:
+    """Return a cached PNG thumbnail for *source_path*, generating it if
+    missing or stale.  *kind* is 'pdf' or 'image'.  Returns None if the
+    thumbnail could not be produced.
+
+    The render width is encoded in the cache filename so changing the
+    target resolution automatically invalidates older, lower-res caches.
+    """
+    try:
+        thumbs_dir.mkdir(parents=True, exist_ok=True)
+    except OSError:
+        return None
+    dest = thumbs_dir / f"{item_id}_w{width}.png"
+    try:
+        if dest.exists() and dest.stat().st_mtime >= source_path.stat().st_mtime:
+            return dest
+    except OSError:
+        pass
+    ok = (_render_pdf_first_page_png(source_path, dest, width)
+          if kind == "pdf"
+          else _render_image_thumbnail(source_path, dest, width))
+    return dest if ok and dest.exists() else None
+
+
+def _purge_cached_thumbnails(thumbs_dir: Path, item_id: int) -> None:
+    """Delete every cached thumbnail variant for *item_id* (any width,
+    plus the legacy un-suffixed name)."""
+    if not thumbs_dir.exists():
+        return
+    for p in thumbs_dir.glob(f"{item_id}_w*.png"):
+        try:
+            p.unlink()
+        except OSError:
+            pass
+    legacy = thumbs_dir / f"{item_id}.png"
+    if legacy.exists():
+        try:
+            legacy.unlink()
+        except OSError:
+            pass
+
+
+# A4 page height in millimetres — used to convert letterhead pixel bands to mm.
+_A4_HEIGHT_MM = 297.0
+# Brightness (0-255) below which a pixel counts as letterhead "content" rather
+# than blank paper. ~235 tolerates slightly off-white scans / backgrounds.
+_LH_CONTENT_THRESHOLD = 235
+# Legal-notice proforma geometry (mm). Single source of truth shared by the PDF
+# generator and the on-page margin guidance so the two can never drift apart.
+_LN_BAND_GAP_MM = 6.0       # gap between the letterhead header and the proforma
+_LN_BAND_HEIGHT_MM = 40.0   # height of the proforma (recipient / notice) block
+
+
+def _measure_letterhead_margins(letterhead_id, pad_mm: float = 2.0) -> Optional[Dict[str, float]]:
+    """Measure how far a letterhead's printed header and footer extend into the page.
+
+    The letterhead is stamped stretched to fill the whole A4 sheet
+    (``preserveAspectRatio=False``), so the margins a user must leave are
+    governed entirely by where the artwork sits inside the image — *not* by any
+    fixed constant. We render the letterhead to a full-page PNG (reusing the
+    thumbnail cache), find the bottom edge of the top (header) band and the top
+    edge of the bottom (footer) band, and convert those pixel rows to mm of A4
+    height.
+
+    Returns millimetre measurements, or ``None`` when the letterhead cannot be
+    measured (none selected, blank, or rendering unavailable)::
+
+        {"header_mm", "footer_mm", "top_margin_mm", "bottom_margin_mm"}
+
+    ``top_margin_mm`` / ``bottom_margin_mm`` include a small safety pad so text
+    set exactly at the recommended margin still clears the artwork.
+    """
+    path = _resolve_letterhead_path(letterhead_id)
+    if not path:
+        return None
+    try:
+        lid = int(letterhead_id)
+    except (TypeError, ValueError):
+        return None
+
+    kind = "pdf" if path.suffix.lower() == ".pdf" else "image"
+    thumb = _get_or_create_thumbnail(path, _letterheads_dir() / ".thumbs", lid, kind)
+    if not thumb:
+        return None
+
+    try:
+        from PIL import Image
+    except ImportError:
+        return None
+
+    try:
+        with Image.open(thumb) as im:
+            im = im.convert("L")
+            W, H = im.size
+            if H < 10 or W < 1:
+                return None
+            px = im.load()
+
+            def _row_has_content(y: int) -> bool:
+                for x in range(0, W, 3):          # sample every 3rd column for speed
+                    if px[x, y] < _LH_CONTENT_THRESHOLD:
+                        return True
+                return False
+
+            content_rows = [y for y in range(H) if _row_has_content(y)]
+    except Exception:
+        return None
+
+    if not content_rows:
+        return None
+
+    mm_per_px = _A4_HEIGHT_MM / H
+    half = H * 0.5
+    top_rows = [y for y in content_rows if y < half]
+    bot_rows = [y for y in content_rows if y >= half]
+
+    header_mm = ((max(top_rows) + 1) * mm_per_px) if top_rows else 0.0
+    footer_mm = ((H - min(bot_rows)) * mm_per_px) if bot_rows else 0.0
+
+    return {
+        "header_mm": round(header_mm, 1),
+        "footer_mm": round(footer_mm, 1),
+        "top_margin_mm": round(header_mm + pad_mm, 1),
+        "bottom_margin_mm": round(footer_mm + pad_mm, 1),
+    }
+
+
+def _letterhead_margin_guidance(letterhead_id) -> Optional[Dict[str, float]]:
+    """Display-ready margin recommendations (cm, rounded *up* to 0.1 cm) for a
+    letterhead, derived from its measured artwork. Returns None when the
+    letterhead is not measurable (none selected / blank / render unavailable).
+
+    - ``top_cm``        : every-page top margin needed to clear the header band
+    - ``bottom_cm``     : every-page bottom margin needed to clear the footer
+    - ``first_page_cm`` : page-1 top margin (header + proforma block)
+    """
+    m = _measure_letterhead_margins(letterhead_id)
+    if not m:
+        return None
+    import math
+
+    def _ceil_cm(mm: float) -> float:
+        return math.ceil(mm) / 10.0  # round up to the next 0.1 cm (never under)
+
+    first_mm = m["top_margin_mm"] + _LN_BAND_GAP_MM + _LN_BAND_HEIGHT_MM
+    return {
+        "top_cm": _ceil_cm(m["top_margin_mm"]),
+        "bottom_cm": _ceil_cm(m["bottom_margin_mm"]),
+        "first_page_cm": _ceil_cm(first_mm),
+    }
+
+
+@app.get("/api/letterheads")
+@require_login_api
+def api_letterheads():
+    """Return all uploaded letterheads as JSON."""
+    conn = get_app_db()
+    rows = conn.execute(
+        "SELECT id, label, filename, created_at FROM letterheads ORDER BY created_at DESC"
+    ).fetchall()
+    items = []
+    for r in rows:
+        items.append({
+            "id": r["id"],
+            "label": r["label"],
+            "filename": r["filename"],
+            "kind": _letterhead_kind(r["filename"]),
+            "image_url": url_for("api_letterhead_image", lid=r["id"]),
+            "thumbnail_url": url_for("api_letterhead_thumbnail", lid=r["id"], v=_THUMB_WIDTH),
+            "created_at": r["created_at"],
+            "margins": _letterhead_margin_guidance(r["id"]),
+        })
+    return jsonify({"ok": True, "letterheads": items})
+
+
+@app.post("/api/letterheads/upload")
+@require_admin_api
+def api_letterheads_upload():
+    """Upload a new letterhead image (admin only)."""
+    if not FS_ROOT:
+        return jsonify({"ok": False, "msg": "Storage not configured."}), 400
+
+    label = normalize_ws(request.form.get("label") or "")
+    if not label:
+        return jsonify({"ok": False, "msg": "Label is required."}), 400
+
+    f = request.files.get("file")
+    if not f or not f.filename:
+        return jsonify({"ok": False, "msg": "No file provided."}), 400
+
+    ext = (f.filename.rsplit(".", 1)[1].lower()) if "." in f.filename else ""
+    if ext not in _LETTERHEAD_EXTENSIONS:
+        return jsonify({"ok": False, "msg": f"Only PNG/JPG images or PDF files are allowed (got .{ext})."}), 400
+
+    # Magic byte validation
+    sigs = _MAGIC_SIGNATURES.get(ext, [])
+    if sigs:
+        header = f.stream.read(8)
+        f.stream.seek(0)
+        if not any(header.startswith(sig) for sig in sigs):
+            return jsonify({"ok": False, "msg": "File content does not match its extension."}), 400
+
+    # Size check
+    f.stream.seek(0, 2)
+    size = f.stream.tell()
+    f.stream.seek(0)
+    if size > _LETTERHEAD_MAX_BYTES:
+        return jsonify({"ok": False, "msg": "File too large (max 5 MB)."}), 400
+
+    import uuid as _uuid
+    safe_name = _sanitize_filename_fragment(Path(f.filename).stem) or "letterhead"
+    disk_name = f"{_uuid.uuid4().hex[:12]}_{safe_name}.{ext}"
+    dest = _letterheads_dir() / disk_name
+    try:
+        _safe_path(dest, FS_ROOT)
+    except ValueError:
+        return jsonify({"ok": False, "msg": "Invalid filename."}), 400
+
+    f.save(str(dest))
+
+    conn = get_app_db()
+    user_id = g.current_user.id if g.current_user else None
+    conn.execute(
+        "INSERT INTO letterheads(label, filename, uploaded_by) VALUES(?, ?, ?)",
+        (label, disk_name, user_id),
+    )
+    conn.commit()
+    row = conn.execute(
+        "SELECT id FROM letterheads WHERE filename = ?", (disk_name,)
+    ).fetchone()
+
+    return jsonify({"ok": True, "id": row["id"], "label": label})
+
+
+@app.delete("/api/letterheads/<int:lid>")
+@require_admin_api
+def api_letterhead_delete(lid: int):
+    """Delete a letterhead image (admin only)."""
+    conn = get_app_db()
+    row = conn.execute("SELECT filename FROM letterheads WHERE id = ?", (lid,)).fetchone()
+    if not row:
+        return jsonify({"ok": False, "msg": "Letterhead not found."}), 404
+
+    disk_path = _letterheads_dir() / row["filename"]
+    if disk_path.exists():
+        disk_path.unlink()
+    _purge_cached_thumbnails(_letterheads_dir() / ".thumbs", lid)
+    conn.execute("DELETE FROM letterheads WHERE id = ?", (lid,))
+    conn.commit()
+    return jsonify({"ok": True})
+
+
+@app.get("/api/letterheads/<int:lid>/image")
+@require_login
+def api_letterhead_image(lid: int):
+    """Serve a letterhead image file."""
+    conn = get_app_db()
+    row = conn.execute("SELECT filename FROM letterheads WHERE id = ?", (lid,)).fetchone()
+    if not row:
+        return "Not found", 404
+
+    disk_path = _letterheads_dir() / row["filename"]
+    if not disk_path.exists():
+        return "Not found", 404
+
+    return send_file(str(disk_path))
+
+
+@app.get("/api/letterheads/<int:lid>/thumbnail")
+@require_login
+def api_letterhead_thumbnail(lid: int):
+    """Serve an A4 PNG preview of a letterhead (image or PDF)."""
+    conn = get_app_db()
+    row = conn.execute("SELECT filename FROM letterheads WHERE id = ?", (lid,)).fetchone()
+    if not row:
+        return "Not found", 404
+
+    disk_path = _letterheads_dir() / row["filename"]
+    if not disk_path.exists():
+        return "Not found", 404
+
+    kind = _letterhead_kind(row["filename"])
+    thumb = _get_or_create_thumbnail(
+        disk_path, _letterheads_dir() / ".thumbs", lid, kind
+    )
+    if thumb is None:
+        # Fall back to the original image for raster letterheads; PDFs that
+        # cannot be rendered get a 404 so the UI shows its icon fallback.
+        if kind != "pdf":
+            return send_file(str(disk_path))
+        return "Not found", 404
+    resp = send_file(str(thumb), mimetype="image/png")
+    # URL is versioned by render width, so the bytes for a given URL never
+    # change — cache aggressively (a width change yields a fresh URL).
+    resp.headers["Cache-Control"] = "public, max-age=31536000, immutable"
+    return resp
+
+
+def _resolve_letterhead_path(letterhead_id) -> Optional[Path]:
+    """Look up a letterhead by ID and return its disk path, or None."""
+    if not letterhead_id:
+        return None
+    try:
+        lid = int(letterhead_id)
+    except (TypeError, ValueError):
+        return None
+    conn = get_app_db()
+    row = conn.execute("SELECT filename FROM letterheads WHERE id = ?", (lid,)).fetchone()
+    if not row:
+        return None
+    p = _letterheads_dir() / row["filename"]
+    return p if p.exists() else None
+
+
+def _apply_letterhead_to_pdf(content_buffer: BytesIO, letterhead_path: Optional[Path]) -> BytesIO:
+    """Stamp an A4 letterhead behind *every* page of a generated PDF.
+
+    The letterhead may be a raster image (PNG/JPG) or a PDF; its first
+    page (or the single image, scaled to fill A4) is placed underneath
+    each content page so multi-page invoices and certificates keep the
+    letterhead — and the reserved margins — on all pages.
+
+    Returns a new BytesIO with the merged document.  If *letterhead_path*
+    is None, or anything goes wrong, the original content buffer is
+    returned unchanged (graceful fallback to a blank-header document).
+    """
+    if not letterhead_path:
+        content_buffer.seek(0)
+        return content_buffer
+
+    try:
+        from pypdf import PdfReader, PdfWriter
+        from reportlab.lib.pagesizes import A4
+        from reportlab.pdfgen import canvas as _rl_canvas
+    except ImportError:
+        content_buffer.seek(0)
+        return content_buffer
+
+    try:
+        ext = letterhead_path.suffix.lower().lstrip(".")
+        if ext == "pdf":
+            lh_reader = PdfReader(str(letterhead_path))
+            if not lh_reader.pages:
+                content_buffer.seek(0)
+                return content_buffer
+            lh_template = lh_reader.pages[0]
+        else:
+            # Render the image onto a full A4 page so it becomes the background.
+            page_w, page_h = A4
+            img_buf = BytesIO()
+            c = _rl_canvas.Canvas(img_buf, pagesize=A4)
+            c.drawImage(
+                str(letterhead_path), 0, 0,
+                width=page_w, height=page_h,
+                preserveAspectRatio=False, mask="auto",
+            )
+            c.showPage()
+            c.save()
+            img_buf.seek(0)
+            lh_template = PdfReader(img_buf).pages[0]
+
+        # Clone the content into the writer first so every page is attached
+        # to the writer before merging (the reliable, non-deprecated path),
+        # then stamp the letterhead underneath each page (over=False).
+        content_buffer.seek(0)
+        writer = PdfWriter(clone_from=content_buffer)
+        for page in writer.pages:
+            page.merge_page(lh_template, over=False)
+
+        out = BytesIO()
+        writer.write(out)
+        out.seek(0)
+        return out
+    except Exception:
+        content_buffer.seek(0)
+        return content_buffer
+
+
+# ════════════════════════════════════════════════════════════════════
+# CERTIFICATES
+# ════════════════════════════════════════════════════════════════════
+#
+# Free-form internship certificate generator.  The frontend is a
+# single contenteditable A4 sandbox with a custom formatting toolbar.
+# Rich HTML from four editable regions (title, intern info, body,
+# signature) is sent to the backend, converted to ReportLab flowables
+# via _quill_html_to_reportlab_story(), and rendered to PDF.
+#
+# Certificate numbers use NNN/intern/YYYY format, reset yearly.
+# Storage: FS_ROOT/Certificates/<year>/<num>_<name>.pdf
+#
+# Routes: /certificate (form), /certificate/save,
+#         /api/certificates/next-number
+# ════════════════════════════════════════════════════════════════════
+
+CERTIFICATE_SEQ_PAD = 3
+
+
+class CertificateNumberConflict(Exception):
+    """Raised when the chosen certificate number is already taken."""
+
+
+class CertificateStorageError(Exception):
+    """Raised when saving the certificate PDF to disk fails."""
+
+
+def _certificate_year(cert_date: Optional[str] = None) -> str:
+    """Return a 4-digit year from a DD-MM-YYYY / YYYY-MM-DD date, else this year."""
+    raw = (cert_date or "").strip()
+    if raw:
+        parts = raw.split("-")
+        if len(parts) == 3:
+            if len(parts[2]) == 4:
+                return parts[2]      # DD-MM-YYYY
+            if len(parts[0]) == 4:
+                return parts[0]      # YYYY-MM-DD
+    from datetime import datetime as _dt
+    return str(_dt.now().year)
+
+
+def _format_certificate_number(seq: int, year: str) -> str:
+    """Format a certificate number as ``NNN/intern/YYYY`` (3-digit, zero-padded)."""
+    return f"{str(max(seq, 1)).zfill(CERTIFICATE_SEQ_PAD)}/intern/{year}"
+
+
+def _next_certificate_seq(conn: sqlite3.Connection, year: str) -> int:
+    """Next sequence number for *year*. Resets to 1 each calendar year."""
+    suffix = f"/intern/{year}"
+    rows = conn.execute("SELECT certificate_number FROM certificates").fetchall()
+    max_seq = 0
+    for r in rows:
+        num = (r["certificate_number"] or "").strip()
+        if num.endswith(suffix):
+            lead = num.split("/", 1)[0]
+            try:
+                max_seq = max(max_seq, int(lead))
+            except ValueError:
+                pass
+    return max_seq + 1
+
+
+def _suggest_certificate_number(conn: sqlite3.Connection, year: Optional[str] = None) -> str:
+    year = year or _certificate_year()
+    return _format_certificate_number(_next_certificate_seq(conn, year), year)
+
+
+def _reserve_certificate_number(conn: sqlite3.Connection, year: Optional[str] = None) -> str:
+    year = year or _certificate_year()
+    return _format_certificate_number(_next_certificate_seq(conn, year), year)
+
+
+def _certificate_target_path(
+    cert_data: Dict[str, Any],
+) -> tuple[Path, Optional[Path]]:
+    """Compute (pdf_save_path, cert_dir) for a certificate."""
+    cert_number = cert_data.get("certificate_number") or "CERT-00000"
+    cert_date = cert_data.get("certificate_date") or ""
+    intern_name = cert_data.get("intern_name") or ""
+
+    # Determine year from certificate date
+    year_str = ""
+    if cert_date:
+        parts = cert_date.split("-")
+        if len(parts) == 3 and len(parts[2]) == 4:
+            year_str = parts[2]  # DD-MM-YYYY
+        elif len(parts) == 3 and len(parts[0]) == 4:
+            year_str = parts[0]  # YYYY-MM-DD
+    if not year_str:
+        from datetime import datetime as _dt
+        year_str = str(_dt.now().year)
+
+    cert_dir = FS_ROOT / "Certificates" / year_str
+    try:
+        _safe_path(cert_dir, FS_ROOT)
+    except ValueError:
+        raise CertificateStorageError("Invalid certificate path.")
+    cert_dir.mkdir(parents=True, exist_ok=True)
+
+    safe_num = _sanitize_filename_fragment(cert_number) or "cert"
+    safe_name = _sanitize_filename_fragment(intern_name) or "intern"
+    filename = f"{safe_num}_{safe_name}.pdf"
+    pdf_path = cert_dir / filename
+    return pdf_path, cert_dir
+
+
+def _insert_certificate_row(
+    conn: sqlite3.Connection,
+    cert_number: str,
+    intern_name: str,
+    file_path: str,
+    payload_json: str,
+    user_id: Optional[int],
+) -> int:
+    conn.execute(
+        """
+        INSERT INTO certificates(certificate_number, intern_name, file_path, payload_json, generated_by)
+        VALUES(?, ?, ?, ?, ?)
+        """,
+        (cert_number, intern_name, file_path, payload_json, user_id),
+    )
+    conn.commit()
+    row = conn.execute("SELECT last_insert_rowid() AS id").fetchone()
+    return row["id"]
+
+
+# ---- Quill HTML → ReportLab conversion ------------------------------------
+def _quill_html_to_reportlab_story(html_str: str, base_style) -> list:
+    """Convert Quill-generated HTML to a list of ReportLab flowables.
+
+    Supports: <b>, <i>, <u>, <strong>, <em>, font sizes, alignment,
+    line-height.  Each <p> becomes a separate Paragraph with its own
+    ParagraphStyle derived from *base_style*.
+    """
+    from reportlab.platypus import Paragraph, Spacer
+    from reportlab.lib.enums import TA_LEFT, TA_CENTER, TA_RIGHT, TA_JUSTIFY
+
+    if not html_str or not html_str.strip():
+        return [Paragraph("&nbsp;", base_style)]
+
+    import re as _re
+    from html.parser import HTMLParser
+
+    _ALIGN_MAP = {
+        "left": TA_LEFT, "center": TA_CENTER,
+        "right": TA_RIGHT, "justify": TA_JUSTIFY,
+    }
+    _BLOCK_TAGS = {"p", "div", "h1", "h2", "h3", "h4", "li"}
+
+    # Every font in the certificate is rendered in Times New Roman, regardless
+    # of what the editor requested — so any font-family choice maps to TNR.
+    _cert_font = _register_times_new_roman()
+
+    def _map_font_family(fam: str):
+        return _cert_font
+
+    class _RichParser(HTMLParser):
+        def __init__(self):
+            super().__init__()
+            self.paragraphs = []    # list of (inline_html, align, leading)
+            self._buf = []          # inline markup accumulator
+            self._align = None
+            self._leading = None
+            self._font_stack = []   # number of <font> tags opened per <span>
+
+        def _flush(self):
+            text = "".join(self._buf).strip()
+            if text:
+                self.paragraphs.append((text, self._align, self._leading))
+            self._buf = []
+            self._align = None
+            self._leading = None
+
+        def handle_starttag(self, tag, attrs):
+            a = dict(attrs)
+            if tag in _BLOCK_TAGS:
+                self._flush()
+                style = a.get("style", "")
+                m = _re.search(r'text-align:\s*(left|center|right|justify)', style)
+                if m:
+                    self._align = m.group(1)
+                m = _re.search(r'line-height:\s*([0-9.]+)', style)
+                if m:
+                    try:
+                        self._leading = float(m.group(1))
+                    except ValueError:
+                        pass
+                cls = a.get("class", "")
+                if "ql-align-center" in cls:
+                    self._align = "center"
+                elif "ql-align-right" in cls:
+                    self._align = "right"
+                elif "ql-align-justify" in cls:
+                    self._align = "justify"
+            elif tag in ("strong", "b"):
+                self._buf.append("<b>")
+            elif tag in ("em", "i"):
+                self._buf.append("<i>")
+            elif tag == "u":
+                self._buf.append("<u>")
+            elif tag == "br":
+                self._buf.append("<br/>")
+            elif tag == "span" or tag == "font":
+                opened = 0
+                style = a.get("style", "")
+                cls = a.get("class", "")
+                size_m = _re.search(r'font-size:\s*([0-9.]+)', style)
+                if size_m:
+                    try:
+                        self._buf.append(f'<font size={int(float(size_m.group(1)))}>')
+                        opened += 1
+                    except ValueError:
+                        pass
+                face = None
+                fam_m = _re.search(r'font-family:\s*([^;]+)', style)
+                if fam_m:
+                    face = _map_font_family(fam_m.group(1))
+                if a.get("face"):
+                    face = _map_font_family(a.get("face")) or a.get("face")
+                if "ql-font-times-new-roman" in cls or "ql-font-sans-serif" in cls:
+                    face = _cert_font
+                if face:
+                    self._buf.append(f'<font face="{face}">')
+                    opened += 1
+                self._font_stack.append(opened)
+
+        def handle_endtag(self, tag):
+            if tag in _BLOCK_TAGS:
+                self._flush()
+            elif tag in ("strong", "b"):
+                self._buf.append("</b>")
+            elif tag in ("em", "i"):
+                self._buf.append("</i>")
+            elif tag == "u":
+                self._buf.append("</u>")
+            elif tag == "span" or tag == "font":
+                opened = self._font_stack.pop() if self._font_stack else 0
+                self._buf.append("</font>" * opened)
+
+        def handle_data(self, data):
+            self._buf.append(
+                data.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+            )
+
+    parser = _RichParser()
+    parser.feed(html_str)
+    parser._flush()
+
+    story = []
+    for inline_html, align, leading in parser.paragraphs:
+        style = base_style.clone(f"rich_{id(inline_html)}")
+        if align:
+            style.alignment = _ALIGN_MAP.get(align, base_style.alignment)
+        if leading:
+            style.leading = style.fontSize * leading
+        story.append(Paragraph(inline_html, style))
+        story.append(Spacer(1, 2))
+
+    return story if story else [Paragraph("&nbsp;", base_style)]
+
+
+# ---- Certificate PDF generation (ReportLab) --------------------------------
+def generate_certificate_pdf(cert: Dict[str, Any]) -> tuple[BytesIO, str]:
+    """Build an A4 certificate PDF from free-form sandbox regions.
+
+    Expected keys in *cert*:
+        title_html        – rich HTML for the centred title
+        intern_name       – plain text (used for filename / DB)
+        intern_info_html  – rich HTML for the left column (name, address, duration)
+        certificate_number, certificate_date – plain text for right column
+        body_html         – rich HTML for the main body
+        signature_html    – rich HTML for the right-aligned signature block
+        letterhead_id     – optional FK to letterheads table
+    """
+    try:
+        from reportlab.lib.pagesizes import A4
+        from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
+        from reportlab.lib.units import mm
+        from reportlab.lib.enums import TA_LEFT, TA_CENTER, TA_RIGHT, TA_JUSTIFY
+        from reportlab.platypus import (
+            Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle,
+        )
+    except ImportError as exc:
+        raise RuntimeError(
+            "ReportLab is required to generate certificates. "
+            "Install it with `pip install reportlab`."
+        ) from exc
+
+    pdf_buffer = BytesIO()
+
+    # Letterhead handling
+    letterhead_path = _resolve_letterhead_path(cert.get("letterhead_id"))
+    letterhead_margin = 12.7 * mm
+    extra_letterhead_margin = 25.4 * mm
+    top_margin = (24 * mm) + letterhead_margin + extra_letterhead_margin
+
+    doc = SimpleDocTemplate(
+        pdf_buffer,
+        pagesize=A4,
+        leftMargin=18 * mm,
+        rightMargin=18 * mm,
+        topMargin=top_margin,
+        bottomMargin=25 * mm,  # +0.5cm so content clears the foot of the letterhead
+        title=f"Certificate {cert.get('certificate_number') or ''}".strip() or "Certificate",
+    )
+    page_w, page_h = A4
+
+    def _on_page(canvas, doc_inner):
+        # Letterhead (image or PDF) is stamped behind every page after the
+        # document is built — see _apply_letterhead_to_pdf below.  The top
+        # margin reserved above keeps content clear of the letterhead band
+        # on every page, including subsequent pages of multi-page documents.
+        pass
+
+    styles = getSampleStyleSheet()
+
+    # Render the entire certificate in genuine Times New Roman when available,
+    # falling back to ReportLab's built-in Times only if the face is missing.
+    cert_font = _register_times_new_roman()
+    cert_font_bold = "TimesNewRoman-Bold" if cert_font == "TimesNewRoman" else "Times-Bold"
+
+    title_style = ParagraphStyle(
+        "CertTitle", parent=styles["Title"],
+        fontName=cert_font_bold, fontSize=20, leading=26,
+        alignment=TA_CENTER, spaceAfter=8,
+    )
+    info_style = ParagraphStyle(
+        "CertInfo", parent=styles["Normal"],
+        fontName=cert_font, fontSize=11, leading=15,
+        alignment=TA_LEFT,
+    )
+    meta_style = ParagraphStyle(
+        "CertMeta", parent=styles["Normal"],
+        fontName=cert_font, fontSize=11, leading=15,
+        alignment=TA_RIGHT,
+    )
+    body_base_style = ParagraphStyle(
+        "CertBody", parent=styles["Normal"],
+        fontName=cert_font, fontSize=12, leading=18,
+        alignment=TA_JUSTIFY, spaceBefore=4, spaceAfter=4,
+    )
+    sig_base_style = ParagraphStyle(
+        "CertSig", parent=styles["Normal"],
+        fontName=cert_font, fontSize=11, leading=14,
+        alignment=TA_CENTER,
+    )
+
+    story: list = []
+
+    # ── 1. Title (rich text from title region) ────────────────────
+    title_html = cert.get("title_html") or ""
+    if title_html.strip():
+        story.extend(_quill_html_to_reportlab_story(title_html, title_style))
+    else:
+        story.append(Paragraph("CERTIFICATE OF INTERNSHIP", title_style))
+    story.append(Spacer(1, 12))
+
+    # ── 2. Two-column header: intern info LEFT | meta RIGHT ──────
+    intern_info_html = cert.get("intern_info_html") or ""
+    cert_number = safe_text(cert.get("certificate_number") or "")
+    cert_date = safe_text(cert.get("certificate_date") or "")
+
+    # Left column — intern details (rich text)
+    if intern_info_html.strip():
+        left_flowables = _quill_html_to_reportlab_story(intern_info_html, info_style)
+    else:
+        left_flowables = [Paragraph("&nbsp;", info_style)]
+
+    # Right column — certificate number + date (structured)
+    meta_parts = []
+    if cert_number:
+        meta_parts.append(f"<b>Certificate No:</b> {cert_number}")
+    if cert_date:
+        meta_parts.append(f"<b>Date:</b> {cert_date}")
+    right_flowable = Paragraph("<br/>".join(meta_parts) if meta_parts else "&nbsp;", meta_style)
+
+    header_table = Table(
+        [[left_flowables, [right_flowable]]],
+        colWidths=[doc.width * 0.6, doc.width * 0.4],
+    )
+    header_table.setStyle(TableStyle([
+        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+        ("LEFTPADDING", (0, 0), (-1, -1), 0),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+        ("TOPPADDING", (0, 0), (-1, -1), 0),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
+    ]))
+    story.append(header_table)
+    story.append(Spacer(1, 16))
+
+    # ── 3. Body (rich text from main body region) ─────────────────
+    body_html = cert.get("body_html") or ""
+    if body_html.strip():
+        story.extend(_quill_html_to_reportlab_story(body_html, body_base_style))
+    story.append(Spacer(1, 30))
+
+    # ── 4. Signature (rich text, right-aligned block) ─────────────
+    signature_html = cert.get("signature_html") or ""
+    if signature_html.strip():
+        sig_flowables = _quill_html_to_reportlab_story(signature_html, sig_base_style)
+        sig_wrapper = Table(
+            [[sig_flowables]],
+            colWidths=[doc.width * 0.45],
+            hAlign="RIGHT",
+        )
+        sig_wrapper.setStyle(TableStyle([
+            ("VALIGN", (0, 0), (-1, -1), "BOTTOM"),
+            ("LEFTPADDING", (0, 0), (-1, -1), 0),
+            ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+            ("TOPPADDING", (0, 0), (-1, -1), 0),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
+        ]))
+        story.append(sig_wrapper)
+
+    doc.build(story, onFirstPage=_on_page, onLaterPages=_on_page)
+    pdf_buffer.seek(0)
+    final_buffer = _apply_letterhead_to_pdf(pdf_buffer, letterhead_path)
+
+    # Suggested filename
+    safe_num = _sanitize_filename_fragment(cert.get("certificate_number") or "") or "cert"
+    safe_name = _sanitize_filename_fragment(cert.get("intern_name") or "") or "intern"
+    filename = f"{safe_num}_{safe_name}.pdf"
+    return final_buffer, filename
+
+
+def _normalize_certificate_date(value: Any) -> str:
+    """Normalise a certificate date to DD-MM-YYYY. Accepts DD-MM-YYYY or YYYY-MM-DD."""
+    raw = str(value or "").strip()
+    if not raw:
+        from datetime import datetime as _dt
+        now = _dt.now()
+        return now.strftime("%d-%m-%Y")
+
+    # DD-MM-YYYY already
+    m = re.match(r"^(\d{2})-(\d{2})-(\d{4})$", raw)
+    if m:
+        return raw
+
+    # YYYY-MM-DD → convert
+    m = re.match(r"^(\d{4})-(\d{2})-(\d{2})$", raw)
+    if m:
+        return f"{m.group(3)}-{m.group(2)}-{m.group(1)}"
+
+    raise ValueError(f"Unrecognised date format: {raw!r}. Use DD-MM-YYYY or YYYY-MM-DD.")
+
+
+# ---- GET /certificate — render the certificate form -----------------------
+@app.route("/certificate", methods=["GET"])
+@require_login
+def certificate_form():
+    try:
+        return render_template("certificate.html")
+    except Exception:
+        return render_template_string("""
+            <!doctype html><title>Generate Certificate</title>
+            <h1>Certificate Generator</h1>
+            <p>Unable to load the styled template. Please contact support.</p>
+        """)
+
+
+# ---- POST /certificate/save — generate PDF, store on disk, return download -
+@app.post("/certificate/save")
+@require_login
+def certificate_save():
+    payload = request.get_json(silent=True)
+    if not isinstance(payload, dict):
+        return jsonify({"ok": False, "msg": "Invalid certificate payload."}), 400
+
+    intern_name = str(payload.get("intern_name") or "").strip()[:180]
+    if not intern_name:
+        return jsonify({"ok": False, "msg": "Intern name is required."}), 400
+
+    requested_number = str(payload.get("certificate_number") or "").strip()
+
+    try:
+        normalized_date = _normalize_certificate_date(payload.get("certificate_date"))
+    except ValueError as exc:
+        return jsonify({"ok": False, "msg": str(exc)}), 400
+
+    # Derive year for certificate numbering
+    cert_year = _certificate_year(normalized_date)
+
+    cert_data: Dict[str, Any] = {
+        "certificate_number": requested_number,
+        "certificate_date": normalized_date,
+        "title_html": str(payload.get("title_html") or "").strip(),
+        "intern_name": intern_name,
+        "intern_info_html": str(payload.get("intern_info_html") or "").strip(),
+        "body_html": str(payload.get("body_html") or "").strip(),
+        "signature_html": str(payload.get("signature_html") or "").strip(),
+        "letterhead_id": payload.get("letterhead_id"),
+    }
+
+    conn = get_app_db()
+
+    # Auto-assign or validate certificate number
+    if not requested_number:
+        cert_data["certificate_number"] = _reserve_certificate_number(conn, cert_year)
+    else:
+        existing = conn.execute(
+            "SELECT id FROM certificates WHERE certificate_number = ?",
+            (requested_number,),
+        ).fetchone()
+        if existing:
+            return jsonify({"ok": False, "msg": f"Certificate number {requested_number} already exists."}), 409
+        cert_data["certificate_number"] = requested_number
+
+    try:
+        pdf_buffer, suggested_filename = generate_certificate_pdf(cert_data)
+    except Exception as exc:
+        log.exception("Certificate PDF generation failed")
+        return jsonify({"ok": False, "msg": "Certificate PDF generation failed."}), 500
+
+    try:
+        pdf_path, _ = _certificate_target_path(cert_data)
+        pdf_path.parent.mkdir(parents=True, exist_ok=True)
+        pdf_path.write_bytes(pdf_buffer.getvalue())
+    except CertificateStorageError as exc:
+        return jsonify({"ok": False, "msg": str(exc)}), 400
+    except OSError as exc:
+        log.exception("Certificate save failed")
+        return jsonify({"ok": False, "msg": "Could not save the certificate."}), 500
+
+    user_id = g.current_user.id if g.current_user else None
+    payload_json = json.dumps(cert_data, ensure_ascii=False)
+    _insert_certificate_row(
+        conn, cert_data["certificate_number"], intern_name,
+        str(pdf_path), payload_json, user_id,
+    )
+
+    pdf_buffer.seek(0)
+    resp = send_file(
+        pdf_buffer,
+        mimetype="application/pdf",
+        as_attachment=True,
+        download_name=suggested_filename,
+    )
+    resp.headers["X-Certificate-Number"] = cert_data["certificate_number"]
+    return resp
+
+
+# ---- GET /api/certificates/next-number -----------------------------------
+@app.get("/api/certificates/next-number")
+@require_login_api
+def api_certificate_next_number():
+    try:
+        conn = get_app_db()
+        suggestion = _suggest_certificate_number(conn)
+    except Exception as exc:
+        log.error("Unable to determine next certificate number: %s", exc, exc_info=True)
+        return jsonify({"ok": False, "msg": "Unable to determine the next certificate number."}), 500
+    return jsonify({"ok": True, "certificate_number": suggestion})
+
+
+# ════════════════════════════════════════════════════════════════════
+# VAKALATNAMA LIBRARY
+# ════════════════════════════════════════════════════════════════════
+#
+# Admin-uploaded Vakalatnama PDF templates.  All logged-in users can
+# browse and download them.  Stored in FS_ROOT/Vakalatnamas/.
+#
+# Routes: /vakalatnama, /api/vakalatnamas, /api/vakalatnamas/upload,
+#         /api/vakalatnamas/<id>, /api/vakalatnamas/<id>/download
+# ════════════════════════════════════════════════════════════════════
+
+def _vakalatnamas_dir() -> Path:
+    """Return (and lazily create) the FS_ROOT/Vakalatnamas directory."""
+    d = FS_ROOT / "Vakalatnamas"
+    d.mkdir(parents=True, exist_ok=True)
+    return d
+
+
+@app.get("/vakalatnama")
+@require_login
+def vakalatnama_page():
+    try:
+        return render_template("vakalatnama.html")
+    except Exception:
+        return render_template_string("""
+            <!doctype html><title>Vakalatnama</title>
+            <h1>Vakalatnama Library</h1>
+            <p>Unable to load the styled template. Please contact support.</p>
+        """)
+
+
+@app.get("/api/vakalatnamas")
+@require_login_api
+def api_vakalatnamas():
+    conn = get_app_db()
+    rows = conn.execute(
+        "SELECT id, label, filename, created_at FROM vakalatnamas ORDER BY created_at DESC"
+    ).fetchall()
+    items = []
+    for r in rows:
+        items.append({
+            "id": r["id"],
+            "label": r["label"],
+            "filename": r["filename"],
+            "download_url": url_for("api_vakalatnama_download", vid=r["id"]),
+            "thumbnail_url": url_for("api_vakalatnama_thumbnail", vid=r["id"], v=_THUMB_WIDTH),
+            "created_at": r["created_at"],
+        })
+    return jsonify({"ok": True, "vakalatnamas": items})
+
+
+@app.post("/api/vakalatnamas/upload")
+@require_admin_api
+def api_vakalatnamas_upload():
+    if not FS_ROOT:
+        return jsonify({"ok": False, "msg": "Storage not configured."}), 400
+
+    label = normalize_ws(request.form.get("label") or "")
+    if not label:
+        return jsonify({"ok": False, "msg": "Label is required."}), 400
+
+    f = request.files.get("file")
+    if not f or not f.filename:
+        return jsonify({"ok": False, "msg": "No file provided."}), 400
+
+    ext = (f.filename.rsplit(".", 1)[1].lower()) if "." in f.filename else ""
+    if ext != "pdf":
+        return jsonify({"ok": False, "msg": "Only PDF files are allowed."}), 400
+
+    # Magic byte validation for PDF
+    header = f.stream.read(8)
+    f.stream.seek(0)
+    if not header.startswith(b"%PDF"):
+        return jsonify({"ok": False, "msg": "File content does not appear to be a valid PDF."}), 400
+
+    import uuid as _uuid
+    safe_name = _sanitize_filename_fragment(Path(f.filename).stem) or "vakalatnama"
+    disk_name = f"{_uuid.uuid4().hex[:12]}_{safe_name}.pdf"
+    dest = _vakalatnamas_dir() / disk_name
+    try:
+        _safe_path(dest, FS_ROOT)
+    except ValueError:
+        return jsonify({"ok": False, "msg": "Invalid filename."}), 400
+
+    f.save(str(dest))
+
+    conn = get_app_db()
+    user_id = g.current_user.id if g.current_user else None
+    conn.execute(
+        "INSERT INTO vakalatnamas(label, filename, uploaded_by) VALUES(?, ?, ?)",
+        (label, disk_name, user_id),
+    )
+    conn.commit()
+    row = conn.execute(
+        "SELECT id FROM vakalatnamas WHERE filename = ?", (disk_name,)
+    ).fetchone()
+
+    return jsonify({"ok": True, "id": row["id"], "label": label})
+
+
+@app.delete("/api/vakalatnamas/<int:vid>")
+@require_admin_api
+def api_vakalatnama_delete(vid: int):
+    conn = get_app_db()
+    row = conn.execute("SELECT filename FROM vakalatnamas WHERE id = ?", (vid,)).fetchone()
+    if not row:
+        return jsonify({"ok": False, "msg": "Vakalatnama not found."}), 404
+
+    disk_path = _vakalatnamas_dir() / row["filename"]
+    if disk_path.exists():
+        disk_path.unlink()
+    _purge_cached_thumbnails(_vakalatnamas_dir() / ".thumbs", vid)
+    conn.execute("DELETE FROM vakalatnamas WHERE id = ?", (vid,))
+    conn.commit()
+    return jsonify({"ok": True})
+
+
+@app.get("/api/vakalatnamas/<int:vid>/download")
+@require_login
+def api_vakalatnama_download(vid: int):
+    conn = get_app_db()
+    row = conn.execute("SELECT label, filename FROM vakalatnamas WHERE id = ?", (vid,)).fetchone()
+    if not row:
+        return "Not found", 404
+
+    disk_path = _vakalatnamas_dir() / row["filename"]
+    if not disk_path.exists():
+        return "Not found", 404
+
+    download_name = _sanitize_filename_fragment(row["label"]) or "vakalatnama"
+    return send_file(str(disk_path), as_attachment=True, download_name=f"{download_name}.pdf")
+
+
+@app.get("/api/vakalatnamas/<int:vid>/thumbnail")
+@require_login
+def api_vakalatnama_thumbnail(vid: int):
+    """Serve an A4 PNG preview of the first page of a Vakalatnama PDF."""
+    conn = get_app_db()
+    row = conn.execute("SELECT filename FROM vakalatnamas WHERE id = ?", (vid,)).fetchone()
+    if not row:
+        return "Not found", 404
+
+    disk_path = _vakalatnamas_dir() / row["filename"]
+    if not disk_path.exists():
+        return "Not found", 404
+
+    thumb = _get_or_create_thumbnail(
+        disk_path, _vakalatnamas_dir() / ".thumbs", vid, "pdf"
+    )
+    if thumb is None:
+        return "Not found", 404
+    resp = send_file(str(thumb), mimetype="image/png")
+    resp.headers["Cache-Control"] = "public, max-age=31536000, immutable"
+    return resp
+
+
+# ════════════════════════════════════════════════════════════════════
+# LEGAL NOTICES
+# ════════════════════════════════════════════════════════════════════
+#
+# The user drafts a legal notice in their own word processor (leaving an
+# empty top margin), exports it to PDF and uploads it here.  The server
+# stamps the chosen letterhead behind every page and overlays a header
+# band on page 1 — recipient block on the left, notice number + date on
+# the right.  Notices are numbered N/LN/YY and reset each calendar year.
+#
+# Storage: FS_ROOT/Legal_Notices/<year>/<num>_<recipient>.pdf
+# An "Add to Case" action can copy a generated notice into any case's
+# "Legal Notices" subfolder.
+#
+# Routes: /legal-notice, /legal-notice/save,
+#         /api/legal-notices/next-number, /api/legal-notices/add-to-case
+# ════════════════════════════════════════════════════════════════════
+
+
+class LegalNoticeNumberConflict(Exception):
+    """Raised when the chosen legal-notice number is already taken."""
+
+
+class LegalNoticeStorageError(Exception):
+    """Raised when saving the legal-notice PDF to disk fails."""
+
+
+def _legal_notices_dir() -> Path:
+    """Return (and lazily create) the FS_ROOT/Legal_Notices directory."""
+    d = FS_ROOT / "Legal_Notices"
+    d.mkdir(parents=True, exist_ok=True)
+    return d
+
+
+def _legal_notice_year_full(notice_date: Optional[str] = None) -> str:
+    """Return a 4-digit year from a DD-MM-YYYY / YYYY-MM-DD date, else this year."""
+    raw = (notice_date or "").strip()
+    if raw:
+        parts = raw.split("-")
+        if len(parts) == 3:
+            if len(parts[2]) == 4:
+                return parts[2]      # DD-MM-YYYY
+            if len(parts[0]) == 4:
+                return parts[0]      # YYYY-MM-DD
+    from datetime import datetime as _dt
+    return str(_dt.now().year)
+
+
+def _legal_notice_year_yy(notice_date: Optional[str] = None) -> str:
+    """Return a 2-digit year suffix (e.g. '26') for notice numbering."""
+    return _legal_notice_year_full(notice_date)[-2:]
+
+
+def _format_legal_notice_number(seq: int, yy: str) -> str:
+    """Format a legal-notice number as ``N/LN/YY`` (non-padded sequence)."""
+    return f"{max(seq, 1)}/LN/{yy}"
+
+
+def _next_legal_notice_seq(conn: sqlite3.Connection, yy: str) -> int:
+    """Next sequence number for the given 2-digit year. Resets each year."""
+    suffix = f"/LN/{yy}"
+    rows = conn.execute("SELECT notice_number FROM legal_notices").fetchall()
+    max_seq = 0
+    for r in rows:
+        num = (r["notice_number"] or "").strip()
+        if num.endswith(suffix):
+            lead = num.split("/", 1)[0]
+            try:
+                max_seq = max(max_seq, int(lead))
+            except ValueError:
+                pass
+    return max_seq + 1
+
+
+def _suggest_legal_notice_number(conn: sqlite3.Connection, yy: Optional[str] = None) -> str:
+    yy = yy or _legal_notice_year_yy()
+    return _format_legal_notice_number(_next_legal_notice_seq(conn, yy), yy)
+
+
+def _reserve_legal_notice_number(conn: sqlite3.Connection, yy: Optional[str] = None) -> str:
+    yy = yy or _legal_notice_year_yy()
+    return _format_legal_notice_number(_next_legal_notice_seq(conn, yy), yy)
+
+
+def _legal_notice_target_path(notice: Dict[str, Any]) -> Path:
+    """Compute the global save path for a legal notice PDF."""
+    full_year = _legal_notice_year_full(notice.get("notice_date"))
+    ndir = _legal_notices_dir() / full_year
+    try:
+        _safe_path(ndir, FS_ROOT)
+    except ValueError:
+        raise LegalNoticeStorageError("Invalid legal notice path.")
+    ndir.mkdir(parents=True, exist_ok=True)
+
+    safe_num = _sanitize_filename_fragment(
+        (notice.get("notice_number") or "").replace("/", "-")
+    ) or "notice"
+    safe_name = _sanitize_filename_fragment(notice.get("recipient_name") or "") or "recipient"
+    base = f"{safe_num}_{safe_name}"
+    candidate = ndir / f"{base}.pdf"
+    counter = 1
+    while candidate.exists():
+        candidate = ndir / f"{base}_{counter}.pdf"
+        counter += 1
+    return candidate
+
+
+# Memoised result of the Times New Roman lookup (resolved once per process).
+_TNR_FONT_NAME: Optional[str] = None
+_TNR_FONT_RESOLVED: bool = False
+
+
+def _register_times_new_roman() -> str:
+    """Register Microsoft Times New Roman with ReportLab if it is installed.
+
+    ReportLab's built-in ``Times-Roman`` is Adobe's standard PDF Times, which
+    renders noticeably larger and heavier than Microsoft Times New Roman. When a
+    genuine Times New Roman face is present on the system (e.g. via
+    ``ttf-mscorefonts-installer`` on Debian/Ubuntu, ``ttf-ms-fonts`` on Arch),
+    we register it — with bold/italic variants — so the proforma matches the
+    body of the user's uploaded notice.
+
+    Returns the registered base font name (``"TimesNewRoman"``) on success, or
+    falls back to the built-in ``"Times-Roman"`` if no genuine face is found.
+    The result is memoised for the lifetime of the process.
+    """
+    global _TNR_FONT_NAME, _TNR_FONT_RESOLVED
+    if _TNR_FONT_RESOLVED:
+        return _TNR_FONT_NAME or "Times-Roman"
+    _TNR_FONT_RESOLVED = True
+
+    try:
+        from reportlab.pdfbase import pdfmetrics
+        from reportlab.pdfbase.ttfonts import TTFont
+    except Exception:
+        _TNR_FONT_NAME = None
+        return "Times-Roman"
+
+    def _match(style: str) -> Optional[str]:
+        """Resolve the file for Times New Roman in *style* via fontconfig.
+
+        ``fc-match`` always returns *some* fallback, so verify the resolved
+        family really is Times New Roman before trusting the path.
+        """
+        fc = shutil.which("fc-match")
+        if not fc:
+            return None
+        try:
+            import subprocess
+            out = subprocess.run(
+                [fc, "-f", "%{file}\t%{family}",
+                 f"Times New Roman:style={style}"],
+                capture_output=True, text=True, timeout=5,
+            ).stdout.strip()
+        except Exception:
+            return None
+        if "\t" not in out:
+            return None
+        path, family = out.split("\t", 1)
+        if "times new roman" not in family.lower():
+            return None
+        return path or None
+
+    regular = _match("Regular")
+    if not regular:
+        _TNR_FONT_NAME = None
+        return "Times-Roman"
+
+    bold = _match("Bold") or regular
+    italic = _match("Italic") or regular
+    bold_italic = _match("Bold Italic") or bold
+
+    try:
+        pdfmetrics.registerFont(TTFont("TimesNewRoman", regular))
+        pdfmetrics.registerFont(TTFont("TimesNewRoman-Bold", bold))
+        pdfmetrics.registerFont(TTFont("TimesNewRoman-Italic", italic))
+        pdfmetrics.registerFont(TTFont("TimesNewRoman-BoldItalic", bold_italic))
+        pdfmetrics.registerFontFamily(
+            "TimesNewRoman",
+            normal="TimesNewRoman",
+            bold="TimesNewRoman-Bold",
+            italic="TimesNewRoman-Italic",
+            boldItalic="TimesNewRoman-BoldItalic",
+        )
+    except Exception:
+        _TNR_FONT_NAME = None
+        return "Times-Roman"
+
+    _TNR_FONT_NAME = "TimesNewRoman"
+    return "TimesNewRoman"
+
+
+def generate_legal_notice_pdf(uploaded_bytes: bytes, notice: Dict[str, Any]) -> BytesIO:
+    """Stamp an uploaded notice PDF with a header band (page 1) + letterhead.
+
+    Overlays — on the first page only:
+      • LEFT  : the recipient block (To, name, relation, address, contact)
+      • RIGHT : the notice number and the date
+    Then merges the selected letterhead behind every page.  Returns a
+    BytesIO positioned at 0.
+    """
+    try:
+        from pypdf import PdfReader, PdfWriter
+        from reportlab.lib.units import mm
+        from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
+        from reportlab.lib.enums import TA_LEFT, TA_RIGHT
+        from reportlab.platypus import Paragraph, Frame
+        from reportlab.pdfgen import canvas as _rl_canvas
+    except ImportError as exc:
+        raise RuntimeError(
+            "pypdf and ReportLab are required to process legal notices."
+        ) from exc
+
+    reader = PdfReader(BytesIO(uploaded_bytes))
+    if not reader.pages:
+        raise ValueError("The uploaded PDF has no pages.")
+
+    first_page = reader.pages[0]
+    page_w = float(first_page.mediabox.width)
+    page_h = float(first_page.mediabox.height)
+
+    # ── Header-band geometry (points) ──────────────────────────────
+    side_margin = 18 * mm
+    # Reserve exactly as much top space as the selected letterhead's header
+    # actually occupies (measured from the artwork), so the proforma block sits
+    # just below it. Fall back to 38.1 mm only when no letterhead is measurable
+    # (e.g. "None"/blank, where the user prints onto physical letterhead paper).
+    _measured = _measure_letterhead_margins(notice.get("letterhead_id"))
+    if _measured and _measured["header_mm"] > 0:
+        letterhead_reserve = _measured["top_margin_mm"] * mm
+    else:
+        letterhead_reserve = 38.1 * mm     # space the printed letterhead occupies
+    band_gap = _LN_BAND_GAP_MM * mm    # gap between letterhead and the band
+    band_height = _LN_BAND_HEIGHT_MM * mm
+    band_top = page_h - letterhead_reserve - band_gap
+    content_w = page_w - (2 * side_margin)
+    left_w = content_w * 0.62
+    right_w = content_w - left_w
+
+    proforma_font = _register_times_new_roman()
+    styles = getSampleStyleSheet()
+    left_style = ParagraphStyle(
+        "LNLeft", parent=styles["Normal"],
+        fontName=proforma_font, fontSize=12, leading=16, alignment=TA_LEFT,
+    )
+    right_style = ParagraphStyle(
+        "LNRight", parent=styles["Normal"],
+        fontName=proforma_font, fontSize=12, leading=16, alignment=TA_RIGHT,
+    )
+
+    def _esc(v: Any) -> str:
+        v = (str(v or "")).strip()
+        return safe_text(v) if v else ""
+
+    # Left — recipient block
+    recipient_html_lines = ["To,"]
+    name = (notice.get("recipient_name") or "").strip()
+    if name:
+        recipient_html_lines.append(f"<b>{_esc(name)}</b>,")
+    relation = " ".join(
+        p for p in [
+            (notice.get("relation_type") or "").strip(),
+            (notice.get("relation_value") or "").strip(),
+        ] if p
+    ).strip()
+    if relation:
+        recipient_html_lines.append(f"{_esc(relation)},")
+    for key in ("address_line1", "address_line2"):
+        val = (notice.get(key) or "").strip()
+        if val:
+            recipient_html_lines.append(f"{_esc(val)},")
+    contact = (notice.get("contact") or "").strip()
+    if contact:
+        recipient_html_lines.append(_esc(contact))
+    left_html = "<br/>".join(recipient_html_lines)
+
+    # Right — notice number + date
+    right_lines = []
+    num = (notice.get("notice_number") or "").strip()
+    date = (notice.get("notice_date") or "").strip()
+    if num:
+        right_lines.append(f"<b>Notice No:</b> {_esc(num)}")
+    if date:
+        right_lines.append(f"<b>Date:</b> {_esc(date)}")
+    right_html = "<br/>".join(right_lines) if right_lines else "&nbsp;"
+
+    overlay_buf = BytesIO()
+    c = _rl_canvas.Canvas(overlay_buf, pagesize=(page_w, page_h))
+    left_frame = Frame(
+        side_margin, band_top - band_height, left_w, band_height,
+        leftPadding=0, rightPadding=6, topPadding=0, bottomPadding=0,
+    )
+    left_frame.addFromList([Paragraph(left_html, left_style)], c)
+    right_frame = Frame(
+        side_margin + left_w, band_top - band_height, right_w, band_height,
+        leftPadding=6, rightPadding=0, topPadding=0, bottomPadding=0,
+    )
+    right_frame.addFromList([Paragraph(right_html, right_style)], c)
+    c.showPage()
+    c.save()
+    overlay_buf.seek(0)
+    overlay_page = PdfReader(overlay_buf).pages[0]
+
+    # Merge the header band over page 1
+    writer = PdfWriter(clone_from=BytesIO(uploaded_bytes))
+    writer.pages[0].merge_page(overlay_page, over=True)
+
+    merged = BytesIO()
+    writer.write(merged)
+    merged.seek(0)
+
+    # Letterhead behind every page
+    letterhead_path = _resolve_letterhead_path(notice.get("letterhead_id"))
+    return _apply_letterhead_to_pdf(merged, letterhead_path)
+
+
+# ---- GET /legal-notice — render the legal notice form --------------------
+@app.route("/legal-notice", methods=["GET"])
+@require_login
+def legal_notice_form():
+    try:
+        return render_template("legal_notice.html")
+    except Exception:
+        return render_template_string("""
+            <!doctype html><title>Legal Notice</title>
+            <h1>Legal Notice</h1>
+            <p>Unable to load the styled template. Please contact support.</p>
+        """)
+
+
+# ---- POST /legal-notice/save — stamp PDF, store, return download ----------
+@app.post("/legal-notice/save")
+@require_login
+def legal_notice_save():
+    if not FS_ROOT:
+        return jsonify({"ok": False, "msg": "Storage not configured."}), 400
+
+    f = request.files.get("file")
+    if not f or not f.filename:
+        return jsonify({"ok": False, "msg": "Please upload the notice PDF."}), 400
+
+    ext = (f.filename.rsplit(".", 1)[1].lower()) if "." in f.filename else ""
+    if ext != "pdf":
+        return jsonify({"ok": False, "msg": "Only PDF files are allowed."}), 400
+
+    header = f.stream.read(8)
+    f.stream.seek(0)
+    if not header.startswith(b"%PDF"):
+        return jsonify({"ok": False, "msg": "File content does not appear to be a valid PDF."}), 400
+
+    uploaded_bytes = f.stream.read()
+    f.stream.seek(0)
+
+    recipient_name = normalize_ws(request.form.get("recipient_name") or "")[:180]
+    if not recipient_name:
+        return jsonify({"ok": False, "msg": "Recipient name is required."}), 400
+
+    try:
+        normalized_date = _normalize_certificate_date(request.form.get("notice_date"))
+    except ValueError as exc:
+        return jsonify({"ok": False, "msg": str(exc)}), 400
+
+    yy = _legal_notice_year_yy(normalized_date)
+    requested_number = (request.form.get("notice_number") or "").strip()
+
+    letterhead_id = request.form.get("letterhead_id") or None
+
+    notice: Dict[str, Any] = {
+        "notice_number": requested_number,
+        "notice_date": normalized_date,
+        "recipient_name": recipient_name,
+        "relation_type": normalize_ws(request.form.get("relation_type") or "")[:60],
+        "relation_value": normalize_ws(request.form.get("relation_value") or "")[:180],
+        "address_line1": normalize_ws(request.form.get("address_line1") or "")[:200],
+        "address_line2": normalize_ws(request.form.get("address_line2") or "")[:200],
+        "contact": normalize_ws(request.form.get("contact") or "")[:120],
+        "letterhead_id": letterhead_id,
+    }
+
+    conn = get_app_db()
+
+    if not requested_number:
+        notice["notice_number"] = _reserve_legal_notice_number(conn, yy)
+    else:
+        existing = conn.execute(
+            "SELECT id FROM legal_notices WHERE notice_number = ?",
+            (requested_number,),
+        ).fetchone()
+        if existing:
+            return jsonify({"ok": False, "msg": f"Notice number {requested_number} already exists."}), 409
+        notice["notice_number"] = requested_number
+
+    try:
+        pdf_buffer = generate_legal_notice_pdf(uploaded_bytes, notice)
+    except (ValueError, RuntimeError) as exc:
+        return jsonify({"ok": False, "msg": f"Could not process the notice PDF: {exc}"}), 400
+    except Exception as exc:  # pragma: no cover - defensive
+        log.exception("Legal notice processing failed")
+        return jsonify({"ok": False, "msg": "PDF processing failed."}), 500
+
+    pdf_bytes = pdf_buffer.getvalue()
+
+    try:
+        pdf_path = _legal_notice_target_path(notice)
+        pdf_path.write_bytes(pdf_bytes)
+    except LegalNoticeStorageError as exc:
+        return jsonify({"ok": False, "msg": str(exc)}), 400
+    except OSError as exc:
+        log.exception("Legal notice save failed")
+        return jsonify({"ok": False, "msg": "Could not save the notice."}), 500
+
+    user_id = g.current_user.id if g.current_user else None
+    payload_json = json.dumps(notice, ensure_ascii=False)
+    try:
+        conn.execute(
+            """
+            INSERT INTO legal_notices(notice_number, recipient_name, file_path, payload_json, generated_by)
+            VALUES(?, ?, ?, ?, ?)
+            """,
+            (notice["notice_number"], recipient_name, str(pdf_path), payload_json, user_id),
+        )
+        conn.commit()
+    except sqlite3.IntegrityError:
+        with suppress(FileNotFoundError):
+            pdf_path.unlink()
+        return jsonify({"ok": False, "msg": "Notice number already exists."}), 409
+
+    download_name = pdf_path.name
+    resp = send_file(
+        BytesIO(pdf_bytes),
+        mimetype="application/pdf",
+        as_attachment=True,
+        download_name=download_name,
+    )
+    resp.headers["X-Legal-Notice-Number"] = notice["notice_number"]
+    return resp
+
+
+# ---- GET /api/legal-notices/next-number ----------------------------------
+@app.get("/api/legal-notices/next-number")
+@require_login_api
+def api_legal_notice_next_number():
+    try:
+        conn = get_app_db()
+        suggestion = _suggest_legal_notice_number(conn)
+    except Exception as exc:
+        return jsonify({"ok": False, "msg": f"Unable to determine notice number: {exc}"}), 500
+    return jsonify({"ok": True, "notice_number": suggestion})
+
+
+# ---- POST /api/legal-notices/add-to-case — copy a notice into a case -----
+@app.post("/api/legal-notices/add-to-case")
+@require_login_api
+def api_legal_notice_add_to_case():
+    if not FS_ROOT:
+        return jsonify({"ok": False, "msg": "Storage not configured."}), 400
+
+    data = request.get_json(silent=True) or {}
+    notice_number = (data.get("notice_number") or "").strip()
+    year = (data.get("year") or "").strip()
+    month = (data.get("month") or "").strip()
+    case_name = (data.get("case") or "").strip()
+
+    if not notice_number:
+        return jsonify({"ok": False, "msg": "Missing notice number."}), 400
+    if not (year and month and case_name):
+        return jsonify({"ok": False, "msg": "Select a year, month, and case."}), 400
+
+    conn = get_app_db()
+    row = conn.execute(
+        "SELECT file_path FROM legal_notices WHERE notice_number = ?",
+        (notice_number,),
+    ).fetchone()
+    if not row:
+        return jsonify({"ok": False, "msg": "Notice not found. Save it first."}), 404
+
+    try:
+        source = _safe_path(Path(row["file_path"]), FS_ROOT)
+    except ValueError:
+        return jsonify({"ok": False, "msg": "Invalid notice path."}), 400
+    if not source.is_file():
+        return jsonify({"ok": False, "msg": "Saved notice file is missing."}), 404
+
+    try:
+        case_dir = _safe_path(FS_ROOT / year / month / case_name, FS_ROOT)
+    except ValueError:
+        return jsonify({"ok": False, "msg": "Invalid case path."}), 400
+    if not case_dir.is_dir():
+        return jsonify({"ok": False, "msg": "Case directory not found."}), 404
+
+    target_dir = case_dir / "Legal Notices"
+    target_dir.mkdir(parents=True, exist_ok=True)
+
+    dest = target_dir / source.name
+    counter = 1
+    while dest.exists():
+        dest = target_dir / f"{source.stem}_{counter}{source.suffix}"
+        counter += 1
+
+    try:
+        dest.write_bytes(source.read_bytes())
+    except OSError as exc:
+        return jsonify({"ok": False, "msg": f"Could not copy notice: {exc}"}), 500
+
+    return jsonify({"ok": True, "saved_as": str(dest)})
+
+
+# ════════════════════════════════════════════════════════════════════
+# LETTERHEAD STAMPING
+# ════════════════════════════════════════════════════════════════════
+#
+# A dedicated page for stamping any A4 PDF (a letter, representation,
+# or any document that is not a formal notice or certificate) onto a
+# chosen letterhead.  No recipient details, no numbering, no case
+# association — just pick a letterhead, see its auto-detected margins,
+# upload a PDF, and download the stamped result.
+#
+# Routes: /letterhead (form), /letterhead/stamp
+# ════════════════════════════════════════════════════════════════════
+
+# ---- GET /letterhead — render the letterhead stamping page ---------------
+@app.route("/letterhead", methods=["GET"])
+@require_login
+def letterhead_page():
+    try:
+        return render_template("letterhead.html")
+    except Exception:
+        return render_template_string("""
+            <!doctype html><title>Letterhead</title>
+            <h1>Letterhead</h1>
+            <p>Unable to load the styled template. Please contact support.</p>
+        """)
+
+
+# ---- POST /letterhead/stamp — stamp uploaded PDF onto a letterhead -------
+@app.post("/letterhead/stamp")
+@require_login
+def letterhead_stamp():
+    f = request.files.get("file")
+    if not f or not f.filename:
+        return jsonify({"ok": False, "msg": "Please upload a PDF."}), 400
+
+    ext = (f.filename.rsplit(".", 1)[1].lower()) if "." in f.filename else ""
+    if ext != "pdf":
+        return jsonify({"ok": False, "msg": "Only PDF files are allowed."}), 400
+
+    header = f.stream.read(8)
+    f.stream.seek(0)
+    if not header.startswith(b"%PDF"):
+        return jsonify({"ok": False, "msg": "File content does not appear to be a valid PDF."}), 400
+
+    uploaded_bytes = f.stream.read()
+    f.stream.seek(0)
+    if not uploaded_bytes:
+        return jsonify({"ok": False, "msg": "The uploaded PDF is empty."}), 400
+
+    letterhead_path = _resolve_letterhead_path(request.form.get("letterhead_id") or None)
+
+    try:
+        stamped = _apply_letterhead_to_pdf(BytesIO(uploaded_bytes), letterhead_path)
+    except Exception as exc:  # pragma: no cover - defensive
+        log.exception("Letterhead stamping failed")
+        return jsonify({"ok": False, "msg": f"PDF processing error: {exc}"}), 500
+
+    pdf_bytes = stamped.getvalue()
+
+    original_stem = Path(f.filename).stem or "letter"
+    safe_stem = re.sub(r"[^A-Za-z0-9 ._-]", "", original_stem).strip() or "letter"
+    download_name = f"{safe_stem}_letterhead.pdf"
+
+    return send_file(
+        BytesIO(pdf_bytes),
+        mimetype="application/pdf",
+        as_attachment=True,
+        download_name=download_name,
+    )
 
 
 # ════════════════════════════════════════════════════════════════════
@@ -4627,10 +6600,11 @@ def admin_settings():
             role = (request.form.get("user_role") or "user").lower()
             password = request.form.get("user_password") or ""
 
+            password_error = password_policy_error(password)
             if role not in {"admin", "user"}:
                 flash("Invalid role specified.", "error")
-            elif len(password) < 8:
-                flash("User password must be at least 8 characters long.", "error")
+            elif password_error:
+                flash(f"User password: {password_error}", "error")
             else:
                 try:
                     create_user(email, password, role=role)
@@ -4638,7 +6612,8 @@ def admin_settings():
                 except UserExistsError:
                     flash("A user with that email already exists.", "error")
                 except Exception as exc:
-                    flash(f"Failed to create user: {exc}", "error")
+                    log.error("Failed to create user: %s", exc, exc_info=True)
+                    flash("Failed to create user. Please try again.", "error")
 
         elif form_name == "toggle_user":
             try:

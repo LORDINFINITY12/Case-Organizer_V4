@@ -20,6 +20,53 @@ document.addEventListener('DOMContentLoaded', () => {
     caseName: contextEl ? (contextEl.dataset.caseName || '').trim() : '',
   };
 
+  // ── Letterhead picker ────────────────────────────────────────
+  let _selectedLetterheadId = null;
+  const _lhThumbs = document.getElementById('letterhead-thumbs');
+
+  function _escHtml(s) {
+    return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  function _selectLetterhead(card, id) {
+    _selectedLetterheadId = id;
+    if (_lhThumbs) _lhThumbs.querySelectorAll('.letterhead-thumb').forEach(el => el.classList.remove('selected'));
+    card.classList.add('selected');
+  }
+
+  async function _loadLetterheads() {
+    if (!_lhThumbs) return;
+    try {
+      const resp = await fetch('/api/letterheads', { headers: { 'X-CSRF-Token': _csrfToken() } });
+      const data = await resp.json();
+      if (!data.ok) return;
+
+      _lhThumbs.innerHTML = '';
+      const noneCard = document.createElement('div');
+      noneCard.className = 'letterhead-thumb selected';
+      noneCard.innerHTML = '<span class="letterhead-thumb-label">None</span>';
+      noneCard.addEventListener('click', () => _selectLetterhead(noneCard, null));
+      _lhThumbs.appendChild(noneCard);
+
+      for (const lh of data.letterheads) {
+        const card = document.createElement('div');
+        card.className = 'letterhead-thumb';
+        const fallbackIcon = lh.kind === 'pdf' ? 'fa-file-pdf' : 'fa-image';
+        const thumbUrl = lh.thumbnail_url || lh.image_url;
+        const preview = `<div class="letterhead-thumb-preview">`
+          + `<img src="${_escHtml(thumbUrl)}" alt="${_escHtml(lh.label)}" loading="lazy" `
+          + `onerror="this.style.display='none';this.nextElementSibling.style.display='flex';" />`
+          + `<span class="letterhead-thumb-fallback" style="display:none;"><i class="fa-solid ${fallbackIcon}"></i></span>`
+          + `</div>`;
+        card.innerHTML = `${preview}
+          <span class="letterhead-thumb-label">${_escHtml(lh.label)}</span>`;
+        card.addEventListener('click', () => _selectLetterhead(card, lh.id));
+        _lhThumbs.appendChild(card);
+      }
+    } catch (e) { /* ignore */ }
+  }
+  _loadLetterheads();
+
   function textContent(node) {
     return (node?.textContent || '').replace(/\s+/g, ' ').trim();
   }
@@ -344,6 +391,7 @@ document.addEventListener('DOMContentLoaded', () => {
       case_year: caseContext.year,
       case_month: caseContext.month,
       case_name: caseContext.caseName,
+      letterhead_id: _selectedLetterheadId,
     };
   }
 

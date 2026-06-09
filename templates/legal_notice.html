@@ -17,13 +17,13 @@
           } catch (e) {}
       })();
   </script>
-  <title>Case Organizer – Generate Invoice</title>
+  <title>Case Organizer – Legal Notice</title>
   <meta name="csrf-token" content="{{ csrf_token }}">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" />
   <link rel="stylesheet" href="{{ static_url('css/style.css') }}" />
   <link rel="icon" type="image/png" href="{{ url_for('static', filename='img/Case_Organizer_logo.png') }}" />
-  <link rel="stylesheet" href="{{ static_url('css/invoice.css') }}" />
+  <link rel="stylesheet" href="{{ static_url('css/legal_notice.css') }}" />
 </head>
 <body data-role="{{ current_user.role if current_user else '' }}">
   <div class="app-shell">
@@ -59,7 +59,7 @@
               <i class="fa-solid fa-file-pdf" aria-hidden="true"></i>
               <span class="user-menu-label">PDF Editing Tools</span>
             </a>
-            <a href="{{ url_for('invoice_form') }}" class="user-menu-item" role="menuitem" aria-current="page">
+            <a href="{{ url_for('invoice_form') }}" class="user-menu-item" role="menuitem">
               <i class="fa-solid fa-file-invoice-dollar" aria-hidden="true"></i>
               <span class="user-menu-label">Generate Invoice</span>
             </a>
@@ -71,7 +71,7 @@
               <i class="fa-solid fa-stamp" aria-hidden="true"></i>
               <span class="user-menu-label">Vakalatnama</span>
             </a>
-            <a href="{{ url_for('legal_notice_form') }}" class="user-menu-item" role="menuitem">
+            <a href="{{ url_for('legal_notice_form') }}" class="user-menu-item" role="menuitem" aria-current="page">
               <i class="fa-solid fa-scroll" aria-hidden="true"></i>
               <span class="user-menu-label">Legal Notices</span>
             </a>
@@ -105,24 +105,69 @@
     <main class="home enter-animate">
       {% include "_flash.html" %}
 
-      <section class="invoice-page" aria-label="Invoice generator">
-        <div id="invoice-context"
-             data-case-year="{{ case_context.year if case_context else '' }}"
-             data-case-month="{{ case_context.month if case_context else '' }}"
-             data-case-name="{{ case_context.case if case_context else '' }}">
+      <section class="ln-page" aria-label="Legal notice generator">
+        <h1>Legal Notice</h1>
+        <div class="ln-intro">
+          <p>Upload your Legal Notice in PDF format.</p>
+          <p>
+            The document must be A4 sized. Leave enough top and bottom margin on
+            <em>every</em> page so your text clears the letterhead, and a larger
+            top margin on the first page for the recipient block and the notice
+            number. The exact margins for the letterhead you pick are shown below.
+          </p>
         </div>
-        <h1>Generate Invoice</h1>
-        <p class="invoice-intro">
-          Fill in the invoice details below. All highlighted fields are directly editable.
-          When you are ready, download the PDF and print it from your preferred viewer.
-        </p>
 
-        {% if case_context %}
-          <div class="invoice-case-banner">
-            Invoice for <strong>{{ case_context.case }}</strong>
-            <span class="invoice-case-meta">({{ case_context.year }} / {{ case_context.month }})</span>
+        <!-- Exact, per-letterhead margin guidance (filled by JS) -->
+        <div class="ln-margins" id="ln-margins" aria-live="polite"></div>
+
+        <!-- Recipient + notice meta -->
+        <div class="ln-form-card">
+          <h3 class="section-title">Recipient &amp; Notice Details</h3>
+          <div class="ln-grid">
+            <label class="ln-field ln-col-2">
+              <span>To (Recipient name) <em class="ln-req">*</em></span>
+              <input type="text" id="ln-recipient-name" placeholder="Full name of the recipient" maxlength="180" />
+            </label>
+
+            <label class="ln-field">
+              <span>Relation / Capacity</span>
+              <select id="ln-relation-type">
+                <option value="">None</option>
+                <option value="W/o">W/o (wife of)</option>
+                <option value="D/o">D/o (daughter of)</option>
+                <option value="S/o">S/o (son of)</option>
+                <option value="Position/Capacity">Position / Capacity</option>
+              </select>
+            </label>
+            <label class="ln-field">
+              <span>Relation / Capacity value</span>
+              <input type="text" id="ln-relation-value" placeholder="e.g., Mr. Ram Kumar OR Managing Director" maxlength="180" />
+            </label>
+
+            <label class="ln-field">
+              <span>Address line 1</span>
+              <input type="text" id="ln-address1" placeholder="House / street / locality" maxlength="200" />
+            </label>
+            <label class="ln-field">
+              <span>Address line 2</span>
+              <input type="text" id="ln-address2" placeholder="City, State, PIN" maxlength="200" />
+            </label>
+
+            <label class="ln-field ln-col-2">
+              <span>Contact info <span class="ln-optional">(optional)</span></span>
+              <input type="text" id="ln-contact" placeholder="Phone / email" maxlength="120" />
+            </label>
+
+            <label class="ln-field">
+              <span>Notice number</span>
+              <input type="text" id="ln-number" placeholder="Auto" />
+            </label>
+            <label class="ln-field">
+              <span>Date</span>
+              <input type="text" id="ln-date" placeholder="DD-MM-YYYY" />
+            </label>
           </div>
-        {% endif %}
+        </div>
 
         <!-- Letterhead Picker -->
         <div class="letterhead-picker" id="letterhead-picker">
@@ -132,77 +177,60 @@
           </div>
         </div>
 
-        <div class="invoice-actions">
+        <!-- PDF upload -->
+        <div class="ln-form-card">
+          <h3 class="section-title">Notice PDF</h3>
+          <div class="dropzone" id="ln-drop" tabindex="0">Drag &amp; drop your notice PDF here or click to select</div>
+          <input type="file" id="ln-file" hidden accept=".pdf" />
+          <div id="ln-file-list" class="results"></div>
+        </div>
+
+        <div class="ln-actions">
           <button
-            id="invoice-download"
+            id="ln-download"
             class="btn-primary"
             type="button"
-            data-download-url="{{ url_for('invoice_save') }}"
+            data-save-url="{{ url_for('legal_notice_save') }}"
           >
-            <i class="fa-solid fa-file-arrow-down"></i> Download &amp; Save Invoice
+            <i class="fa-solid fa-file-arrow-down"></i> Download &amp; Save Notice
+          </button>
+          <button id="ln-addcase-toggle" class="btn-secondary" type="button" disabled>
+            <i class="fa-solid fa-folder-plus"></i> Add to Case
           </button>
         </div>
 
-        <p class="contenteditable-hint">
-          Tip: Click on any text that shows a dashed underline on focus to edit its value.
-          Add or remove line items as needed before exporting.
-        </p>
-
-        <div class="invoice-box">
-          <div class="invoice-top">
-            <div class="invoice-title" data-invoice-title>
-              <span>INVOICE</span>
+        <!-- Add to Case panel (expands after a notice is saved) -->
+        <div class="ln-addcase" id="ln-addcase" hidden>
+          <div class="ln-form-card">
+            <h3 class="section-title">Add this notice to a case</h3>
+            <p class="ln-addcase-hint">
+              Copies the saved notice into the selected case's
+              <code>Legal Notices</code> folder.
+            </p>
+            <div class="mc-tabs" role="tablist" aria-label="Add to case lookup">
+              <button type="button" class="mc-tab active" data-ln-tab="date" role="tab" aria-selected="true">Year &amp; Month</button>
+              <button type="button" class="mc-tab" data-ln-tab="name" role="tab" aria-selected="false">Case Name</button>
             </div>
-            <div class="invoice-meta">
-              <label>
-                <span class="meta-label">Invoice #</span>
-                <span contenteditable="true" data-invoice-number>0001</span>
-              </label>
-              <label>
-                <span class="meta-label">Date</span>
-                <span contenteditable="true" data-invoice-date>DD-MM-YYYY</span>
-              </label>
+            <div class="mc-panel" data-ln-tab="date">
+              <div class="form-grid">
+                <select id="ln-year"><option value="">Year</option></select>
+                <select id="ln-month" disabled><option value="">Month</option></select>
+                <select id="ln-case" disabled><option value="">Case (Petitioner v. Respondent)</option></select>
+              </div>
             </div>
-          </div>
-
-          <div class="invoice-parties">
-            <div class="party-block" data-issuer-block>
-              <p class="party-heading">From</p>
-              <p><span contenteditable="true" data-issuer-name>Advocate Name</span></p>
-              <p><span contenteditable="true">Address line 1</span></p>
-              <p><span contenteditable="true">City, State ZIP</span></p>
-              <p><span contenteditable="true">Phone &amp; Email</span></p>
+            <div class="mc-panel" data-ln-tab="name" hidden>
+              <div class="mc-name-search">
+                <input type="text" id="ln-name-input" placeholder="Search case name…" />
+                <button type="button" id="ln-name-search" class="btn-secondary">Search</button>
+              </div>
+              <div id="ln-name-results" class="results mc-name-results">
+                <div class="result-item">Search for a case to begin.</div>
+              </div>
             </div>
-            <div class="party-block party-recipient" data-recipient-block>
-              <p class="party-heading">To</p>
-              <p><span contenteditable="true" data-client-name>Client Name</span></p>
-              <p><span contenteditable="true">Client Address line 1</span></p>
-              <p><span contenteditable="true">City, State ZIP</span></p>
-              <p><span contenteditable="true">Phone &amp; Email</span></p>
+            <div class="form-actions">
+              <button id="ln-addcase-go" class="btn-primary" type="button" disabled>Copy to Selected Case</button>
             </div>
           </div>
-
-          <table class="invoice-table" aria-label="Invoice line items">
-            <thead>
-              <tr class="heading">
-                <th scope="col" style="width: 10%;">S/N</th>
-                <th scope="col" style="width: 25%;">Item</th>
-                <th scope="col" style="width: 45%;">Description</th>
-                <th scope="col" style="width: 20%;">Amount</th>
-              </tr>
-            </thead>
-            <tbody id="invoice-items"></tbody>
-            <tfoot>
-              <tr class="total">
-                <td colspan="3" class="total-label">Total</td>
-                <td class="total-value">
-                  <span id="invoice-total">0.00</span>
-                </td>
-              </tr>
-            </tfoot>
-          </table>
-
-          <button type="button" class="invoice-add" id="add-invoice-item">+ Add Item</button>
         </div>
       </section>
     </main>
@@ -214,6 +242,6 @@
     });
   </script>
   <script src="{{ static_url('js/main.js') }}"></script>
-  <script src="{{ static_url('js/invoice.js') }}"></script>
+  <script src="{{ static_url('js/legal_notice.js') }}"></script>
 </body>
 </html>

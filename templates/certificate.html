@@ -17,14 +17,15 @@
           } catch (e) {}
       })();
   </script>
-  <title>Case Organizer – My Account</title>
+  <title>Case Organizer – Generate Certificate</title>
+  <meta name="csrf-token" content="{{ csrf_token }}">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" />
   <link rel="stylesheet" href="{{ static_url('css/style.css') }}" />
   <link rel="icon" type="image/png" href="{{ url_for('static', filename='img/Case_Organizer_logo.png') }}" />
-  <meta name="csrf-token" content="{{ csrf_token }}">
+  <link rel="stylesheet" href="{{ static_url('css/certificate.css') }}" />
 </head>
-<body>
+<body data-role="{{ current_user.role if current_user else '' }}">
   <div class="app-shell">
     <header class="topbar">
       <a href="{{ url_for('home') }}" class="brand">Case Organizer</a>
@@ -50,7 +51,7 @@
                 <span class="badge">{{ unread_count }}</span>
               {% endif %}
             </a>
-            <a href="{{ url_for('account') }}" class="user-menu-item" role="menuitem" aria-current="page">
+            <a href="{{ url_for('account') }}" class="user-menu-item" role="menuitem">
               <i class="fa-solid fa-user" aria-hidden="true"></i>
               <span class="user-menu-label">My Account</span>
             </a>
@@ -62,7 +63,7 @@
               <i class="fa-solid fa-file-invoice-dollar" aria-hidden="true"></i>
               <span class="user-menu-label">Generate Invoice</span>
             </a>
-            <a href="{{ url_for('certificate_form') }}" class="user-menu-item" role="menuitem">
+            <a href="{{ url_for('certificate_form') }}" class="user-menu-item" role="menuitem" aria-current="page">
               <i class="fa-solid fa-certificate" aria-hidden="true"></i>
               <span class="user-menu-label">Generate Certificate</span>
             </a>
@@ -104,49 +105,108 @@
     <main class="home enter-animate">
       {% include "_flash.html" %}
 
-      <h1>My Account</h1>
-      <div class="settings-grid">
-        <div class="settings-card">
-          <h2>Update Email</h2>
-          <form method="post">
-            {{ csrf_input }}
-            <input type="hidden" name="form_name" value="update_email">
-            <label for="new_email">Email</label>
-            <input id="new_email" name="new_email" type="email" value="{{ current_user.email }}" required>
+      <section class="cert-page" aria-label="Certificate generator">
+        <h1>Generate Internship Certificate</h1>
+        <p class="cert-intro">
+          Edit the certificate directly below &mdash; every part of the document is
+          fully editable. Use the toolbar to format text. When ready, download the PDF.
+        </p>
 
-            <label for="current_password_email">Current password</label>
-            <input id="current_password_email" name="current_password" type="password" placeholder="Required" required>
-
-            <button type="submit" class="btn-primary">Save Email</button>
-          </form>
+        <!-- Letterhead Picker -->
+        <div class="letterhead-picker" id="letterhead-picker">
+          <h3>Letterhead</h3>
+          <div class="letterhead-thumbs" id="letterhead-thumbs">
+            <!-- Populated by JS -->
+          </div>
         </div>
 
-        <div class="settings-card">
-          <h2>Change Password</h2>
-          <form method="post">
-            {{ csrf_input }}
-            <input type="hidden" name="form_name" value="update_password">
-            <label for="current_password">Current password</label>
-            <input id="current_password" name="current_password" type="password" placeholder="Current password" required>
-
-            <label for="new_password">New password</label>
-            <input id="new_password" name="new_password" type="password" placeholder="Minimum 8 characters" required>
-
-            <label for="confirm_password">Confirm password</label>
-            <input id="confirm_password" name="confirm_password" type="password" placeholder="Repeat new password" required>
-
-            <button type="submit" class="btn-secondary">Update Password</button>
-          </form>
+        <div class="cert-actions">
+          <button
+            id="cert-download"
+            class="btn-primary"
+            type="button"
+            data-download-url="{{ url_for('certificate_save') }}"
+          >
+            <i class="fa-solid fa-file-arrow-down"></i> Download &amp; Save Certificate
+          </button>
         </div>
-      </div>
+
+        <!-- Formatting toolbar -->
+        <div class="cert-toolbar" id="cert-toolbar">
+          <select id="tb-size" title="Font size">
+            <option value="10">10</option>
+            <option value="11">11</option>
+            <option value="12" selected>12</option>
+            <option value="14">14</option>
+            <option value="16">16</option>
+            <option value="18">18</option>
+            <option value="20">20</option>
+            <option value="24">24</option>
+            <option value="28">28</option>
+            <option value="32">32</option>
+          </select>
+          <span class="tb-sep"></span>
+          <button type="button" data-cmd="bold" title="Bold (Ctrl+B)"><i class="fa-solid fa-bold"></i></button>
+          <button type="button" data-cmd="italic" title="Italic (Ctrl+I)"><i class="fa-solid fa-italic"></i></button>
+          <button type="button" data-cmd="underline" title="Underline (Ctrl+U)"><i class="fa-solid fa-underline"></i></button>
+          <span class="tb-sep"></span>
+          <button type="button" data-cmd="justifyLeft" title="Align left"><i class="fa-solid fa-align-left"></i></button>
+          <button type="button" data-cmd="justifyCenter" title="Align center"><i class="fa-solid fa-align-center"></i></button>
+          <button type="button" data-cmd="justifyRight" title="Align right"><i class="fa-solid fa-align-right"></i></button>
+          <button type="button" data-cmd="justifyFull" title="Justify"><i class="fa-solid fa-align-justify"></i></button>
+          <span class="tb-sep"></span>
+          <select id="tb-lineheight" title="Line spacing">
+            <option value="1">1.0</option>
+            <option value="1.15">1.15</option>
+            <option value="1.5" selected>1.5</option>
+            <option value="2">2.0</option>
+          </select>
+        </div>
+
+        <!-- Editable A4 document -->
+        <div class="cert-doc" id="cert-doc" contenteditable="true">
+          <!-- Title region -->
+          <div class="cert-region cert-title-region" data-cert-title>
+            <p style="text-align: center; font-size: 22pt;"><b>CERTIFICATE OF INTERNSHIP</b></p>
+          </div>
+
+          <!-- Two-column header: intern info LEFT | meta RIGHT -->
+          <div class="cert-header-row">
+            <div class="cert-header-left" data-intern-info>
+              <p><b>Name:</b> <span data-intern-name></span></p>
+              <p><b>Address:</b> </p>
+              <p><b>Duration:</b>  to </p>
+            </div>
+            <div class="cert-header-right">
+              <p><b>Certificate No:</b> <span data-cert-number contenteditable="false"></span></p>
+              <p><b>Date:</b> <span data-cert-date class="cert-date-field"></span></p>
+            </div>
+          </div>
+
+          <!-- Body region -->
+          <div class="cert-region cert-body-region" data-cert-body>
+            <p><br></p>
+            <p>This is to certify that ...</p>
+            <p><br></p>
+          </div>
+
+          <!-- Signature region -->
+          <div class="cert-region cert-sig-region" data-cert-signature>
+            <p style="text-align: center;">_________________________</p>
+            <p style="text-align: center;"><b>Signing Authority Name</b></p>
+            <p style="text-align: center;">Designation</p>
+          </div>
+        </div>
+      </section>
     </main>
   </div>
 
   <script nonce="{{ csp_nonce }}">
     window.CaseOrg = Object.assign(window.CaseOrg || {}, {
-      isAdmin: {{ 'true' if current_user and current_user.role == 'admin' else 'false' }}
+      isAdmin: {{ (current_user and current_user.role == 'admin') | tojson }}
     });
   </script>
   <script src="{{ static_url('js/main.js') }}"></script>
+  <script src="{{ static_url('js/certificate.js') }}"></script>
 </body>
 </html>

@@ -87,12 +87,21 @@ class TestLoginLogout:
         resp = auth_client.get("/account")
         assert resp.status_code == 200
 
-    def test_logout_clears_session(self, auth_client):
-        resp = auth_client.get("/logout", follow_redirects=False)
+    def test_logout_clears_session(self, auth_client, csrf_token):
+        resp = auth_client.post(
+            "/logout", data={"_csrf_token": csrf_token}, follow_redirects=False
+        )
         assert resp.status_code == 302
         resp2 = auth_client.get("/account", follow_redirects=False)
         assert resp2.status_code == 302
         assert "/login" in resp2.headers.get("Location", "")
+
+    def test_logout_via_get_rejected(self, auth_client):
+        # GET /logout must not work — forced logout via <img src="/logout">.
+        resp = auth_client.get("/logout", follow_redirects=False)
+        assert resp.status_code == 405
+        resp2 = auth_client.get("/account", follow_redirects=False)
+        assert resp2.status_code == 200
 
     def test_api_unauthenticated_returns_401(self, client):
         resp = client.post("/api/session/keepalive")
@@ -108,13 +117,15 @@ class TestSessionPersistence:
         assert resp2.status_code == 200
 
     def test_expired_token_forces_relogin(self, client, db):
+        from services.users import _hash_token
+
         uid = create_user("expired@test.com", "Pass1234!")
         token = create_session(uid)
 
-        # Manually expire the session in DB
+        # Manually expire the session in DB (tokens are stored hashed)
         db.execute(
-            "UPDATE user_sessions SET expires_at = '2000-01-01T00:00:00' WHERE session_token = ?",
-            (token,),
+            "UPDATE user_sessions SET expires_at = '2000-01-01T00:00:00' WHERE session_token_hash = ?",
+            (_hash_token(token),),
         )
         db.commit()
 

@@ -17,14 +17,15 @@
           } catch (e) {}
       })();
   </script>
-  <title>Case Organizer – My Account</title>
+  <title>Case Organizer – Letterhead</title>
+  <meta name="csrf-token" content="{{ csrf_token }}">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" />
   <link rel="stylesheet" href="{{ static_url('css/style.css') }}" />
   <link rel="icon" type="image/png" href="{{ url_for('static', filename='img/Case_Organizer_logo.png') }}" />
-  <meta name="csrf-token" content="{{ csrf_token }}">
+  <link rel="stylesheet" href="{{ static_url('css/legal_notice.css') }}" />
 </head>
-<body>
+<body data-role="{{ current_user.role if current_user else '' }}">
   <div class="app-shell">
     <header class="topbar">
       <a href="{{ url_for('home') }}" class="brand">Case Organizer</a>
@@ -50,7 +51,7 @@
                 <span class="badge">{{ unread_count }}</span>
               {% endif %}
             </a>
-            <a href="{{ url_for('account') }}" class="user-menu-item" role="menuitem" aria-current="page">
+            <a href="{{ url_for('account') }}" class="user-menu-item" role="menuitem">
               <i class="fa-solid fa-user" aria-hidden="true"></i>
               <span class="user-menu-label">My Account</span>
             </a>
@@ -74,7 +75,7 @@
               <i class="fa-solid fa-scroll" aria-hidden="true"></i>
               <span class="user-menu-label">Legal Notices</span>
             </a>
-            <a href="{{ url_for('letterhead_page') }}" class="user-menu-item" role="menuitem">
+            <a href="{{ url_for('letterhead_page') }}" class="user-menu-item" role="menuitem" aria-current="page">
               <i class="fa-solid fa-file-lines" aria-hidden="true"></i>
               <span class="user-menu-label">Letterhead</span>
             </a>
@@ -104,49 +105,59 @@
     <main class="home enter-animate">
       {% include "_flash.html" %}
 
-      <h1>My Account</h1>
-      <div class="settings-grid">
-        <div class="settings-card">
-          <h2>Update Email</h2>
-          <form method="post">
-            {{ csrf_input }}
-            <input type="hidden" name="form_name" value="update_email">
-            <label for="new_email">Email</label>
-            <input id="new_email" name="new_email" type="email" value="{{ current_user.email }}" required>
-
-            <label for="current_password_email">Current password</label>
-            <input id="current_password_email" name="current_password" type="password" placeholder="Required" required>
-
-            <button type="submit" class="btn-primary">Save Email</button>
-          </form>
+      <section class="ln-page" aria-label="Letterhead stamping">
+        <h1>Letterhead</h1>
+        <div class="ln-intro">
+          <p>Stamp any document onto your chosen letterhead.</p>
+          <p>
+            Use this for a letter, representation, or anything that is not a
+            formal notice or certificate. Pick a letterhead below to see the
+            exact margins it needs, then upload your A4 PDF. The letterhead is
+            placed behind <em>every</em> page, so leave enough top and bottom
+            margin on each page for your text to clear it.
+          </p>
         </div>
 
-        <div class="settings-card">
-          <h2>Change Password</h2>
-          <form method="post">
-            {{ csrf_input }}
-            <input type="hidden" name="form_name" value="update_password">
-            <label for="current_password">Current password</label>
-            <input id="current_password" name="current_password" type="password" placeholder="Current password" required>
+        <!-- Exact, per-letterhead margin guidance (filled by JS) -->
+        <div class="ln-margins" id="lh-margins" aria-live="polite"></div>
 
-            <label for="new_password">New password</label>
-            <input id="new_password" name="new_password" type="password" placeholder="Minimum 8 characters" required>
-
-            <label for="confirm_password">Confirm password</label>
-            <input id="confirm_password" name="confirm_password" type="password" placeholder="Repeat new password" required>
-
-            <button type="submit" class="btn-secondary">Update Password</button>
-          </form>
+        <!-- Letterhead Picker -->
+        <div class="letterhead-picker" id="letterhead-picker">
+          <h3>Letterhead</h3>
+          <div class="letterhead-thumbs" id="letterhead-thumbs">
+            <!-- Populated by JS -->
+          </div>
         </div>
-      </div>
+
+        <!-- PDF upload -->
+        <div class="ln-form-card">
+          <h3 class="section-title">Your PDF</h3>
+          <div class="dropzone" id="lh-drop" tabindex="0">Drag &amp; drop your PDF here or click to select</div>
+          <input type="file" id="lh-file" hidden accept=".pdf" />
+          <div id="lh-file-list" class="results"></div>
+        </div>
+
+        <div class="ln-actions">
+          <button
+            id="lh-download"
+            class="btn-primary"
+            type="button"
+            data-stamp-url="{{ url_for('letterhead_stamp') }}"
+            disabled
+          >
+            <i class="fa-solid fa-file-arrow-down"></i> Download Stamped PDF
+          </button>
+        </div>
+      </section>
     </main>
   </div>
 
   <script nonce="{{ csp_nonce }}">
     window.CaseOrg = Object.assign(window.CaseOrg || {}, {
-      isAdmin: {{ 'true' if current_user and current_user.role == 'admin' else 'false' }}
+      isAdmin: {{ (current_user and current_user.role == 'admin') | tojson }}
     });
   </script>
   <script src="{{ static_url('js/main.js') }}"></script>
+  <script src="{{ static_url('js/letterhead.js') }}"></script>
 </body>
 </html>

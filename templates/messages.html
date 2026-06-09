@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta name="color-scheme" content="light dark">
-  <script>
+  <script nonce="{{ csp_nonce }}">
       (function () {
           try {
               const KEY = 'caseOrg.theme';
@@ -62,6 +62,22 @@
               <i class="fa-solid fa-file-invoice-dollar" aria-hidden="true"></i>
               <span class="user-menu-label">Generate Invoice</span>
             </a>
+            <a href="{{ url_for('certificate_form') }}" class="user-menu-item" role="menuitem">
+              <i class="fa-solid fa-certificate" aria-hidden="true"></i>
+              <span class="user-menu-label">Generate Certificate</span>
+            </a>
+            <a href="{{ url_for('vakalatnama_page') }}" class="user-menu-item" role="menuitem">
+              <i class="fa-solid fa-stamp" aria-hidden="true"></i>
+              <span class="user-menu-label">Vakalatnama</span>
+            </a>
+            <a href="{{ url_for('legal_notice_form') }}" class="user-menu-item" role="menuitem">
+              <i class="fa-solid fa-scroll" aria-hidden="true"></i>
+              <span class="user-menu-label">Legal Notices</span>
+            </a>
+            <a href="{{ url_for('letterhead_page') }}" class="user-menu-item" role="menuitem">
+              <i class="fa-solid fa-file-lines" aria-hidden="true"></i>
+              <span class="user-menu-label">Letterhead</span>
+            </a>
             {% if current_user.role == 'admin' %}
               <a href="{{ url_for('admin_settings') }}" class="user-menu-item" role="menuitem">
                 <i class="fa-solid fa-gear" aria-hidden="true"></i>
@@ -77,9 +93,12 @@
       <button id="theme-toggle" class="theme-toggle" title="Toggle theme" aria-label="Toggle theme">
         <i class="fa-solid fa-moon"></i>
       </button>
-      <a href="{{ url_for('logout') }}" class="logout" title="Logout">
-        <i class="fa-solid fa-right-from-bracket"></i>
-      </a>
+      <form method="post" action="{{ url_for('logout') }}" class="logout-form">
+        <input type="hidden" name="_csrf_token" value="{{ csrf_token }}">
+        <button type="submit" class="logout" title="Logout">
+          <i class="fa-solid fa-right-from-bracket"></i>
+        </button>
+      </form>
     </header>
 
     <main class="home enter-animate">
@@ -151,7 +170,7 @@
                         {{ csrf_input }}
                         <input type="hidden" name="current_tab" value="inbox">
                         <button type="submit" class="icon-btn icon-danger" title="Delete message" aria-label="Delete message"
-                          onclick="return confirm('Delete this message? This cannot be undone.');">
+                          data-confirm="Delete this message? This cannot be undone.">
                           <i class="fa-solid fa-trash"></i>
                         </button>
                       </form>
@@ -191,7 +210,7 @@
                         {{ csrf_input }}
                         <input type="hidden" name="current_tab" value="sent">
                         <button type="submit" class="icon-btn icon-danger" title="Delete message" aria-label="Delete message"
-                          onclick="return confirm('Delete this message? This cannot be undone.');">
+                          data-confirm="Delete this message? This cannot be undone.">
                           <i class="fa-solid fa-trash"></i>
                         </button>
                       </form>
@@ -208,14 +227,14 @@
     </main>
   </div>
 
-  <script>
+  <script nonce="{{ csp_nonce }}">
     window.CaseOrg = Object.assign(window.CaseOrg || {}, {
       isAdmin: {{ 'true' if current_user and current_user.role == 'admin' else 'false' }}
     });
   </script>
   <script src="{{ static_url('js/main.js') }}"></script>
   {% if tab == 'sent' %}
-  <script>
+  <script nonce="{{ csp_nonce }}">
     window.addEventListener('DOMContentLoaded', function () {
       const target = document.getElementById('sent-section');
       if (target && typeof target.scrollIntoView === 'function') {

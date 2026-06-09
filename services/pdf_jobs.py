@@ -54,7 +54,7 @@ def build_job_paths(job_id: str) -> PdfJobPaths:
 
 
 def create_job(*, tool: str, owner_user_id: int) -> str:
-    job_id = secrets.token_urlsafe(16)
+    job_id = secrets.token_urlsafe(32)
     paths = build_job_paths(job_id)
     paths.input_dir.mkdir(parents=True, exist_ok=True)
     paths.output_dir.mkdir(parents=True, exist_ok=True)

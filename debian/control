@@ -23,7 +23,8 @@ Depends:
   adduser,
   ${misc:Depends}
 Recommends:
-  tesseract-ocr-all
+  tesseract-ocr-all,
+  ttf-mscorefonts-installer
 Description: Lightweight Flask-based case file organizer with systemd service
  Case Organizer organizes legal case files into a structured hierarchy,
  supports uploads, search, and metadata. Ships with a systemd unit and
