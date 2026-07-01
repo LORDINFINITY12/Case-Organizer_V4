@@ -642,7 +642,7 @@ input, select, textarea {
 }
 .cl-name-row {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    grid-template-columns: 1fr;
     gap: 12px;
 }
 .cl-name-option {
@@ -2981,7 +2981,8 @@ input[type="number"].year-input {
     border: 1px solid var(--input-border, #e6e8ef);
     background: var(--input-bg, #fff);
     color: var(--text);
-    font-size: 14px;
+    font-size: inherit;
+    font-family: inherit;
     box-sizing: border-box;
 }
 .search-dropdown-panel {
@@ -3015,9 +3016,19 @@ input[type="number"].year-input {
 }
 .search-dropdown-panel .sd-option {
     padding: 8px 12px;
-    font-size: 13px;
+    font-size: inherit;
     cursor: pointer;
     color: var(--text);
+}
+/* Custom (free-text) option — the value the user typed, reflected back. */
+.search-dropdown-panel .sd-option-custom::after {
+    content: " — use as typed";
+    color: var(--muted, #9aa3b2);
+    font-size: 0.85em;
+}
+.search-dropdown-panel .sd-option-custom:hover::after,
+.search-dropdown-panel .sd-option-custom.active::after {
+    color: rgba(255, 255, 255, 0.85);
 }
 .search-dropdown-panel .sd-option:hover,
 .search-dropdown-panel .sd-option.active {
@@ -3029,6 +3040,30 @@ input[type="number"].year-input {
     background: var(--input-border, #e6e8ef);
     margin: 4px 0;
 }
+
+/* ── Case form: current-forum conditional block + subcategory placeholder ──── */
+/* Disabled placeholder shown when a File Category has no subcategory. */
+.mc-subcat-placeholder {
+    width: 100%;
+    padding: 10px 12px;
+    border-radius: 12px;
+    border: 1px solid var(--input-border, #e6e8ef);
+    background: var(--input-bg, #fff);
+    color: var(--text);
+    font-size: 14px;
+    box-sizing: border-box;
+    opacity: 0.55;
+    cursor: not-allowed;
+}
+/* Conditional "Transferred / In Appeal" fields get a little breathing room. */
+#current-extra:not(:empty),
+#note-case-current-extra:not(:empty) {
+    margin-top: 10px;
+}
+/* A note-modal field that should span the full grid width (e.g. court dropdown). */
+.note-field.note-field-wide { grid-column: 1 / -1; }
+/* Match the unified court dropdown's input to the note-field input styling. */
+.note-field .search-dropdown-input { border-radius: 10px; padding: 8px 10px; }
 
 /* ── Long-List Dropdown styling ───────────────────────────────────────────── */
 .ll-dropdown { position: relative; }

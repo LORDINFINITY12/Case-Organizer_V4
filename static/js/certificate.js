@@ -1,140 +1,29 @@
-/* ── Certificate Generator JS (free-form sandbox) ─────────────── */
+/* ── Internship Certificate Generator JS (upload + stamp) ─────────── */
 
-function _csrfToken() {
+function _certCsrfToken() {
   const m = document.querySelector('meta[name="csrf-token"]');
   return m ? m.content : '';
+}
+
+function _certEscHtml(s) {
+  return (s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
 document.addEventListener('DOMContentLoaded', () => {
   const downloadBtn = document.getElementById('cert-download');
   if (!downloadBtn) return;
 
-  const certDoc = document.getElementById('cert-doc');
-  if (!certDoc) return;
+  // ── Field references ─────────────────────────────────────────
+  const numberEl = document.getElementById('cert-number');
+  const dateEl = document.getElementById('cert-date');
 
-  // ── Region references ────────────────────────────────────────
-  const titleRegion = certDoc.querySelector('[data-cert-title]');
-  const internInfoRegion = certDoc.querySelector('[data-intern-info]');
-  const bodyRegion = certDoc.querySelector('[data-cert-body]');
-  const signatureRegion = certDoc.querySelector('[data-cert-signature]');
-  const certNumberEl = certDoc.querySelector('[data-cert-number]');
-  const certDateEl = certDoc.querySelector('[data-cert-date]');
-  const internNameEl = certDoc.querySelector('[data-intern-name]');
+  const fileInput = document.getElementById('cert-file');
+  const dropzone = document.getElementById('cert-drop');
+  const fileList = document.getElementById('cert-file-list');
 
-  // ── Toolbar setup ────────────────────────────────────────────
-  const toolbar = document.getElementById('cert-toolbar');
-  const sizeSelect = document.getElementById('tb-size');
-  const lineHeightSelect = document.getElementById('tb-lineheight');
-
-  // Ensure execCommand uses CSS spans for font styling
-  document.execCommand('styleWithCSS', false, true);
-
-  // Toolbar button commands (bold, italic, underline, alignment)
-  toolbar.addEventListener('click', (e) => {
-    const btn = e.target.closest('[data-cmd]');
-    if (!btn) return;
-    e.preventDefault();
-    certDoc.focus();
-    document.execCommand(btn.dataset.cmd, false, null);
-  });
-
-  // Font size — use fontSize command then convert browser's <font size="N">
-  // to inline style since execCommand fontSize only supports 1-7
-  sizeSelect.addEventListener('change', () => {
-    certDoc.focus();
-    const pt = parseInt(sizeSelect.value, 10);
-    // Use a marker font size then immediately convert
-    document.execCommand('fontSize', false, '7');
-    // Find all font[size="7"] inside our doc and convert to inline style
-    const bigFonts = certDoc.querySelectorAll('font[size="7"]');
-    bigFonts.forEach(f => {
-      f.removeAttribute('size');
-      f.style.fontSize = pt + 'pt';
-    });
-  });
-
-  // Line height — apply to the block containing the cursor
-  lineHeightSelect.addEventListener('change', () => {
-    const sel = window.getSelection();
-    if (!sel.rangeCount) return;
-    const node = sel.anchorNode;
-    const block = _closestBlock(node);
-    if (block && certDoc.contains(block)) {
-      block.style.lineHeight = lineHeightSelect.value;
-    }
-  });
-
-  function _closestBlock(node) {
-    let el = node.nodeType === 3 ? node.parentElement : node;
-    while (el && el !== certDoc) {
-      const display = window.getComputedStyle(el).display;
-      if (display === 'block' || display === 'list-item') return el;
-      el = el.parentElement;
-    }
-    return null;
-  }
-
-  // ── Letterhead Picker ────────────────────────────────────────
-  let selectedLetterheadId = null;
-  const thumbsContainer = document.getElementById('letterhead-thumbs');
-
-  async function loadLetterheads() {
-    if (!thumbsContainer) return;
-    try {
-      const resp = await fetch('/api/letterheads', {
-        headers: { 'X-CSRF-Token': _csrfToken() },
-      });
-      const data = await resp.json();
-      if (!data.ok) return;
-
-      thumbsContainer.innerHTML = '';
-
-      // "None" option
-      const noneCard = document.createElement('div');
-      noneCard.className = 'letterhead-thumb selected';
-      noneCard.dataset.id = '';
-      noneCard.innerHTML = '<span class="letterhead-thumb-label">None</span>';
-      noneCard.addEventListener('click', () => selectLetterhead(noneCard, null));
-      thumbsContainer.appendChild(noneCard);
-
-      // Uploaded letterheads
-      for (const lh of data.letterheads) {
-        const card = document.createElement('div');
-        card.className = 'letterhead-thumb';
-        card.dataset.id = String(lh.id);
-        const fallbackIcon = lh.kind === 'pdf' ? 'fa-file-pdf' : 'fa-image';
-        const thumbUrl = lh.thumbnail_url || lh.image_url;
-        const preview = `<div class="letterhead-thumb-preview">`
-          + `<img src="${_escHtml(thumbUrl)}" alt="${_escHtml(lh.label)}" loading="lazy" `
-          + `onerror="this.style.display='none';this.nextElementSibling.style.display='flex';" />`
-          + `<span class="letterhead-thumb-fallback" style="display:none;"><i class="fa-solid ${fallbackIcon}"></i></span>`
-          + `</div>`;
-        card.innerHTML = `
-          ${preview}
-          <span class="letterhead-thumb-label">${_escHtml(lh.label)}</span>
-        `;
-        card.addEventListener('click', () => selectLetterhead(card, lh.id));
-        thumbsContainer.appendChild(card);
-      }
-    } catch (e) {
-      console.warn('Failed to load letterheads:', e);
-    }
-  }
-
-  function selectLetterhead(card, id) {
-    selectedLetterheadId = id;
-    thumbsContainer.querySelectorAll('.letterhead-thumb').forEach(el => el.classList.remove('selected'));
-    card.classList.add('selected');
-  }
-
-  function _escHtml(s) {
-    return (s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-  }
-
-  loadLetterheads();
+  let selectedFile = null;
 
   // ── Date helpers ─────────────────────────────────────────────
-
   function formatDateObj(date) {
     const day = String(date.getDate()).padStart(2, '0');
     const month = String(date.getMonth() + 1).padStart(2, '0');
@@ -169,85 +58,195 @@ document.addEventListener('DOMContentLoaded', () => {
     return formatDateObj(parsed);
   }
 
-  // ── Auto-populate certificate number + date ──────────────────
+  if (dateEl) {
+    dateEl.value = formatDateObj(new Date());
+    dateEl.addEventListener('blur', () => {
+      dateEl.value = normaliseDate(dateEl.value, { fallbackToToday: true });
+    });
+  }
 
+  // ── Auto-populate certificate number ─────────────────────────
   async function loadNextNumber() {
     try {
       const resp = await fetch('/api/certificates/next-number', {
-        headers: { 'X-CSRF-Token': _csrfToken() },
+        headers: { 'X-CSRF-Token': _certCsrfToken() },
       });
       const data = await resp.json();
-      if (data.ok && data.certificate_number && certNumberEl) {
-        certNumberEl.textContent = data.certificate_number;
+      if (data.ok && data.certificate_number && numberEl && !numberEl.value.trim()) {
+        numberEl.value = data.certificate_number;
       }
     } catch (e) {
-      // ignore
+      // ignore — user can type a number manually
     }
   }
   loadNextNumber();
 
-  // Default date to today
-  if (certDateEl) {
-    certDateEl.textContent = formatDateObj(new Date());
-    certDateEl.addEventListener('blur', () => {
-      const val = (certDateEl.textContent || '').replace(/\s+/g, ' ').trim();
-      certDateEl.textContent = normaliseDate(val, { fallbackToToday: true });
+  // ── Letterhead picker + margin guidance ──────────────────────
+  let selectedLetterheadId = null;
+  const thumbsContainer = document.getElementById('letterhead-thumbs');
+  const marginsBox = document.getElementById('cert-margins');
+  const marginCache = {};   // 'none' | '<id>' -> margins | null
+
+  function fmtCm(v) {
+    return (Math.round(v * 10) / 10).toFixed(1).replace(/\.0$/, '');
+  }
+
+  function renderMargins(m, id) {
+    if (!marginsBox) return;
+    if (m && typeof m.top_cm === 'number') {
+      marginsBox.className = 'ln-margins ln-margins-exact';
+      marginsBox.innerHTML =
+        '<div class="ln-margins-title"><i class="fa-solid fa-ruler-combined"></i> Margins for this letterhead</div>'
+        + '<ul>'
+        + `<li><strong>Every page</strong> — top <strong>${fmtCm(m.top_cm)}&nbsp;cm</strong>, bottom <strong>${fmtCm(m.bottom_cm)}&nbsp;cm</strong></li>`
+        + `<li><strong>First page</strong> — top <strong>${fmtCm(m.first_page_cm)}&nbsp;cm</strong> (room for the intern details &amp; certificate number)</li>`
+        + '</ul>';
+    } else if (id !== null && id !== undefined) {
+      // A letterhead is selected but could not be measured automatically.
+      marginsBox.className = 'ln-margins ln-margins-warn';
+      marginsBox.innerHTML =
+        '<div class="ln-margins-title"><i class="fa-solid fa-triangle-exclamation"></i> Could not measure this letterhead</div>'
+        + '<p>Leave top and bottom margins that match its printed header and footer, '
+        + 'and at least <strong>7&nbsp;cm</strong> at the top of the first page.</p>';
+    } else {
+      // "None" — printing onto physical pre-printed letterhead paper.
+      marginsBox.className = 'ln-margins ln-margins-none';
+      marginsBox.innerHTML =
+        '<div class="ln-margins-title"><i class="fa-solid fa-circle-info"></i> No letterhead selected</div>'
+        + '<p>Match the top and bottom margins to the printed header and footer on your '
+        + 'physical letterhead paper. On the first page leave at least <strong>7&nbsp;cm</strong> '
+        + 'at the top for the title and the intern / certificate details.</p>';
+    }
+  }
+
+  async function applyMarginGuidance(id) {
+    const key = (id === null || id === undefined) ? 'none' : String(id);
+    if (key in marginCache) { renderMargins(marginCache[key], id); return; }
+    try {
+      const qs = (id === null || id === undefined) ? '' : ('?letterhead_id=' + encodeURIComponent(id));
+      const resp = await fetch('/api/certificates/margins' + qs, {
+        headers: { 'X-CSRF-Token': _certCsrfToken() },
+      });
+      const data = await resp.json();
+      marginCache[key] = (data && data.ok) ? data.margins : null;
+    } catch (e) {
+      marginCache[key] = null;
+    }
+    renderMargins(marginCache[key], id);
+  }
+  applyMarginGuidance(null);   // default state: "None" selected
+
+  async function loadLetterheads() {
+    if (!thumbsContainer) return;
+    try {
+      const resp = await fetch('/api/letterheads', {
+        headers: { 'X-CSRF-Token': _certCsrfToken() },
+      });
+      const data = await resp.json();
+      if (!data.ok) return;
+
+      thumbsContainer.innerHTML = '';
+
+      // "None" option
+      const noneCard = document.createElement('div');
+      noneCard.className = 'letterhead-thumb selected';
+      noneCard.dataset.id = '';
+      noneCard.innerHTML = '<span class="letterhead-thumb-label">None</span>';
+      noneCard.addEventListener('click', () => selectLetterhead(noneCard, null));
+      thumbsContainer.appendChild(noneCard);
+
+      for (const lh of data.letterheads) {
+        const card = document.createElement('div');
+        card.className = 'letterhead-thumb';
+        card.dataset.id = String(lh.id);
+        const fallbackIcon = lh.kind === 'pdf' ? 'fa-file-pdf' : 'fa-image';
+        const thumbUrl = lh.thumbnail_url || lh.image_url;
+        const preview = `<div class="letterhead-thumb-preview">`
+          + `<img src="${_certEscHtml(thumbUrl)}" alt="${_certEscHtml(lh.label)}" loading="lazy" `
+          + `onerror="this.style.display='none';this.nextElementSibling.style.display='flex';" />`
+          + `<span class="letterhead-thumb-fallback" style="display:none;"><i class="fa-solid ${fallbackIcon}"></i></span>`
+          + `</div>`;
+        card.innerHTML = `
+          ${preview}
+          <span class="letterhead-thumb-label">${_certEscHtml(lh.label)}</span>
+        `;
+        card.addEventListener('click', () => selectLetterhead(card, lh.id));
+        thumbsContainer.appendChild(card);
+      }
+    } catch (e) {
+      console.warn('Failed to load letterheads:', e);
+    }
+  }
+
+  function selectLetterhead(card, id) {
+    selectedLetterheadId = id;
+    thumbsContainer.querySelectorAll('.letterhead-thumb').forEach(el => el.classList.remove('selected'));
+    card.classList.add('selected');
+    applyMarginGuidance(id);
+  }
+
+  loadLetterheads();
+
+  // ── File upload (dropzone) ───────────────────────────────────
+  function setFile(file) {
+    if (!file) return;
+    const name = (file.name || '').toLowerCase();
+    if (!name.endsWith('.pdf')) {
+      alert('Only PDF files are allowed.');
+      return;
+    }
+    selectedFile = file;
+    if (fileList) {
+      fileList.innerHTML = `<div class="result-item"><i class="fa-solid fa-file-pdf"></i> ${_certEscHtml(file.name)}</div>`;
+    }
+  }
+
+  if (dropzone) {
+    dropzone.addEventListener('click', () => fileInput && fileInput.click());
+    dropzone.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fileInput && fileInput.click(); }
+    });
+    dropzone.addEventListener('dragover', (e) => { e.preventDefault(); dropzone.classList.add('dragover'); });
+    dropzone.addEventListener('dragleave', () => dropzone.classList.remove('dragover'));
+    dropzone.addEventListener('drop', (e) => {
+      e.preventDefault();
+      dropzone.classList.remove('dragover');
+      if (e.dataTransfer.files && e.dataTransfer.files.length) setFile(e.dataTransfer.files[0]);
+    });
+  }
+  if (fileInput) {
+    fileInput.addEventListener('change', () => {
+      if (fileInput.files && fileInput.files.length) setFile(fileInput.files[0]);
     });
   }
 
-  // ── Helper: extract plain text from an element ───────────────
-  function textOf(el) {
-    return (el?.textContent || '').replace(/\s+/g, ' ').trim();
-  }
-
-  // ── Helper: extract intern name from intern info region ──────
-  function extractInternName() {
-    // Try the dedicated span first
-    if (internNameEl) {
-      const t = textOf(internNameEl);
-      if (t) return t;
-    }
-    // Fallback: parse the first line of intern info for "Name: <value>"
-    const text = textOf(internInfoRegion);
-    const m = text.match(/Name:\s*(.+?)(?:\s*Address:|$)/i);
-    return m ? m[1].trim() : '';
-  }
-
-  // ── Download handler ─────────────────────────────────────────
-
+  // ── Download & Save handler ──────────────────────────────────
   downloadBtn.addEventListener('click', async () => {
-    const internName = extractInternName();
-    if (!internName) {
-      alert('Intern name is required. Please fill in the Name field in the intern details section.');
+    if (!selectedFile) {
+      alert('Please upload the certificate PDF.');
       return;
     }
 
-    const certDate = normaliseDate(textOf(certDateEl), { fallbackToToday: true });
-    if (certDateEl) certDateEl.textContent = certDate;
+    const certDate = normaliseDate(dateEl?.value, { fallbackToToday: true });
+    if (dateEl) dateEl.value = certDate;
 
-    const payload = {
-      certificate_number: textOf(certNumberEl) || null,
-      certificate_date: certDate,
-      title_html: titleRegion ? titleRegion.innerHTML : '',
-      intern_name: internName,
-      intern_info_html: internInfoRegion ? internInfoRegion.innerHTML : '',
-      body_html: bodyRegion ? bodyRegion.innerHTML : '',
-      signature_html: signatureRegion ? signatureRegion.innerHTML : '',
-      letterhead_id: selectedLetterheadId,
-    };
+    const fd = new FormData();
+    fd.append('file', selectedFile);
+    fd.append('certificate_number', (numberEl?.value || '').trim());
+    fd.append('certificate_date', certDate);
+    if (selectedLetterheadId !== null && selectedLetterheadId !== undefined) {
+      fd.append('letterhead_id', String(selectedLetterheadId));
+    }
 
     downloadBtn.disabled = true;
     downloadBtn.textContent = 'Generating...';
 
     try {
-      const url = downloadBtn.dataset.downloadUrl;
+      const url = downloadBtn.dataset.saveUrl;
       const resp = await fetch(url, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-CSRF-Token': _csrfToken(),
-        },
-        body: JSON.stringify(payload),
+        headers: { 'X-CSRF-Token': _certCsrfToken() },
+        body: fd,
       });
 
       if (!resp.ok) {
@@ -256,13 +255,9 @@ document.addEventListener('DOMContentLoaded', () => {
         return;
       }
 
-      // Update displayed certificate number from server response
       const serverNumber = resp.headers.get('X-Certificate-Number');
-      if (serverNumber && certNumberEl) {
-        certNumberEl.textContent = serverNumber;
-      }
+      if (serverNumber && numberEl) numberEl.value = serverNumber;
 
-      // Download the PDF blob
       const blob = await resp.blob();
       const disposition = resp.headers.get('Content-Disposition') || '';
       let filename = 'certificate.pdf';
@@ -277,7 +272,8 @@ document.addEventListener('DOMContentLoaded', () => {
       a.remove();
       URL.revokeObjectURL(a.href);
 
-      // Refresh the number for the next certificate
+      // Refresh the number for the next certificate.
+      if (numberEl) numberEl.value = '';
       loadNextNumber();
     } catch (e) {
       alert('Network error. Please try again.');

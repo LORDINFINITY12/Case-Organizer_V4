@@ -211,6 +211,41 @@ journalctl -u case-organizer.service
 
 ---
 
+### Option 3 – Docker (Windows / macOS / Linux)
+
+The Docker image is the easiest way to run Case Organizer on **Windows**.
+
+**A. One-click (Windows):** download `case-organizer_<version>_docker.tar.gz` and
+`docker-setup.bat` from the [latest release](https://github.com/LORDINFINITY12/Case-Organizer_V4/releases),
+put them in the same folder, and double-click `docker-setup.bat`. It loads the
+image, starts the container with persistent storage under
+`%USERPROFILE%\CaseOrganizer`, and opens the app in your browser. On
+Linux/macOS run `./docker-setup.sh` instead.
+
+**B. Load the release image manually:**
+
+```bash
+docker load -i case-organizer_4.5.2_docker.tar.gz
+docker run -d --name case-organizer -p 5000:5000 \
+  -e CASEORG_COOKIE_SECURE=0 \
+  -v caseorg-config:/data/config -v caseorg-files:/data/files \
+  --restart unless-stopped case-organizer:4.5.2
+```
+
+**C. Build from source with Compose:**
+
+```bash
+docker compose up -d          # builds and runs; data persists under ./data
+```
+
+Then open `http://localhost:5000`. On first-run **/setup**, set the storage
+location to `/data/files` so case files land on the mounted volume (config lives
+in `/data/config`). `CASEORG_COOKIE_SECURE=0` is required for plain-HTTP
+localhost; put a TLS-terminating reverse proxy in front and set it to `1` for
+HTTPS deployments.
+
+---
+
 ## First-Run Setup
 
 1. **Storage and Users**  

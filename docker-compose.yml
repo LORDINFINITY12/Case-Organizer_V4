@@ -1,0 +1,23 @@
+# Case Organizer — Docker Compose
+#
+#   Build from source & run:   docker compose up -d
+#   Or, using the release image (after `docker load -i case-organizer_4.5.2_docker.tar.gz`):
+#                              docker compose up -d   (the pre-loaded image is reused)
+#
+# Then open http://localhost:5000 and complete first-run /setup.
+# When asked for the storage location, use /data/files so case files land on the
+# mounted ./data/files folder (config lives in ./data/config).
+services:
+  case-organizer:
+    build: .
+    image: case-organizer:4.5.2
+    container_name: case-organizer
+    ports:
+      - "5000:5000"
+    environment:
+      # Plain-HTTP localhost — see the Dockerfile note. Set to 1 behind HTTPS.
+      CASEORG_COOKIE_SECURE: "0"
+    volumes:
+      - ./data/config:/data/config
+      - ./data/files:/data/files
+    restart: unless-stopped

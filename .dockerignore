@@ -1,0 +1,30 @@
+# Keep the build context small and the image clean.
+.git
+.gitignore
+.claude
+.claude/
+CLAUDE.md
+
+# Python caches / local envs
+__pycache__/
+**/__pycache__/
+*.pyc
+.pytest_cache/
+.venv/
+venv/
+
+# Tests are not needed at runtime
+tests/
+
+# Docker + packaging artefacts
+Dockerfile
+.dockerignore
+docker-compose.yml
+docker-setup.bat
+docker-setup.sh
+*.deb
+*.tar
+*.tar.gz
+
+# Local runtime data (bind-mounted at runtime, not baked into the image)
+data/

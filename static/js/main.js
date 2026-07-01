@@ -387,26 +387,10 @@ function bindUserMenus(){
 const CASEORG_STATE = window.CaseOrg || {};
 const CASEORG_IS_ADMIN = Boolean(CASEORG_STATE.isAdmin);
 
-// --- Data: subcategories & case types ----------------------------------
-const SUBCATS = {
-  Criminal: [
-    "Anticipatory Bail","Appeals","Bail","Charges","Criminal Miscellaneous",
-    "Orders/Judgments","Office Reports","Primary Documents","Revisions","Trial","Writs",
-    "Reference","Transfer Petitions","Special Leave Petition"
-  ],
-  Civil: [
-    "Civil Main","Civil Miscellaneous Main","Civil Appeal","Civil Revision",
-    "Civil Writ Petition","Orders/Judgments","Office Reports","Primary Documents",
-    "Reference","Transfer Petitions","Special Leave Petition"
-  ],
-  Commercial: [
-    "Civil Main","Civil Miscellaneous Main","Civil Appeal","Civil Revision",
-    "Civil Writ Petition","Constitutional","Orders/Judgments","Office Reports","Primary Documents",
-    "Reference","Transfer Petitions","Special Leave Petition"
-  ],
-  // NOTE: Intentionally no "Case Law" key so subcategory is disabled when selected.
-};
-
+// --- Data: case types (case-law classification) ------------------------
+// (The old flat case-creation SUBCATS list was retired in favour of the grouped
+//  FILE_SUBCATS taxonomy used for filing; case classification now needs only a
+//  Case Category.)
 const CASE_TYPES = {
   Criminal: [
     "498A (Cruelty/Dowry)","Murder","Rape","Sexual Harassment","Hurt",
@@ -418,6 +402,66 @@ const CASE_TYPES = {
   ],
   Commercial: [
     "Trademark","Copyright","Patent","Banking","Constitutional","Others"
+  ],
+};
+
+/* ── File Subcategory taxonomy (Manage Cases filing) ─────────────────────────
+ * Structured divisions under Civil / Criminal / Commercial.  Each group becomes a
+ * header in the searchable dropdown; each item becomes a filing subfolder name.
+ * Source: firm's Law_Firm_Server_Taxonomy.md (researched additions included). */
+const FILE_SUBCATS = {
+  Civil: [
+    { group: "General Civil Proceedings", items: ["Original Suit","Miscellaneous Civil Application","Civil Miscellaneous Petition","Interlocutory Application (IA)","Caveat","Review Petition","Curative Petition","Reference","Execution Petition","Restoration Application","Amendment Application","Recall Application","Transfer Petition (Civil)","Contempt Petition (Civil)","Other"] },
+    { group: "CPC Reliefs - Declaratory Reliefs", items: ["Declaration","Cancellation of Instrument","Rectification of Instrument","Rescission of Contract","Other"] },
+    { group: "CPC Reliefs - Injunctions", items: ["Temporary Injunction (Order XXXIX Rules 1-2 CPC)","Permanent Injunction","Mandatory Injunction","Ex Parte Injunction","Other"] },
+    { group: "CPC Reliefs - Interim Reliefs", items: ["Appointment of Receiver (Order XL CPC)","Attachment Before Judgment (Order XXXVIII Rule 5 CPC)","Security for Costs (Order XXV CPC)","Arrest Before Judgment (Order XXXVIII CPC)","Commission (Order XXVI CPC)","Local Commissioner (Order XXVI CPC)","Other"] },
+    { group: "CPC Reliefs - Execution", items: ["Execution Petition","Stay of Execution","Objection (Section 47 CPC)","Arrest in Execution","Attachment in Execution","Sale in Execution","Other"] },
+    { group: "CPC Reliefs - Appeals & Revisions", items: ["First Appeal (Section 96 CPC)","Second Appeal (Section 100 CPC)","Appeal from Orders (Order XLIII CPC)","Civil Revision (Section 115 CPC)","Review (Order XLVII CPC)","Other"] },
+    { group: "Property", items: ["Possession Suit","Partition Suit","Declaration of Title","Boundary Dispute","Easement Rights","Specific Performance","Mesne Profits","Encroachment","Cancellation of Sale Deed","Cancellation of Gift Deed","Rectification of Deed","Mutation Dispute","Property Injunction","Adverse Possession","Co-ownership Disputes","Other"] },
+    { group: "Family", items: ["Divorce","Judicial Separation","Restitution of Conjugal Rights","Annulment","Maintenance","Permanent Alimony","Child Custody","Visitation Rights","Guardianship","Adoption","Domestic Violence Proceedings","Other"] },
+    { group: "Guardianship", items: ["Appointment of Guardian","Removal of Guardian","Custody Modification","Minor Property Permission","Guardianship Certificate","Other"] },
+    { group: "Succession & Probate", items: ["Probate","Letters of Administration","Succession Certificate","Will Dispute","Testamentary Petition","Intestate Succession","Other"] },
+    { group: "Rent Control", items: ["Eviction","Recovery of Rent","Mesne Profits","Standard Rent","Tenant Injunction","Landlord Injunction","Other"] },
+    { group: "Land Acquisition", items: ["Compensation","Enhanced Compensation","Reference","Rehabilitation","Other"] },
+    { group: "Arbitration", items: ["Appointment of Arbitrator","Interim Measures","Challenge to Award","Enforcement of Award","Domestic Arbitration","International Commercial Arbitration","Other"] },
+    { group: "Consumer", items: ["Consumer Complaint","Appeal","Revision","Execution","Other"] },
+    { group: "Summary Proceedings", items: ["Summary Suit (Order XXXVII CPC)","Summary Judgment","Recovery Suit","Other"] },
+    { group: "Company / NCLT (Civil)", items: ["Oppression & Mismanagement","Reduction of Share Capital","Amalgamation","Merger","Restoration","Other"] },
+    { group: "Writ Jurisdiction", items: ["Writ Petition (Article 226)","Supervisory Petition (Article 227)","Habeas Corpus","Mandamus","Certiorari","Prohibition","Quo Warranto","Other"] },
+    { group: "Supreme Court Constitutional", items: ["Writ Petition (Article 32)","Original Suit (Article 131)","Transfer Petition","Special Leave Petition (Civil)","Review Petition","Curative Petition","Other"] },
+    { group: "Motor Accident Claims (MACT)", items: ["Claim Petition","Compensation Enhancement Appeal","Insurance Recovery","Other"] },
+    { group: "Service & Tribunals", items: ["Service Matter (CAT/SAT)","Departmental Appeal","RERA Complaint","Electricity Petition","Election Petition","Other"] },
+  ],
+  Criminal: [
+    { group: "Investigation", items: ["FIR","Complaint Case","Protest Petition","Closure Report Objections","Charge Sheet","Supplementary Charge Sheet","Final Report","Other"] },
+    { group: "Bail", items: ["Anticipatory Bail","Regular Bail","Interim Bail","Default Bail","Bail Cancellation","Suspension of Sentence","Other"] },
+    { group: "Trial Proceedings", items: ["Sessions Trial","Warrant Trial","Summons Trial","Complaint Trial","Plea Bargaining","Discharge Application","Framing of Charge","Other"] },
+    { group: "Appeals & Revisions", items: ["Criminal Appeal","Criminal Revision","Criminal Miscellaneous Petition","Transfer Petition (Criminal)","Review","Reference","Other"] },
+    { group: "Constitutional & Extraordinary Remedies", items: ["Criminal Writ (Article 226)","Habeas Corpus","Quashing Petition","Petition under Section 482 CrPC / Section 528 BNSS","SLP (Criminal)","Review Petition","Curative Petition","Other"] },
+    { group: "Economic Offences", items: ["PMLA","Benami","FEMA","GST Prosecution","Income Tax Prosecution","Customs","Prevention of Corruption Act","Other"] },
+    { group: "Special Criminal Acts", items: ["Negotiable Instruments Act","NDPS Act","POCSO Act","UAPA","Arms Act","Explosives Act","SC/ST Act","Juvenile Justice Act","Motor Vehicles Act","Information Technology Act","Food Safety Act","Wildlife Protection Act","Environmental Protection Act","Forest Act","Copyright Act","Trade Marks Act","Companies Act (Criminal)","Domestic Violence Act (PWDVA)","Dowry Prohibition Act","Other"] },
+    { group: "Prison & Sentence", items: ["Parole","Furlough","Remission","Premature Release","Sentence Modification","Other"] },
+    { group: "Maintenance & Miscellaneous", items: ["Maintenance (Section 125 CrPC / Section 144 BNSS)","Criminal Contempt","Victim Compensation","Other"] },
+  ],
+  Commercial: [
+    { group: "Commercial Suits", items: ["Commercial Suit","Commercial Appeal","Commercial Revision","Commercial Execution","Summary Judgment","Interim Relief","Other"] },
+    { group: "Banking & Finance", items: ["Loan Recovery","Mortgage","Guarantee","SARFAESI","DRT","DRAT","Cheque Recovery","Bank Fraud","Other"] },
+    { group: "Insolvency", items: ["CIRP","Liquidation","Operational Creditor","Financial Creditor","Personal Insolvency","Other"] },
+    { group: "Company Law", items: ["Shareholder Disputes","Oppression & Mismanagement","Merger","Demerger","Reduction of Capital","Winding Up","Director Disputes","Other"] },
+    { group: "IP - Copyright", items: ["Infringement","Ownership","Licensing","Assignment","Other"] },
+    { group: "IP - Trade Marks", items: ["Infringement","Passing Off","Rectification","Opposition","Other"] },
+    { group: "IP - Patents", items: ["Infringement","Revocation","Compulsory Licence","Other"] },
+    { group: "IP - Designs", items: ["Infringement","Cancellation","Other"] },
+    { group: "IP - Geographical Indications", items: ["Registration","Infringement","Other"] },
+    { group: "IP - Trade Secrets", items: ["Confidential Information","Breach of NDA","Other"] },
+    { group: "Competition Law", items: ["Anti-competitive Agreements","Abuse of Dominance","Combination Approval","CCI Appeal","Other"] },
+    { group: "Securities", items: ["SEBI Proceedings","Insider Trading","Takeover","Listing Compliance","Other"] },
+    { group: "Taxation", items: ["Income Tax","GST","Customs","Excise","Service Tax","VAT","Other"] },
+    { group: "Arbitration", items: ["Domestic Arbitration","International Commercial Arbitration","Section 9","Section 11","Section 34","Section 36","Enforcement of Foreign Award","Other"] },
+    { group: "Technology & Digital Commerce", items: ["IT Act","Data Protection","Software Licensing","SaaS Agreements","E-Commerce","Cyber Contracts","Domain Name Disputes","Other"] },
+    { group: "High Court (Commercial)", items: ["Writ Petition (Article 226)","Supervisory Petition (Article 227)","Other"] },
+    { group: "Supreme Court (Commercial)", items: ["Writ Petition (Article 32)","Special Leave Petition","Review Petition","Curative Petition","Transfer Petition","Other"] },
+    { group: "Regulatory Tribunals", items: ["NCLAT Appeal","TDSAT (Telecom)","APTEL (Electricity)","MSME Facilitation","RERA (Commercial)","Other"] },
   ],
 };
 
@@ -465,6 +509,9 @@ const HIGH_COURTS = [
   { name: "Nagpur High Court", abbrev: "Nag", historical: true },
 ];
 
+// Supreme Court — shown at the very top of the unified court dropdown.
+const SUPREME_COURT = { name: "Supreme Court of India", abbrev: "SC" };
+
 // Lookup: court name → abbreviation
 const _COURT_ABBREV_MAP = {};
 for (const [key, val] of Object.entries(TOP_COURTS)) _COURT_ABBREV_MAP[val.name] = val.abbrev;
@@ -494,10 +541,15 @@ function _getCurrentCourtAbbrev() {
 }
 
 /**
- * Build a searchable dropdown for High Court selection.
+ * Build a searchable dropdown for court selection.
+ * opts.includeSupremeCourt → prepend a "Supreme Court" group above the High Courts.
+ * opts.allowFreeText       → capture typed text (e.g. a trial/lower court) on blur
+ *                            when no listed option was picked.
  * Returns { wrapper, input, hiddenInput, setVal(name) }
  */
-function buildSearchableDropdown(inputId, hiddenId, placeholder) {
+function buildSearchableDropdown(inputId, hiddenId, placeholder, opts = {}) {
+  const includeSC = !!opts.includeSupremeCourt;
+  const allowFreeText = !!opts.allowFreeText;
   const wrapper = document.createElement('div');
   wrapper.className = 'search-dropdown';
 
@@ -528,36 +580,51 @@ function buildSearchableDropdown(inputId, hiddenId, placeholder) {
     const historical = HIGH_COURTS.filter(hc => hc.historical);
 
     let allFiltered = [];
+    let needDivider = false;
 
+    const addOption = (name, abbrev, custom) => {
+      const opt = document.createElement('div');
+      opt.className = 'sd-option' + (custom ? ' sd-option-custom' : '');
+      opt.textContent = name;
+      opt.dataset.value = name;
+      opt.dataset.abbrev = abbrev || '';
+      opt.addEventListener('mousedown', (e) => { e.preventDefault(); selectOption(name, abbrev || ''); });
+      panel.appendChild(opt);
+      allFiltered.push(opt);
+    };
+
+    // Render a labelled group only when it has matches, with a divider *between*
+    // non-empty sections — never a leading/trailing/empty divider.
     const addGroup = (label, items) => {
       const filtered = items.filter(hc => hc.name.toLowerCase().includes(q));
       if (!filtered.length) return;
+      if (needDivider) {
+        const div = document.createElement('div');
+        div.className = 'sd-divider';
+        panel.appendChild(div);
+      }
       const lbl = document.createElement('div');
       lbl.className = 'sd-group-label';
       lbl.textContent = label;
       panel.appendChild(lbl);
-      for (const hc of filtered) {
-        const opt = document.createElement('div');
-        opt.className = 'sd-option';
-        opt.textContent = hc.name;
-        opt.dataset.value = hc.name;
-        opt.dataset.abbrev = hc.abbrev;
-        opt.addEventListener('mousedown', (e) => {
-          e.preventDefault();
-          selectOption(hc.name, hc.abbrev);
-        });
-        panel.appendChild(opt);
-        allFiltered.push(opt);
-      }
+      filtered.forEach(hc => addOption(hc.name, hc.abbrev, false));
+      needDivider = true;
     };
 
-    addGroup('Current', current);
-    if (historical.length) {
-      const div = document.createElement('div');
-      div.className = 'sd-divider';
-      panel.appendChild(div);
-      addGroup('Historical', historical);
+    // Free-text: reflect exactly what the user typed as a pickable option whenever
+    // it isn't already a listed court (combobox behaviour — captures lower/trial
+    // courts that aren't catalogued).
+    const typed = (filter || '').trim();
+    const catalog = (includeSC ? [SUPREME_COURT] : []).concat(HIGH_COURTS);
+    const exact = catalog.some(c => c.name.toLowerCase() === q);
+    if (allowFreeText && typed && !exact) {
+      addOption(typed, '', true);
+      needDivider = true;
     }
+
+    if (includeSC) addGroup('Supreme Court', [SUPREME_COURT]);
+    addGroup(includeSC ? 'High Courts' : 'Current', current);
+    addGroup('Historical', historical);
 
     activeIdx = -1;
     return allFiltered;
@@ -572,9 +639,10 @@ function buildSearchableDropdown(inputId, hiddenId, placeholder) {
   }
 
   function setVal(name) {
+    if (includeSC && name === SUPREME_COURT.name) { selectOption(SUPREME_COURT.name, SUPREME_COURT.abbrev); return; }
     const hc = HIGH_COURTS.find(h => h.name === name);
     if (hc) selectOption(hc.name, hc.abbrev);
-    else { inp.value = name || ''; hidden.value = name || ''; }
+    else { inp.value = name || ''; hidden.value = name || ''; inp.dataset.abbrev = ''; hidden.dataset.abbrev = ''; }
   }
 
   inp.addEventListener('focus', () => {
@@ -588,6 +656,13 @@ function buildSearchableDropdown(inputId, hiddenId, placeholder) {
   });
 
   inp.addEventListener('blur', () => {
+    // Free-text fallback: keep whatever was typed (lower/trial courts not in the
+    // list) so the value is captured even when no listed option was picked.
+    if (allowFreeText && inp.value !== hidden.value) {
+      hidden.value = inp.value;
+      inp.dataset.abbrev = '';
+      hidden.dataset.abbrev = '';
+    }
     setTimeout(() => panel.classList.remove('open'), 150);
   });
 
@@ -616,6 +691,87 @@ function buildSearchableDropdown(inputId, hiddenId, placeholder) {
   });
 
   return { wrapper, input: inp, hiddenInput: hidden, setVal };
+}
+
+/**
+ * Grouped, searchable dropdown for the File Subcategory taxonomy.
+ * `groups` = [{ group: "Header", items: ["A","B",...] }, ...]. Reuses the
+ * .search-dropdown* CSS (group labels + dividers). Returns
+ * { wrapper, getValue, setValue, reset }.
+ */
+function buildGroupedSearchableDropdown(container, hiddenId, placeholder, groups) {
+  const wrapper = document.createElement('div');
+  wrapper.className = 'search-dropdown';
+
+  const inp = document.createElement('input');
+  inp.type = 'text';
+  inp.className = 'search-dropdown-input';
+  inp.placeholder = placeholder || 'Search…';
+  inp.autocomplete = 'off';
+
+  const hidden = document.createElement('input');
+  hidden.type = 'hidden';
+  hidden.id = hiddenId;
+
+  const panel = document.createElement('div');
+  panel.className = 'search-dropdown-panel';
+
+  wrapper.append(inp, hidden, panel);
+  let activeIdx = -1;
+
+  function pick(val) {
+    inp.value = val;
+    hidden.value = val;
+    panel.classList.remove('open');
+  }
+
+  function render(filter) {
+    panel.innerHTML = '';
+    const q = (filter || '').toLowerCase();
+    let first = true;
+    (groups || []).forEach(g => {
+      const groupHit = g.group.toLowerCase().includes(q);
+      const matches = (g.items || []).filter(it => groupHit || it.toLowerCase().includes(q));
+      if (!matches.length) return;
+      if (!first) { const d = document.createElement('div'); d.className = 'sd-divider'; panel.appendChild(d); }
+      first = false;
+      const lbl = document.createElement('div');
+      lbl.className = 'sd-group-label';
+      lbl.textContent = g.group;
+      panel.appendChild(lbl);
+      matches.forEach(it => {
+        const opt = document.createElement('div');
+        opt.className = 'sd-option';
+        opt.textContent = it;
+        opt.dataset.value = it;
+        opt.addEventListener('mousedown', (e) => { e.preventDefault(); pick(it); });
+        panel.appendChild(opt);
+      });
+    });
+    activeIdx = -1;
+  }
+
+  inp.addEventListener('focus', () => { render(inp.value); panel.classList.add('open'); });
+  inp.addEventListener('input', () => { render(inp.value); panel.classList.add('open'); });
+  inp.addEventListener('blur', () => {
+    // Revert any typed-but-unselected text — subcategory must be a listed value.
+    setTimeout(() => { panel.classList.remove('open'); inp.value = hidden.value; }, 150);
+  });
+  inp.addEventListener('keydown', (e) => {
+    const opts = panel.querySelectorAll('.sd-option');
+    if (e.key === 'ArrowDown') { e.preventDefault(); activeIdx = Math.min(activeIdx + 1, opts.length - 1); opts.forEach((o,i)=>o.classList.toggle('active', i===activeIdx)); opts[activeIdx]?.scrollIntoView({block:'nearest'}); }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); activeIdx = Math.max(activeIdx - 1, 0); opts.forEach((o,i)=>o.classList.toggle('active', i===activeIdx)); opts[activeIdx]?.scrollIntoView({block:'nearest'}); }
+    else if (e.key === 'Enter') { e.preventDefault(); if (activeIdx >= 0 && opts[activeIdx]) pick(opts[activeIdx].dataset.value); }
+    else if (e.key === 'Escape') { panel.classList.remove('open'); inp.blur(); }
+  });
+
+  container.appendChild(wrapper);
+  return {
+    wrapper,
+    getValue: () => hidden.value,
+    setValue: (v) => pick(String(v || '')),
+    reset: () => { inp.value = ''; hidden.value = ''; },
+  };
 }
 
 /**
@@ -1633,6 +1789,25 @@ function activateSearchResetMode(mode = 'basic'){
   setSearchResetButton(true);
 }
 
+// Mount the advanced-search File Subcategory control: a grouped searchable
+// taxonomy dropdown for Civil/Criminal/Commercial, or a disabled placeholder.
+// The dropdown's hidden input keeps id "adv-subcat", so existing reads work.
+function mountAdvSubcat(dom){
+  const host = document.getElementById('adv-subcat-host');
+  if (!host) return;
+  host.innerHTML = '';
+  if (FILE_SUBCATS[dom]) {
+    buildGroupedSearchableDropdown(host, 'adv-subcat', 'Search subcategory…', FILE_SUBCATS[dom]);
+  } else {
+    const ph = document.createElement('input');
+    ph.type = 'text';
+    ph.disabled = true;
+    ph.className = 'mc-subcat-placeholder';
+    ph.placeholder = 'Subcategory';
+    host.appendChild(ph);
+  }
+}
+
 function clearSearchInputs(){
   const q = document.getElementById('search-q');
   if (q) q.value = '';
@@ -1644,11 +1819,7 @@ function clearSearchInputs(){
   if (month) month.value = '';
   const domain = document.getElementById('adv-domain');
   if (domain) domain.value = '';
-  const subcat = document.getElementById('adv-subcat');
-  if (subcat) {
-    subcat.innerHTML = '<option value="">Subcategory</option>';
-    subcat.disabled = true;
-  }
+  mountAdvSubcat('');
   const typeEl = document.getElementById('type');
   if (typeEl) typeEl.value = '';
 }
@@ -2080,19 +2251,25 @@ function createCaseForm(){
         </div>
       </div>
 
-      <!-- Domain -> Case Type -> Subcategory -->
-      <select id="cat"><option value="">Case Category</option><option>Criminal</option><option>Civil</option><option>Commercial</option></select>
-      <select id="ctype" disabled><option value="">Case Type</option></select>
-      <input type="text" id="ctype-other" placeholder="Case Type (Other)" style="display:none;" />
-      <select id="subcat" disabled><option value="">Subcategory</option></select>
-      
-      <!-- Courts -->
-      <input type="text" id="os" placeholder="Origin State" />
-      <input type="text" id="od" placeholder="Origin District" />
-      <input type="text" id="of" placeholder="Origin Court/Forum" />
-      <input type="text" id="cs" placeholder="Current State" />
-      <input type="text" id="cd" placeholder="Current District" />
-      <input type="text" id="cf" placeholder="Current Court/Forum" />
+      <!-- Classification -->
+      <div class="full-span">
+        <select id="cat"><option value="">Case Category</option><option>Criminal</option><option>Civil</option><option>Commercial</option></select>
+      </div>
+
+      <!-- Original court -->
+      <input type="text" id="os" placeholder="Original State" />
+      <input type="text" id="od" placeholder="Original District" />
+      <div id="of-host" class="full-span"></div>
+
+      <!-- Current forum / place -->
+      <div class="full-span">
+        <select id="current-status">
+          <option>Same as Original</option>
+          <option>Transferred</option>
+          <option>In Appeal</option>
+        </select>
+      </div>
+      <div id="current-extra" class="full-span"></div>
 
       <textarea id="an" class="full-span cc-additional-notes" rows="4" placeholder="Additional Notes"></textarea>
     </div>
@@ -2130,26 +2307,47 @@ function createCaseForm(){
   ['pn','rn'].forEach(id => $('#'+id)?.addEventListener('input', updateCaseName));
   updateCaseName();
 
-  // Domain -> Subcategory -> CaseType
-  $('#cat')?.addEventListener('change', () => {
-    const dom = $('#cat').value || '';
-    if (dom && SUBCATS[dom]) {
-      const _ccExclude = new Set(["Orders/Judgments", "Office Reports", "Primary Documents"]);
-      populateOptions($('#subcat'), SUBCATS[dom].filter(s => !_ccExclude.has(s)), "Subcategory");
-      populateOptions($('#ctype'), CASE_TYPES[dom], "Case Type");
-      $('#ctype').disabled = false;
-    } else {
-      if ($('#subcat')) { $('#subcat').innerHTML = '<option value="">Subcategory</option>'; $('#subcat').disabled = true; }
-      if ($('#ctype')) { $('#ctype').innerHTML = '<option value="">Case Type</option>'; $('#ctype').disabled = true; }
-      if ($('#ctype-other')) $('#ctype-other').style.display = 'none';
-    }
-  });
+  // Original Court/Forum — unified Supreme Court + High Court searchable dropdown
+  // (with free-text fallback for trial / lower courts not in the list).
+  const ofHost = $('#of-host');
+  if (ofHost) {
+    const ofDD = buildSearchableDropdown(
+      'of-input', 'of',
+      'Original Court / Forum — search Supreme Court / High Courts, or type a lower court',
+      { includeSupremeCourt: true, allowFreeText: true }
+    );
+    ofHost.appendChild(ofDD.wrapper);
+  }
 
-  // Show text input only if Case Type == Others
-  $('#ctype')?.addEventListener('change', () => {
-    const val = $('#ctype').value || '';
-    if ($('#ctype-other')) $('#ctype-other').style.display = (val === 'Others') ? 'block' : 'none';
-  });
+  // Current Forum/Place — reveal only the fields that apply.
+  function renderCurrentExtra(status) {
+    const host = $('#current-extra');
+    if (!host) return;
+    host.innerHTML = '';
+    if (status === 'Transferred') {
+      host.innerHTML = `
+        <div class="form-grid">
+          <input type="text" id="cs" placeholder="Current State" />
+          <input type="text" id="cd" placeholder="Current District" />
+          <div id="cf-host" class="full-span"></div>
+        </div>`;
+      const dd = buildSearchableDropdown(
+        'cf-input', 'cf', 'Current Court / Forum',
+        { includeSupremeCourt: true, allowFreeText: true }
+      );
+      $('#cf-host')?.appendChild(dd.wrapper);
+    } else if (status === 'In Appeal') {
+      host.innerHTML = `<div class="form-grid"><div id="appeal-host" class="full-span"></div></div>`;
+      const dd = buildSearchableDropdown(
+        'appeal-input', 'appeal-forum',
+        'In Appeal — search Supreme Court / High Courts',
+        { includeSupremeCourt: true, allowFreeText: true }
+      );
+      $('#appeal-host')?.appendChild(dd.wrapper);
+    }
+    // "Same as Original" → no extra fields.
+  }
+  $('#current-status')?.addEventListener('change', () => renderCurrentExtra($('#current-status').value || 'Same as Original'));
 
   // Convert all selects to Long-List Dropdowns
   convertAllSelectsToLLD(wrap);
@@ -2166,19 +2364,25 @@ function createCaseForm(){
     fd.set('Respondent Address', ($('#ra')?.value || '').trim());
     fd.set('Respondent Contact', ($('#rc')?.value || '').trim());
     fd.set('Our Party', $('#op')?.value || '');
-    const cat = $('#cat')?.value || '';
-    const subcat = $('#subcat')?.value || '';
-    fd.set('Case Category', cat);
-    fd.set('Case Subcategory', subcat);
-    const ctypeSel = $('#ctype')?.value || '';
-    const ctype = (ctypeSel === 'Others') ? (($('#ctype-other')?.value || '').trim()) : ctypeSel;
-    fd.set('Case Type', ctype);
+    fd.set('Case Category', $('#cat')?.value || '');
     fd.set('Origin State', ($('#os')?.value || '').trim());
     fd.set('Origin District', ($('#od')?.value || '').trim());
     fd.set('Origin Court/Forum', ($('#of')?.value || '').trim());
-    fd.set('Current State', ($('#cs')?.value || '').trim());
-    fd.set('Current District', ($('#cd')?.value || '').trim());
-    fd.set('Current Court/Forum', ($('#cf')?.value || '').trim());
+    const status = $('#current-status')?.value || 'Same as Original';
+    fd.set('Current Status', status);
+    if (status === 'Transferred') {
+      fd.set('Current State', ($('#cs')?.value || '').trim());
+      fd.set('Current District', ($('#cd')?.value || '').trim());
+      fd.set('Current Court/Forum', ($('#cf')?.value || '').trim());
+    } else if (status === 'In Appeal') {
+      fd.set('Current State', '');
+      fd.set('Current District', '');
+      fd.set('Current Court/Forum', ($('#appeal-forum')?.value || '').trim());
+    } else {
+      fd.set('Current State', '');
+      fd.set('Current District', '');
+      fd.set('Current Court/Forum', '');
+    }
     fd.set('Additional Notes', ($('#an')?.value || '').trim());
 
     if (!($('#cc-name')?.value)) { alert('Enter Petitioner and Respondent to form the Case Name.'); return; }
@@ -2210,7 +2414,7 @@ function manageCaseForm(){
           <option value="">File Category</option>
           <option>Criminal</option><option>Civil</option><option>Commercial</option><option>Case Law</option><option>Invoices</option><option>Legal Notices</option>
         </select>
-        <select id="subcategory" disabled><option value="">Subcategory</option></select>
+        <div id="subcategory-host"></div>
         <input type="text" id="main-type" placeholder="Main Type (e.g., Transfer Petition, Criminal Revision, Orders)" />
         <input type="date" id="mc-date" />
         <button id="create-note-btn" class="btn-secondary" type="button" hidden>
@@ -2504,49 +2708,34 @@ function manageCaseForm(){
   // Load initial years
   loadYears();
 
-  // --- Domain -> Subcategory ------------------------------------------
+  // --- File Category -> File Subcategory (grouped searchable taxonomy) -------
+  // Civil/Criminal/Commercial → searchable taxonomy dropdown. Case Law / Invoices
+  // / Legal Notices keep NO subcategory (a disabled placeholder is shown).
+  function mountSubcat(dom) {
+    const host = $('#subcategory-host');
+    if (!host) return;
+    host.innerHTML = '';
+    if (FILE_SUBCATS[dom]) {
+      buildGroupedSearchableDropdown(host, 'subcategory', 'Search file subcategory…', FILE_SUBCATS[dom]);
+    } else {
+      const ph = document.createElement('input');
+      ph.type = 'text';
+      ph.disabled = true;
+      ph.className = 'mc-subcat-placeholder';
+      ph.placeholder = dom ? `Subcategory (not used for ${dom})` : 'Subcategory';
+      host.appendChild(ph);
+    }
+  }
+  mountSubcat('');
+
   $('#domain')?.addEventListener('change', () => {
     const dom = $('#domain').value || '';
-    const subSel = $('#subcategory');
     const mt = $('#main-type');
-
-    if (dom === 'Case Law') {
-      if (subSel) { subSel.innerHTML = '<option value="">Subcategory (not used for Case Law)</option>'; subSel.disabled = true; }
-      if (mt) mt.placeholder = 'Case Law title / citation (used as filename)';
-      return;
-    }
-    if (dom === 'Invoices') {
-      if (subSel) { subSel.innerHTML = '<option value="">Subcategory (not used for Invoices)</option>'; subSel.disabled = true; }
-      if (mt) mt.placeholder = 'Main Type (e.g., Transfer Petition, Criminal Revision, Orders)';
-      return;
-    }
-    if (dom === 'Legal Notices') {
-      if (subSel) { subSel.innerHTML = '<option value="">Subcategory (not used for Legal Notices)</option>'; subSel.disabled = true; }
-      if (mt) mt.placeholder = 'Notice title / reference (used as filename)';
-      return;
-    }
-
-    if (mt) mt.placeholder = 'Main Type (e.g., Transfer Petition, Criminal Revision, Orders)';
-    if (dom && SUBCATS[dom]) {
-      populateOptions(subSel, SUBCATS[dom], "Subcategory");
-    } else if (subSel) {
-      subSel.innerHTML = '<option value="">Subcategory</option>'; subSel.disabled = true;
-    }
-  });
-
-  $('#subcategory')?.addEventListener('change', () => {
-    const val = ($('#subcategory')?.value || '').toLowerCase();
-    const mt  = $('#main-type');
-    if (!mt) return;
-    if (val === 'primary documents') {
-      mt.value = '';
-      mt.disabled = true;
-      mt.placeholder = 'Main Type (not used for Primary Documents)';
-    } else {
-      mt.disabled = false;
-      if (($('#domain')?.value || '') !== 'Case Law') {
-        mt.placeholder = 'Main Type (e.g., Transfer Petition, Criminal Revision, Orders)';
-      }
+    mountSubcat(dom);
+    if (mt) {
+      if (dom === 'Case Law') mt.placeholder = 'Case Law title / citation (used as filename)';
+      else if (dom === 'Legal Notices') mt.placeholder = 'Notice title / reference (used as filename)';
+      else mt.placeholder = 'Main Type (e.g., Transfer Petition, Criminal Revision, Orders)';
     }
   });
 
@@ -2908,7 +3097,7 @@ function caseLawSearchForm(){
     <input type="radio" name="cls-mode" value="type" hidden>
     <input type="radio" name="cls-mode" value="advanced" hidden>
     <div class="form-grid cls-form">
-      <div class="cls-mode-panel" data-mode="name">
+      <div class="cls-mode-panel full-span" data-mode="name">
         <div class="cl-name-row">
           <label class="cl-name-option">
             <input type="radio" name="cls-name-mode" value="petitioner" data-target="cls-name-petitioner" checked>
@@ -3475,39 +3664,43 @@ function bindGlobalNotesModalHandlers(){
     caseCatSel.value = CASE_NOTE_CATEGORIES.includes(selected) ? selected : '';
   }
 
-  function setCaseSubcategoryOptions(category, selected){
-    if (!caseSubcatSel) return;
-    if (category && SUBCATS[category]) {
-      populateOptions(caseSubcatSel, SUBCATS[category], 'Subcategory');
-      caseSubcatSel.disabled = false;
-      caseSubcatSel.value = selected && SUBCATS[category].includes(selected) ? selected : '';
-    } else {
-      caseSubcatSel.innerHTML = '<option value=\"\">Subcategory</option>';
-      caseSubcatSel.disabled = true;
+  // Mount a unified Supreme Court + High Court searchable dropdown (with free-text
+  // fallback) into a host, caching the instance so re-opens just update the value.
+  function mountNoteCourtDD(hostId, hiddenId, placeholder, value){
+    const host = document.getElementById(hostId);
+    if (!host) return;
+    if (!host._courtDD) {
+      host.innerHTML = '';
+      host._courtDD = buildSearchableDropdown(hiddenId + '-input', hiddenId, placeholder,
+        { includeSupremeCourt: true, allowFreeText: true });
+      host.appendChild(host._courtDD.wrapper);
     }
+    host._courtDD.setVal(value || '');
   }
 
-  function setCaseTypeOptions(category, selected){
-    if (!caseTypeSel) return;
-    if (category && CASE_TYPES[category]) {
-      populateOptions(caseTypeSel, CASE_TYPES[category], 'Case Type');
-      caseTypeSel.disabled = false;
-      if (selected && CASE_TYPES[category].includes(selected)) {
-        caseTypeSel.value = selected;
-        showCaseTypeOther(false);
-      } else if (selected) {
-        caseTypeSel.value = 'Others';
-        if (caseTypeOther) caseTypeOther.value = selected;
-        showCaseTypeOther(true);
-      } else {
-        caseTypeSel.value = '';
-        showCaseTypeOther(false);
-      }
-    } else {
-      caseTypeSel.innerHTML = '<option value=\"\">Case Type</option>';
-      caseTypeSel.disabled = true;
-      showCaseTypeOther(false);
+  // Current Forum/Place — reveal only the fields the chosen status needs.
+  function renderNoteCurrentExtra(status, data){
+    const host = document.getElementById('note-case-current-extra');
+    if (!host) return;
+    host.innerHTML = '';
+    if (status === 'Transferred') {
+      host.innerHTML = `
+        <div class="note-grid">
+          <label class="note-field"><span>State</span><input id="note-case-current-state" type="text" autocomplete="off"></label>
+          <label class="note-field"><span>District</span><input id="note-case-current-district" type="text" autocomplete="off"></label>
+          <label class="note-field note-field-wide"><span>Court / Forum</span><div id="note-case-current-forum-host"></div></label>
+        </div>`;
+      setVal('note-case-current-state', data ? data.currentState : '');
+      setVal('note-case-current-district', data ? data.currentDistrict : '');
+      mountNoteCourtDD('note-case-current-forum-host', 'note-case-current-forum', 'Current Court / Forum', data ? data.currentForum : '');
+    } else if (status === 'In Appeal') {
+      host.innerHTML = `
+        <div class="note-grid">
+          <label class="note-field note-field-wide"><span>Court / Forum</span><div id="note-case-current-forum-host"></div></label>
+        </div>`;
+      mountNoteCourtDD('note-case-current-forum-host', 'note-case-current-forum', 'In Appeal — Supreme Court / High Courts', data ? data.currentForum : '');
     }
+    // "Same as Original" → no extra fields.
   }
 
   function setCaseLawPrimaryOptions(selected){
@@ -3536,6 +3729,16 @@ function bindGlobalNotesModalHandlers(){
     const obj = (rawObj && typeof rawObj === 'object') ? rawObj : {};
     const origin = obj['Court of Origin'] || {};
     const current = obj['Current Court/Forum'] || {};
+    const cState = current['State'] || '';
+    const cDistrict = current['District'] || '';
+    const cForum = current['Court/Forum'] || '';
+    let currentStatus = obj['Current Status'] || '';
+    if (!currentStatus) {
+      // Back-compat: derive a status from a legacy note's current-court values.
+      if (cState || cDistrict) currentStatus = 'Transferred';
+      else if (cForum) currentStatus = 'In Appeal';
+      else currentStatus = 'Same as Original';
+    }
     return {
       petitionerName: obj['Petitioner Name'] || '',
       petitionerAddress: obj['Petitioner Address'] || '',
@@ -3545,14 +3748,13 @@ function bindGlobalNotesModalHandlers(){
       respondentContact: obj['Respondent Contact'] || '',
       ourParty: obj['Our Party'] || '',
       caseCategory: obj['Case Category'] || '',
-      caseSubcategory: obj['Case Subcategory'] || '',
-      caseType: obj['Case Type'] || '',
       originState: origin['State'] || '',
       originDistrict: origin['District'] || '',
       originForum: origin['Court/Forum'] || '',
-      currentState: current['State'] || '',
-      currentDistrict: current['District'] || '',
-      currentForum: current['Court/Forum'] || '',
+      currentStatus,
+      currentState: cState,
+      currentDistrict: cDistrict,
+      currentForum: cForum,
       additionalNotes: obj['Additional Notes'] || '',
     };
   }
@@ -3590,20 +3792,22 @@ function bindGlobalNotesModalHandlers(){
       <div class="note-section">
         <div class="note-heading">Classification</div>
         <div class="note-row"><span class="note-label">Case Category</span><span class="note-value">${formatValue(data.caseCategory)}</span></div>
-        <div class="note-row"><span class="note-label">Case Subcategory</span><span class="note-value">${formatValue(data.caseSubcategory)}</span></div>
-        <div class="note-row"><span class="note-label">Case Type</span><span class="note-value">${formatValue(data.caseType)}</span></div>
       </div>
       <div class="note-section">
-        <div class="note-heading">Court of Origin</div>
+        <div class="note-heading">Original Court</div>
         <div class="note-row"><span class="note-label">State</span><span class="note-value">${formatValue(data.originState)}</span></div>
         <div class="note-row"><span class="note-label">District</span><span class="note-value">${formatValue(data.originDistrict)}</span></div>
         <div class="note-row"><span class="note-label">Court / Forum</span><span class="note-value">${formatValue(data.originForum)}</span></div>
       </div>
       <div class="note-section">
-        <div class="note-heading">Current Court / Forum</div>
+        <div class="note-heading">Current Forum / Place</div>
+        <div class="note-row"><span class="note-label">Status</span><span class="note-value">${formatValue(data.currentStatus)}</span></div>
+        ${data.currentStatus === 'Transferred' ? `
         <div class="note-row"><span class="note-label">State</span><span class="note-value">${formatValue(data.currentState)}</span></div>
         <div class="note-row"><span class="note-label">District</span><span class="note-value">${formatValue(data.currentDistrict)}</span></div>
-        <div class="note-row"><span class="note-label">Court / Forum</span><span class="note-value">${formatValue(data.currentForum)}</span></div>
+        <div class="note-row"><span class="note-label">Court / Forum</span><span class="note-value">${formatValue(data.currentForum)}</span></div>` : ''}
+        ${data.currentStatus === 'In Appeal' ? `
+        <div class="note-row"><span class="note-label">Court / Forum</span><span class="note-value">${formatValue(data.currentForum)}</span></div>` : ''}
       </div>
       <div class="note-section note-additional">
         <div class="note-row"><div class="note-value note-wide note-markdown">${formatMarkdownValue(data.additionalNotes || '', '—')}</div></div>
@@ -3700,14 +3904,13 @@ function bindGlobalNotesModalHandlers(){
         casePartySel.value = data.ourParty || '';
       }
       setCaseCategoryOptions(data.caseCategory || '');
-      setCaseSubcategoryOptions(data.caseCategory || '', data.caseSubcategory || '');
-      setCaseTypeOptions(data.caseCategory || '', data.caseType || '');
       setVal('note-case-origin-state', data.originState);
       setVal('note-case-origin-district', data.originDistrict);
-      setVal('note-case-origin-forum', data.originForum);
-      setVal('note-case-current-state', data.currentState);
-      setVal('note-case-current-district', data.currentDistrict);
-      setVal('note-case-current-forum', data.currentForum);
+      mountNoteCourtDD('note-case-origin-forum-host', 'note-case-origin-forum', 'Original Court / Forum', data.originForum);
+      const cStatusSel = document.getElementById('note-case-current-status');
+      const status = data.currentStatus || 'Same as Original';
+      if (cStatusSel) cStatusSel.value = status;
+      renderNoteCurrentExtra(status, data);
       setVal('note-case-additional', data.additionalNotes);
     } else {
       const data = normalizeCaseLawNote(parsedObj);
@@ -3835,24 +4038,28 @@ function bindGlobalNotesModalHandlers(){
       payload['Respondent Address'] = getVal('note-case-ra');
       payload['Respondent Contact'] = getVal('note-case-rc');
       payload['Our Party'] = casePartySel ? (casePartySel.value || '') : getVal('note-case-party');
-      const catVal = caseCatSel ? (caseCatSel.value || '') : getVal('note-case-category');
-      const subVal = caseSubcatSel ? (caseSubcatSel.value || '') : getVal('note-case-subcategory');
-      const typeSelVal = caseTypeSel ? (caseTypeSel.value || '') : getVal('note-case-type');
-      const typeOtherVal = caseTypeOther ? (caseTypeOther.value || '') : '';
-      const finalType = (typeSelVal === 'Others') ? typeOtherVal : typeSelVal;
-      payload['Case Category'] = catVal;
-      payload['Case Subcategory'] = subVal;
-      payload['Case Type'] = finalType;
+      payload['Case Category'] = caseCatSel ? (caseCatSel.value || '') : getVal('note-case-category');
+      // Drop the retired classification keys if a legacy note carried them.
+      delete payload['Case Subcategory'];
+      delete payload['Case Type'];
       payload['Court of Origin'] = {
         'State': getVal('note-case-origin-state'),
         'District': getVal('note-case-origin-district'),
         'Court/Forum': getVal('note-case-origin-forum'),
       };
-      payload['Current Court/Forum'] = {
-        'State': getVal('note-case-current-state'),
-        'District': getVal('note-case-current-district'),
-        'Court/Forum': getVal('note-case-current-forum'),
-      };
+      const cStatus = document.getElementById('note-case-current-status')?.value || 'Same as Original';
+      payload['Current Status'] = cStatus;
+      if (cStatus === 'Transferred') {
+        payload['Current Court/Forum'] = {
+          'State': getVal('note-case-current-state'),
+          'District': getVal('note-case-current-district'),
+          'Court/Forum': getVal('note-case-current-forum'),
+        };
+      } else if (cStatus === 'In Appeal') {
+        payload['Current Court/Forum'] = { 'State': '', 'District': '', 'Court/Forum': getVal('note-case-current-forum') };
+      } else {
+        payload['Current Court/Forum'] = { 'State': '', 'District': '', 'Court/Forum': '' };
+      }
       payload['Additional Notes'] = document.getElementById('note-case-additional')?.value || '';
       return JSON.stringify(payload, null, 2);
     }
@@ -3903,19 +4110,8 @@ function bindGlobalNotesModalHandlers(){
         caseForm.classList.add('is-active');
         if (!caseForm.dataset.wired) {
           caseForm.dataset.wired = '1';
-          caseCatSel?.addEventListener('change', () => {
-            const cat = caseCatSel.value || '';
-            setCaseSubcategoryOptions(cat, '');
-            setCaseTypeOptions(cat, '');
-          });
-          caseTypeSel?.addEventListener('change', () => {
-            const val = caseTypeSel.value || '';
-            if (val === 'Others') {
-              showCaseTypeOther(true);
-            } else {
-              if (caseTypeOther) caseTypeOther.value = '';
-              showCaseTypeOther(false);
-            }
+          document.getElementById('note-case-current-status')?.addEventListener('change', (e) => {
+            renderNoteCurrentExtra((e.target && e.target.value) || 'Same as Original', null);
           });
         }
       } else {
@@ -4366,19 +4562,12 @@ document.addEventListener('DOMContentLoaded', () => {
       });
     },
 
-    // Advanced domain -> subcat
+    // Advanced domain -> subcat (grouped searchable taxonomy)
     () => {
       const advDom = $('#adv-domain');
-      const advSub = $('#adv-subcat');
+      mountAdvSubcat('');
       advDom?.addEventListener('change', ()=>{
-        if (!advSub) return;
-        const dom = advDom.value || '';
-        if (dom && SUBCATS[dom]) {
-          populateOptions(advSub, SUBCATS[dom], "Subcategory");
-        } else {
-          advSub.innerHTML = '<option value="">Subcategory</option>';
-          advSub.disabled = true;
-        }
+        mountAdvSubcat(advDom.value || '');
       });
     },
 

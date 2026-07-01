@@ -1,0 +1,12 @@
+CLAUDE.md
+.claude/
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
+
+# Docker runtime data + build/release artefacts
+data/
+*.tar
+*.tar.gz
+*.deb

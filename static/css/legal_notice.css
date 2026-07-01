@@ -135,7 +135,8 @@
 
 /* Dropzone reuses .dropzone from style.css; add a dragover cue */
 #ln-drop.dragover,
-#lh-drop.dragover {
+#lh-drop.dragover,
+#cert-drop.dragover {
   border-color: var(--accent, #5b8af5);
   background: color-mix(in srgb, var(--accent, #5b8af5) 8%, transparent);
 }

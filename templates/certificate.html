@@ -23,7 +23,7 @@
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" />
   <link rel="stylesheet" href="{{ static_url('css/style.css') }}" />
   <link rel="icon" type="image/png" href="{{ url_for('static', filename='img/Case_Organizer_logo.png') }}" />
-  <link rel="stylesheet" href="{{ static_url('css/certificate.css') }}" />
+  <link rel="stylesheet" href="{{ static_url('css/legal_notice.css') }}" />
 </head>
 <body data-role="{{ current_user.role if current_user else '' }}">
   <div class="app-shell">
@@ -105,12 +105,40 @@
     <main class="home enter-animate">
       {% include "_flash.html" %}
 
-      <section class="cert-page" aria-label="Certificate generator">
+      <section class="ln-page" aria-label="Certificate generator">
         <h1>Generate Internship Certificate</h1>
-        <p class="cert-intro">
-          Edit the certificate directly below &mdash; every part of the document is
-          fully editable. Use the toolbar to format text. When ready, download the PDF.
-        </p>
+        <div class="ln-intro">
+          <p>Upload your Internship Certificate in PDF format.</p>
+          <p>
+            The document must be A4 sized. Leave enough top and bottom margin on
+            <em>every</em> page so your text clears the letterhead, and a larger
+            top margin on the first page for the intern details and the
+            certificate number. The exact margins for the letterhead you pick are
+            shown below.
+          </p>
+        </div>
+
+        <!-- Exact, per-letterhead margin guidance (filled by JS) -->
+        <div class="ln-margins" id="cert-margins" aria-live="polite"></div>
+
+        <!-- Certificate meta -->
+        <div class="ln-form-card">
+          <h3 class="section-title">Certificate Details</h3>
+          <p class="ln-addcase-hint">
+            The intern's name and internship dates come from the certificate
+            document you upload. Only the date and certificate number are stamped.
+          </p>
+          <div class="ln-grid">
+            <label class="ln-field">
+              <span>Certificate number</span>
+              <input type="text" id="cert-number" placeholder="Auto" />
+            </label>
+            <label class="ln-field">
+              <span>Certificate date</span>
+              <input type="text" id="cert-date" placeholder="DD-MM-YYYY" />
+            </label>
+          </div>
+        </div>
 
         <!-- Letterhead Picker -->
         <div class="letterhead-picker" id="letterhead-picker">
@@ -120,82 +148,23 @@
           </div>
         </div>
 
-        <div class="cert-actions">
+        <!-- PDF upload -->
+        <div class="ln-form-card">
+          <h3 class="section-title">Certificate PDF</h3>
+          <div class="dropzone" id="cert-drop" tabindex="0">Drag &amp; drop your certificate PDF here or click to select</div>
+          <input type="file" id="cert-file" hidden accept=".pdf" />
+          <div id="cert-file-list" class="results"></div>
+        </div>
+
+        <div class="ln-actions">
           <button
             id="cert-download"
             class="btn-primary"
             type="button"
-            data-download-url="{{ url_for('certificate_save') }}"
+            data-save-url="{{ url_for('certificate_save') }}"
           >
             <i class="fa-solid fa-file-arrow-down"></i> Download &amp; Save Certificate
           </button>
-        </div>
-
-        <!-- Formatting toolbar -->
-        <div class="cert-toolbar" id="cert-toolbar">
-          <select id="tb-size" title="Font size">
-            <option value="10">10</option>
-            <option value="11">11</option>
-            <option value="12" selected>12</option>
-            <option value="14">14</option>
-            <option value="16">16</option>
-            <option value="18">18</option>
-            <option value="20">20</option>
-            <option value="24">24</option>
-            <option value="28">28</option>
-            <option value="32">32</option>
-          </select>
-          <span class="tb-sep"></span>
-          <button type="button" data-cmd="bold" title="Bold (Ctrl+B)"><i class="fa-solid fa-bold"></i></button>
-          <button type="button" data-cmd="italic" title="Italic (Ctrl+I)"><i class="fa-solid fa-italic"></i></button>
-          <button type="button" data-cmd="underline" title="Underline (Ctrl+U)"><i class="fa-solid fa-underline"></i></button>
-          <span class="tb-sep"></span>
-          <button type="button" data-cmd="justifyLeft" title="Align left"><i class="fa-solid fa-align-left"></i></button>
-          <button type="button" data-cmd="justifyCenter" title="Align center"><i class="fa-solid fa-align-center"></i></button>
-          <button type="button" data-cmd="justifyRight" title="Align right"><i class="fa-solid fa-align-right"></i></button>
-          <button type="button" data-cmd="justifyFull" title="Justify"><i class="fa-solid fa-align-justify"></i></button>
-          <span class="tb-sep"></span>
-          <select id="tb-lineheight" title="Line spacing">
-            <option value="1">1.0</option>
-            <option value="1.15">1.15</option>
-            <option value="1.5" selected>1.5</option>
-            <option value="2">2.0</option>
-          </select>
-        </div>
-
-        <!-- Editable A4 document -->
-        <div class="cert-doc" id="cert-doc" contenteditable="true">
-          <!-- Title region -->
-          <div class="cert-region cert-title-region" data-cert-title>
-            <p style="text-align: center; font-size: 22pt;"><b>CERTIFICATE OF INTERNSHIP</b></p>
-          </div>
-
-          <!-- Two-column header: intern info LEFT | meta RIGHT -->
-          <div class="cert-header-row">
-            <div class="cert-header-left" data-intern-info>
-              <p><b>Name:</b> <span data-intern-name></span></p>
-              <p><b>Address:</b> </p>
-              <p><b>Duration:</b>  to </p>
-            </div>
-            <div class="cert-header-right">
-              <p><b>Certificate No:</b> <span data-cert-number contenteditable="false"></span></p>
-              <p><b>Date:</b> <span data-cert-date class="cert-date-field"></span></p>
-            </div>
-          </div>
-
-          <!-- Body region -->
-          <div class="cert-region cert-body-region" data-cert-body>
-            <p><br></p>
-            <p>This is to certify that ...</p>
-            <p><br></p>
-          </div>
-
-          <!-- Signature region -->
-          <div class="cert-region cert-sig-region" data-cert-signature>
-            <p style="text-align: center;">_________________________</p>
-            <p style="text-align: center;"><b>Signing Authority Name</b></p>
-            <p style="text-align: center;">Designation</p>
-          </div>
         </div>
       </section>
     </main>

@@ -136,9 +136,7 @@
             <option>Civil</option>
             <option>Commercial</option>
           </select>
-          <select id="adv-subcat" aria-label="Subcategory" disabled>
-            <option value="">Subcategory</option>
-          </select>
+          <div id="adv-subcat-host" aria-label="Subcategory"></div>
 
           <button id="adv-search" class="btn-secondary" type="button">Advanced Search</button>
           <button id="dir-search" class="btn-ghost" type="button">Directory Search</button>
@@ -235,27 +233,11 @@
                     <option value="">Case Category</option>
                   </select>
                 </label>
-                <label class="note-field">
-                  <span>Case Subcategory</span>
-                  <select id="note-case-subcategory" autocomplete="off" disabled>
-                    <option value="">Subcategory</option>
-                  </select>
-                </label>
-                <label class="note-field">
-                  <span>Case Type</span>
-                  <select id="note-case-type" autocomplete="off" disabled>
-                    <option value="">Case Type</option>
-                  </select>
-                </label>
-                <label class="note-field note-type-other is-hidden">
-                  <span>Case Type (Other)</span>
-                  <input id="note-case-type-other" type="text" autocomplete="off">
-                </label>
               </div>
             </div>
 
             <div class="note-section">
-              <h4>Court of Origin</h4>
+              <h4>Original Court</h4>
               <div class="note-grid">
                 <label class="note-field">
                   <span>State</span>
@@ -265,29 +247,26 @@
                   <span>District</span>
                   <input id="note-case-origin-district" type="text" autocomplete="off">
                 </label>
-                <label class="note-field">
+                <label class="note-field note-field-wide">
                   <span>Court / Forum</span>
-                  <input id="note-case-origin-forum" type="text" autocomplete="off">
+                  <div id="note-case-origin-forum-host"></div>
                 </label>
               </div>
             </div>
 
             <div class="note-section">
-              <h4>Current Court / Forum</h4>
+              <h4>Current Forum / Place</h4>
               <div class="note-grid">
                 <label class="note-field">
-                  <span>State</span>
-                  <input id="note-case-current-state" type="text" autocomplete="off">
-                </label>
-                <label class="note-field">
-                  <span>District</span>
-                  <input id="note-case-current-district" type="text" autocomplete="off">
-                </label>
-                <label class="note-field">
-                  <span>Court / Forum</span>
-                  <input id="note-case-current-forum" type="text" autocomplete="off">
+                  <span>Status</span>
+                  <select id="note-case-current-status" autocomplete="off">
+                    <option>Same as Original</option>
+                    <option>Transferred</option>
+                    <option>In Appeal</option>
+                  </select>
                 </label>
               </div>
+              <div id="note-case-current-extra"></div>
             </div>
 
             <div class="note-section">
