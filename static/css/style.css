@@ -642,7 +642,7 @@ input, select, textarea {
 }
 .cl-name-row {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    grid-template-columns: 1fr;
     gap: 12px;
 }
 .cl-name-option {
@@ -2981,7 +2981,8 @@ input[type="number"].year-input {
     border: 1px solid var(--input-border, #e6e8ef);
     background: var(--input-bg, #fff);
     color: var(--text);
-    font-size: 14px;
+    font-size: inherit;
+    font-family: inherit;
     box-sizing: border-box;
 }
 .search-dropdown-panel {
@@ -3015,9 +3016,19 @@ input[type="number"].year-input {
 }
 .search-dropdown-panel .sd-option {
     padding: 8px 12px;
-    font-size: 13px;
+    font-size: inherit;
     cursor: pointer;
     color: var(--text);
+}
+/* Custom (free-text) option — the value the user typed, reflected back. */
+.search-dropdown-panel .sd-option-custom::after {
+    content: " — use as typed";
+    color: var(--muted, #9aa3b2);
+    font-size: 0.85em;
+}
+.search-dropdown-panel .sd-option-custom:hover::after,
+.search-dropdown-panel .sd-option-custom.active::after {
+    color: rgba(255, 255, 255, 0.85);
 }
 .search-dropdown-panel .sd-option:hover,
 .search-dropdown-panel .sd-option.active {
@@ -3029,6 +3040,30 @@ input[type="number"].year-input {
     background: var(--input-border, #e6e8ef);
     margin: 4px 0;
 }
+
+/* ── Case form: current-forum conditional block + subcategory placeholder ──── */
+/* Disabled placeholder shown when a File Category has no subcategory. */
+.mc-subcat-placeholder {
+    width: 100%;
+    padding: 10px 12px;
+    border-radius: 12px;
+    border: 1px solid var(--input-border, #e6e8ef);
+    background: var(--input-bg, #fff);
+    color: var(--text);
+    font-size: 14px;
+    box-sizing: border-box;
+    opacity: 0.55;
+    cursor: not-allowed;
+}
+/* Conditional "Transferred / In Appeal" fields get a little breathing room. */
+#current-extra:not(:empty),
+#note-case-current-extra:not(:empty) {
+    margin-top: 10px;
+}
+/* A note-modal field that should span the full grid width (e.g. court dropdown). */
+.note-field.note-field-wide { grid-column: 1 / -1; }
+/* Match the unified court dropdown's input to the note-field input styling. */
+.note-field .search-dropdown-input { border-radius: 10px; padding: 8px 10px; }
 
 /* ── Long-List Dropdown styling ───────────────────────────────────────────── */
 .ll-dropdown { position: relative; }
@@ -3432,4 +3467,100 @@ input[type="number"].year-input {
     display: flex;
     gap: 6px;
     margin-top: 6px;
+}
+
+/* ---- Intern home landing ---- */
+.intern-welcome {
+    max-width: 720px;
+    margin: 40px auto 0;
+    text-align: center;
+}
+.intern-welcome-title {
+    margin: 0 0 6px;
+}
+.intern-welcome-sub {
+    color: var(--muted);
+    margin: 0 0 28px;
+}
+.intern-welcome .cards-grid {
+    justify-content: center;
+}
+
+/* ---- Bento PDF tools: follow the app light/dark theme ------------------
+   BentoPDF ships a dark-only Tailwind palette (var(--color-gray-*), darkest =
+   page background, lightest = 50).  The tool pages are inlined into
+   .bento-tool-shell, so data-theme already cascades in — we just need light
+   values.  Rather than editing 124 bento HTML files, invert bento's gray ramp
+   scoped to the shell, and only in light mode (dark mode keeps the shipped
+   palette untouched).  Accent colors (--color-indigo-* etc.) are theme
+   independent and are deliberately left alone. */
+:root:not([data-theme="dark"]) .bento-tool-shell {
+    background: var(--bg);
+    color: var(--text);
+    --color-gray-50:  #101317;
+    --color-gray-100: #151a21;
+    --color-gray-200: #2a3240;
+    --color-gray-300: #3a4353;
+    --color-gray-400: #6f7a8b;
+    --color-gray-500: #9aa4b2;
+    --color-gray-600: #cbd5e1;
+    --color-gray-700: #e1e6ef;
+    --color-gray-800: #ffffff;  /* cards / raised surfaces */
+    --color-gray-900: #f6f7fb;  /* page background (matches app --bg) */
+}
+/* text-white is bento's default foreground on dark surfaces; darken it in
+   light mode.  Override the utility class (not --color-white) so the handful
+   of genuine bg-white / text-black uses keep their absolute colors. */
+:root:not([data-theme="dark"]) .bento-tool-shell .text-white {
+    color: #1f2430;
+}
+
+/* Several bento component classes (.tool-card, .category-filter, .pdf-panel,
+   …) hardcode Tailwind's DEFAULT palette (#1f2937, #374151, #9ca3af …) as
+   literal hex instead of using the var(--color-gray-*) ramp, so the variable
+   remap above never reaches them and they stay dark.  Map those specific dark
+   surfaces / borders / muted text to their light equivalents.  Accent colors
+   (indigo #4f46e5 etc.) and the self-themed markdown editor (.md-editor,
+   which has its own .light-mode) are deliberately left untouched. */
+:root:not([data-theme="dark"]) .bento-tool-shell .tool-card,
+:root:not([data-theme="dark"]) .bento-tool-shell .feature-card,
+:root:not([data-theme="dark"]) .bento-tool-shell .testimonial-card,
+:root:not([data-theme="dark"]) .bento-tool-shell .pdf-panel,
+:root:not([data-theme="dark"]) .bento-tool-shell .compare-viewer-wrapper.overlay-mode {
+    background-color: #ffffff;   /* was #1f2937 */
+    border-color: #e1e6ef;       /* was #374151 */
+}
+:root:not([data-theme="dark"]) .bento-tool-shell .pill {
+    background-color: #eef2f7;   /* was #374151 */
+    color: #2a3240;              /* was #d1d5db */
+}
+:root:not([data-theme="dark"]) .bento-tool-shell .shortcut-key {
+    background-color: #eef2f7;   /* was #374151 */
+    color: #1f2430;              /* was #e5e7eb */
+    border-color: #cbd5e1;       /* was #4b5563 */
+    box-shadow: 0 1px #e1e6ef;   /* was #1f2937 */
+}
+:root:not([data-theme="dark"]) .bento-tool-shell .legal-content p,
+:root:not([data-theme="dark"]) .bento-tool-shell .legal-content ul {
+    color: #6f7a8b;              /* was #9ca3af */
+}
+:root:not([data-theme="dark"]) .bento-tool-shell ::-webkit-scrollbar-track {
+    background: #eef2f7;
+}
+:root:not([data-theme="dark"]) .bento-tool-shell ::-webkit-scrollbar-thumb {
+    background: #cbd5e1;
+}
+:root:not([data-theme="dark"]) .bento-tool-shell ::-webkit-scrollbar-thumb:hover {
+    background: #9aa4b2;
+}
+/* Category-filter pills are inline-styled on the tools directory with the same
+   hardcoded grays; leave the active (indigo) pill as-is. */
+:root:not([data-theme="dark"]) .bento-tool-shell .category-filter:not(.active) {
+    background-color: #ffffff;   /* was #1f2937 */
+    color: #6f7a8b;              /* was #9ca3af */
+    border-color: #e1e6ef;       /* was #374151 */
+}
+:root:not([data-theme="dark"]) .bento-tool-shell .category-filter:not(.active):hover {
+    background-color: #eef2f7;   /* was #374151 */
+    color: #1f2430;
 }

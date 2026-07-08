@@ -1,0 +1,10 @@
+./app.py
+./caseorg_config.py
+./requirements.txt
+./templates
+./static/css
+./static/img
+./static/js
+./static/bento
+./services
+./debian/usr-bin-case-organizer

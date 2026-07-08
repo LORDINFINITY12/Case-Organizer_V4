@@ -1,3 +1,80 @@
+case-organizer (4.5.3) stable; urgency=medium
+
+  * Added a third user role, "intern", alongside admin and user. Interns may
+    reach only the home page, My Account, internal Mail, and the PDF (bento)
+    editing tools; every other feature is blocked. Enforcement is a
+    default-deny before_request allowlist (_restrict_interns), so any route
+    not explicitly listed is off-limits to interns. The account menu and the
+    home page hide the restricted tools for interns, showing a simple
+    landing instead.
+  * Schema migration v6 -> v7: the users.role CHECK constraint was widened to
+    accept 'intern' via a data-preserving table rebuild — existing users,
+    roles, and active sessions are unchanged. The admin Settings user
+    create/edit forms gained an "Intern" option.
+  * PDF tools (BentoPDF) now follow the app's light/dark theme instead of
+    always rendering dark. Light-mode overrides remap bento's custom gray
+    palette variables and the component classes that hardcode Tailwind's
+    default hex (tool cards, category filters, panels, pills, shortcut keys,
+    etc.), scoped to the tool shell and to light mode; dark mode is
+    unchanged. The self-themed markdown editor is left as-is.
+  * Refactor: the account dropdown menu, previously duplicated across 11
+    templates, was extracted into a shared templates/_user_menu.html partial.
+  * Tests: added tests/test_intern.py (intern access allow/deny, role
+    validation, admin/user unaffected); suite now 174 tests.
+
+ -- Izumi <swarajswarupaggarwal@gmail.com>  Wed, 08 Jul 2026 21:00:00 +0530
+
+case-organizer (4.5.2) stable; urgency=medium
+  * Create Case: classification reduced to a single Case Category
+    (Civil/Criminal/Commercial); the free-text Case Type and Case
+    Subcategory fields were removed. Note.json now records "Current Status"
+    and no longer stores "Case Type"/"Case Subcategory".
+  * Create Case: the dual Origin/Current court blocks were replaced with one
+    Original court block (State, District, Court/Forum) plus a "Current
+    Forum/Place" selector — Same as Original (no extra fields), Transferred
+    (reveals Current State/District/Court-Forum), or In Appeal (a single
+    court picker).
+  * Unified court dropdown: one searchable list with the Supreme Court at the
+    top followed by all High Courts (reusing the case-law High Court
+    component), with free-text entry that reflects an uncatalogued lower /
+    trial court back as a selectable option — replacing the separate
+    "court type then court name" step on the case forms.
+  * File filing taxonomy: the flat Manage Cases "File Subcategory" list was
+    replaced with a grouped, searchable taxonomy under Civil, Criminal, and
+    Commercial (47 divisions / 322 entries) — CPC reliefs with their
+    Section/Order-Rule references, HC/SC proceedings as subcategories
+    (Articles 226/227/32, SLP, Review, Curative), an "Other" per division,
+    and division headers shown in the dropdown. Case Law, Invoices, and
+    Legal Notices keep no subcategory. Advanced Search uses the same list.
+  * Manage Case upload: File Subcategory folder names containing "/" (e.g.
+    "Section 482 CrPC / Section 528 BNSS") are flattened to a single safe
+    folder, and the upload target is now validated with _safe_path().
+  * The View/Edit Note.json modal was updated to the same Category-only
+    classification and Original + Current Status court model, with
+    backward-compatible loading of existing notes (legacy current-court
+    values map to a sensible status).
+  * Certificate generator: stamps a centred "CERTIFICATE OF INTERNSHIP"
+    title automatically; the proforma band is now a single line (Date on the
+    left, Certificate No on the right). The intern name and internship dates
+    come from the uploaded document and are no longer collected. Margins are
+    measured from the selected letterhead (matching Legal Notices),
+    reclaiming first-page working room.
+  * UI: searchable dropdown inputs and options now inherit the surrounding
+    font size instead of a fixed 14px so they match neighbouring fields;
+    empty group dividers no longer appear while typing an uncatalogued court.
+  * UI: the case-law "Name" search (Petitioner / Respondent / Either Party)
+    now spans the full card width with each option stacked on its own row.
+  * Tests: added tests/test_cases.py (classification + court model and File
+    Subcategory folder safety); suite now 156 tests.
+ -- Izumi <swarajswarupaggarwal@gmail.com>  Wed, 01 Jul 2026 12:00:00 +0530
+
+case-organizer (4.5.1) stable; urgency=medium
+
+  * Fixed Internship Certificate Generation and Changed it to follow the
+    notice generation workflow.
+
+ -- Izumi <swarajswarupaggarwal@gmail.com>  Thu, 30 Jun 2026 21:30:00 +0530
+
 case-organizer (4.5) stable; urgency=high
 
   * Added Legal Notice module: new /legal-notice page to upload a notice

@@ -229,7 +229,9 @@ class TestSchemaV6Migration:
         version = conn.execute(
             "SELECT value FROM app_meta WHERE key = 'schema_version'"
         ).fetchone()["value"]
-        assert version == "6"
+        # _ensure_schema upgrades all the way to the current version; the point
+        # of this test is that the v5->v6 session-token hashing survives it.
+        assert version == str(db_mod._SCHEMA_VERSION)
 
         # Old column gone, token stored hashed, lookup by hash succeeds
         cols = [r["name"] for r in conn.execute("PRAGMA table_info(user_sessions)")]

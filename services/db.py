@@ -14,7 +14,7 @@ from services.settings import settings_manager
 
 
 # Global schema version for the application database.
-_SCHEMA_VERSION = 6
+_SCHEMA_VERSION = 7
 
 
 def _app_db_path() -> Path:
@@ -67,6 +67,10 @@ def _ensure_schema(conn: sqlite3.Connection) -> None:
     if current_version < 6:
         _migrate_to_v6(conn)
         current_version = 6
+
+    if current_version < 7:
+        _migrate_to_v7(conn)
+        current_version = 7
 
     if current_version != _SCHEMA_VERSION:
         # Placeholder for future migrations.
@@ -359,6 +363,57 @@ def _migrate_to_v6(conn: sqlite3.Connection) -> None:
 
     conn.execute(
         "INSERT INTO app_meta(key, value) VALUES('schema_version', '6') "
+        "ON CONFLICT(key) DO UPDATE SET value = excluded.value"
+    )
+
+
+def _migrate_to_v7(conn: sqlite3.Connection) -> None:
+    # Allow a third user role, 'intern'.  SQLite cannot alter a CHECK
+    # constraint in place, so rebuild the users table with the widened
+    # constraint, preserving every row and id.  password_resets/user_sessions
+    # reference users(id); FKs stay valid because the name and ids are
+    # unchanged, and foreign_keys is disabled during the swap so the DROP does
+    # not cascade-delete children.  executescript() commits any pending
+    # transaction first (PRAGMA toggles must live outside a transaction).
+    conn.executescript(
+        """
+        PRAGMA foreign_keys=OFF;
+        BEGIN;
+        CREATE TABLE users_new (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            email TEXT NOT NULL UNIQUE,
+            password_hash TEXT NOT NULL,
+            role TEXT NOT NULL CHECK(role IN ('admin','user','intern')),
+            is_active INTEGER NOT NULL DEFAULT 1,
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            last_login_at TEXT
+        );
+        INSERT INTO users_new
+            (id, email, password_hash, role, is_active, created_at, updated_at, last_login_at)
+        SELECT id, email, password_hash, role, is_active, created_at, updated_at, last_login_at
+        FROM users;
+        DROP TABLE users;
+        ALTER TABLE users_new RENAME TO users;
+        COMMIT;
+        PRAGMA foreign_keys=ON;
+        """
+    )
+
+    # The updated_at trigger was attached to the old users table and dropped
+    # with it; recreate it (identical to _migrate_to_v1).
+    conn.execute(
+        """
+        CREATE TRIGGER IF NOT EXISTS trg_users_updated_at
+        AFTER UPDATE ON users
+        BEGIN
+            UPDATE users SET updated_at = CURRENT_TIMESTAMP WHERE id = NEW.id;
+        END;
+        """
+    )
+
+    conn.execute(
+        "INSERT INTO app_meta(key, value) VALUES('schema_version', '7') "
         "ON CONFLICT(key) DO UPDATE SET value = excluded.value"
     )
 

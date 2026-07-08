@@ -1,0 +1,247 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="color-scheme" content="light dark">
+  <script nonce="{{ csp_nonce }}">
+      (function () {
+          try {
+              const KEY = 'caseOrg.theme';
+              const saved = localStorage.getItem(KEY);
+              const wantsDark = saved ? (saved === 'dark')
+                  : (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
+              const defaultDark = true;
+              const useDark = saved ? (saved === 'dark') : defaultDark || wantsDark;
+              if (useDark) document.documentElement.setAttribute('data-theme', 'dark');
+          } catch (e) {}
+      })();
+  </script>
+  <title>Case Organizer – Legal Notice</title>
+  <meta name="csrf-token" content="{{ csrf_token }}">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" />
+  <link rel="stylesheet" href="{{ static_url('css/style.css') }}" />
+  <link rel="icon" type="image/png" href="{{ url_for('static', filename='img/Case_Organizer_logo.png') }}" />
+  <link rel="stylesheet" href="{{ static_url('css/legal_notice.css') }}" />
+</head>
+<body data-role="{{ current_user.role if current_user else '' }}">
+  <div class="app-shell">
+    <header class="topbar">
+      <a href="{{ url_for('home') }}" class="brand">Case Organizer</a>
+      <div class="spacer"></div>
+      {% if current_user %}
+        <div class="user" data-user-menu>
+          <span class="user-menu-toggle"
+                role="button"
+                tabindex="0"
+                data-user-menu-toggle
+                aria-haspopup="menu"
+                aria-expanded="false"
+                aria-label="Toggle account menu"
+                title="Account menu">
+            <span class="user-email-display">{{ current_user.email }}</span>
+            <i class="fa-solid fa-chevron-down" aria-hidden="true"></i>
+          </span>
+          <div class="user-menu-panel" data-user-menu-panel role="menu" hidden>
+            <a href="{{ url_for('messages_home') }}" class="user-menu-item" role="menuitem">
+              <i class="fa-solid fa-envelope" aria-hidden="true"></i>
+              <span class="user-menu-label">Mail</span>
+              {% if unread_count %}
+                <span class="badge">{{ unread_count }}</span>
+              {% endif %}
+            </a>
+            <a href="{{ url_for('account') }}" class="user-menu-item" role="menuitem">
+              <i class="fa-solid fa-user" aria-hidden="true"></i>
+              <span class="user-menu-label">My Account</span>
+            </a>
+            <a href="{{ url_for('bento_tools') }}" class="user-menu-item" role="menuitem">
+              <i class="fa-solid fa-file-pdf" aria-hidden="true"></i>
+              <span class="user-menu-label">PDF Editing Tools</span>
+            </a>
+            <a href="{{ url_for('invoice_form') }}" class="user-menu-item" role="menuitem">
+              <i class="fa-solid fa-file-invoice-dollar" aria-hidden="true"></i>
+              <span class="user-menu-label">Generate Invoice</span>
+            </a>
+            <a href="{{ url_for('certificate_form') }}" class="user-menu-item" role="menuitem">
+              <i class="fa-solid fa-certificate" aria-hidden="true"></i>
+              <span class="user-menu-label">Generate Certificate</span>
+            </a>
+            <a href="{{ url_for('vakalatnama_page') }}" class="user-menu-item" role="menuitem">
+              <i class="fa-solid fa-stamp" aria-hidden="true"></i>
+              <span class="user-menu-label">Vakalatnama</span>
+            </a>
+            <a href="{{ url_for('legal_notice_form') }}" class="user-menu-item" role="menuitem" aria-current="page">
+              <i class="fa-solid fa-scroll" aria-hidden="true"></i>
+              <span class="user-menu-label">Legal Notices</span>
+            </a>
+            <a href="{{ url_for('letterhead_page') }}" class="user-menu-item" role="menuitem">
+              <i class="fa-solid fa-file-lines" aria-hidden="true"></i>
+              <span class="user-menu-label">Letterhead</span>
+            </a>
+            {% if current_user.role == 'admin' %}
+              <a href="{{ url_for('admin_settings') }}" class="user-menu-item" role="menuitem">
+                <i class="fa-solid fa-gear" aria-hidden="true"></i>
+                <span class="user-menu-label">Settings</span>
+              </a>
+            {% endif %}
+          </div>
+        </div>
+      {% endif %}
+      {% if not current_user %}
+        <div class="user">Guest</div>
+      {% endif %}
+      <button id="theme-toggle" class="theme-toggle" title="Toggle theme" aria-label="Toggle theme">
+        <i class="fa-solid fa-moon"></i>
+      </button>
+      <form method="post" action="{{ url_for('logout') }}" class="logout-form">
+        <input type="hidden" name="_csrf_token" value="{{ csrf_token }}">
+        <button type="submit" class="logout" title="Logout">
+          <i class="fa-solid fa-right-from-bracket"></i>
+        </button>
+      </form>
+    </header>
+
+    <main class="home enter-animate">
+      {% include "_flash.html" %}
+
+      <section class="ln-page" aria-label="Legal notice generator">
+        <h1>Legal Notice</h1>
+        <div class="ln-intro">
+          <p>Upload your Legal Notice in PDF format.</p>
+          <p>
+            The document must be A4 sized. Leave enough top and bottom margin on
+            <em>every</em> page so your text clears the letterhead, and a larger
+            top margin on the first page for the recipient block and the notice
+            number. The exact margins for the letterhead you pick are shown below.
+          </p>
+        </div>
+
+        <!-- Exact, per-letterhead margin guidance (filled by JS) -->
+        <div class="ln-margins" id="ln-margins" aria-live="polite"></div>
+
+        <!-- Recipient + notice meta -->
+        <div class="ln-form-card">
+          <h3 class="section-title">Recipient &amp; Notice Details</h3>
+          <div class="ln-grid">
+            <label class="ln-field ln-col-2">
+              <span>To (Recipient name) <em class="ln-req">*</em></span>
+              <input type="text" id="ln-recipient-name" placeholder="Full name of the recipient" maxlength="180" />
+            </label>
+
+            <label class="ln-field">
+              <span>Relation / Capacity</span>
+              <select id="ln-relation-type">
+                <option value="">None</option>
+                <option value="W/o">W/o (wife of)</option>
+                <option value="D/o">D/o (daughter of)</option>
+                <option value="S/o">S/o (son of)</option>
+                <option value="Position/Capacity">Position / Capacity</option>
+              </select>
+            </label>
+            <label class="ln-field">
+              <span>Relation / Capacity value</span>
+              <input type="text" id="ln-relation-value" placeholder="e.g., Mr. Ram Kumar OR Managing Director" maxlength="180" />
+            </label>
+
+            <label class="ln-field">
+              <span>Address line 1</span>
+              <input type="text" id="ln-address1" placeholder="House / street / locality" maxlength="200" />
+            </label>
+            <label class="ln-field">
+              <span>Address line 2</span>
+              <input type="text" id="ln-address2" placeholder="City, State, PIN" maxlength="200" />
+            </label>
+
+            <label class="ln-field ln-col-2">
+              <span>Contact info <span class="ln-optional">(optional)</span></span>
+              <input type="text" id="ln-contact" placeholder="Phone / email" maxlength="120" />
+            </label>
+
+            <label class="ln-field">
+              <span>Notice number</span>
+              <input type="text" id="ln-number" placeholder="Auto" />
+            </label>
+            <label class="ln-field">
+              <span>Date</span>
+              <input type="text" id="ln-date" placeholder="DD-MM-YYYY" />
+            </label>
+          </div>
+        </div>
+
+        <!-- Letterhead Picker -->
+        <div class="letterhead-picker" id="letterhead-picker">
+          <h3>Letterhead</h3>
+          <div class="letterhead-thumbs" id="letterhead-thumbs">
+            <!-- Populated by JS -->
+          </div>
+        </div>
+
+        <!-- PDF upload -->
+        <div class="ln-form-card">
+          <h3 class="section-title">Notice PDF</h3>
+          <div class="dropzone" id="ln-drop" tabindex="0">Drag &amp; drop your notice PDF here or click to select</div>
+          <input type="file" id="ln-file" hidden accept=".pdf" />
+          <div id="ln-file-list" class="results"></div>
+        </div>
+
+        <div class="ln-actions">
+          <button
+            id="ln-download"
+            class="btn-primary"
+            type="button"
+            data-save-url="{{ url_for('legal_notice_save') }}"
+          >
+            <i class="fa-solid fa-file-arrow-down"></i> Download &amp; Save Notice
+          </button>
+          <button id="ln-addcase-toggle" class="btn-secondary" type="button" disabled>
+            <i class="fa-solid fa-folder-plus"></i> Add to Case
+          </button>
+        </div>
+
+        <!-- Add to Case panel (expands after a notice is saved) -->
+        <div class="ln-addcase" id="ln-addcase" hidden>
+          <div class="ln-form-card">
+            <h3 class="section-title">Add this notice to a case</h3>
+            <p class="ln-addcase-hint">
+              Copies the saved notice into the selected case's
+              <code>Legal Notices</code> folder.
+            </p>
+            <div class="mc-tabs" role="tablist" aria-label="Add to case lookup">
+              <button type="button" class="mc-tab active" data-ln-tab="date" role="tab" aria-selected="true">Year &amp; Month</button>
+              <button type="button" class="mc-tab" data-ln-tab="name" role="tab" aria-selected="false">Case Name</button>
+            </div>
+            <div class="mc-panel" data-ln-tab="date">
+              <div class="form-grid">
+                <select id="ln-year"><option value="">Year</option></select>
+                <select id="ln-month" disabled><option value="">Month</option></select>
+                <select id="ln-case" disabled><option value="">Case (Petitioner v. Respondent)</option></select>
+              </div>
+            </div>
+            <div class="mc-panel" data-ln-tab="name" hidden>
+              <div class="mc-name-search">
+                <input type="text" id="ln-name-input" placeholder="Search case name…" />
+                <button type="button" id="ln-name-search" class="btn-secondary">Search</button>
+              </div>
+              <div id="ln-name-results" class="results mc-name-results">
+                <div class="result-item">Search for a case to begin.</div>
+              </div>
+            </div>
+            <div class="form-actions">
+              <button id="ln-addcase-go" class="btn-primary" type="button" disabled>Copy to Selected Case</button>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <script nonce="{{ csp_nonce }}">
+    window.CaseOrg = Object.assign(window.CaseOrg || {}, {
+      isAdmin: {{ (current_user and current_user.role == 'admin') | tojson }}
+    });
+  </script>
+  <script src="{{ static_url('js/main.js') }}"></script>
+  <script src="{{ static_url('js/legal_notice.js') }}"></script>
+</body>
+</html>

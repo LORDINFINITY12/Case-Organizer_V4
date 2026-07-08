@@ -44,47 +44,7 @@
             <i class="fa-solid fa-chevron-down" aria-hidden="true"></i>
           </span>
           <div class="user-menu-panel" data-user-menu-panel role="menu" hidden>
-            <a href="{{ url_for('messages_home') }}" class="user-menu-item" role="menuitem">
-              <i class="fa-solid fa-envelope" aria-hidden="true"></i>
-              <span class="user-menu-label">Mail</span>
-              {% if unread_count %}
-                <span class="badge">{{ unread_count }}</span>
-              {% endif %}
-            </a>
-            <a href="{{ url_for('account') }}" class="user-menu-item" role="menuitem">
-              <i class="fa-solid fa-user" aria-hidden="true"></i>
-              <span class="user-menu-label">My Account</span>
-            </a>
-            <a href="{{ url_for('bento_tools') }}" class="user-menu-item" role="menuitem">
-              <i class="fa-solid fa-file-pdf" aria-hidden="true"></i>
-              <span class="user-menu-label">PDF Editing Tools</span>
-            </a>
-            <a href="{{ url_for('invoice_form') }}" class="user-menu-item" role="menuitem">
-              <i class="fa-solid fa-file-invoice-dollar" aria-hidden="true"></i>
-              <span class="user-menu-label">Generate Invoice</span>
-            </a>
-            <a href="{{ url_for('certificate_form') }}" class="user-menu-item" role="menuitem">
-              <i class="fa-solid fa-certificate" aria-hidden="true"></i>
-              <span class="user-menu-label">Generate Certificate</span>
-            </a>
-            <a href="{{ url_for('vakalatnama_page') }}" class="user-menu-item" role="menuitem">
-              <i class="fa-solid fa-stamp" aria-hidden="true"></i>
-              <span class="user-menu-label">Vakalatnama</span>
-            </a>
-            <a href="{{ url_for('legal_notice_form') }}" class="user-menu-item" role="menuitem">
-              <i class="fa-solid fa-scroll" aria-hidden="true"></i>
-              <span class="user-menu-label">Legal Notices</span>
-            </a>
-            <a href="{{ url_for('letterhead_page') }}" class="user-menu-item" role="menuitem">
-              <i class="fa-solid fa-file-lines" aria-hidden="true"></i>
-              <span class="user-menu-label">Letterhead</span>
-            </a>
-            {% if current_user.role == 'admin' %}
-              <a href="{{ url_for('admin_settings') }}" class="user-menu-item" role="menuitem">
-                <i class="fa-solid fa-gear" aria-hidden="true"></i>
-                <span class="user-menu-label">Settings</span>
-              </a>
-            {% endif %}
+            {% include "_user_menu.html" %}
           </div>
         </div>
       {% endif %}
@@ -105,6 +65,7 @@
     <main class="home enter-animate">
       {% include "_flash.html" %}
 
+      {% if current_user.role != 'intern' %}
       <!-- Search Bar -->
       <section class="search-section" aria-label="Search">
         <div class="search-row">
@@ -136,9 +97,7 @@
             <option>Civil</option>
             <option>Commercial</option>
           </select>
-          <select id="adv-subcat" aria-label="Subcategory" disabled>
-            <option value="">Subcategory</option>
-          </select>
+          <div id="adv-subcat-host" aria-label="Subcategory"></div>
 
           <button id="adv-search" class="btn-secondary" type="button">Advanced Search</button>
           <button id="dir-search" class="btn-ghost" type="button">Directory Search</button>
@@ -172,6 +131,23 @@
 
       <!-- Forms appear here -->
       <section id="form-host" aria-live="polite"></section>
+      {% else %}
+      <!-- Intern landing: case tools are hidden; only PDF tools + mail apply -->
+      <section class="intern-welcome" aria-label="Welcome">
+        <h1 class="intern-welcome-title">Welcome, {{ current_user.email }}</h1>
+        <p class="intern-welcome-sub">Your account has access to the PDF editing tools and internal mail.</p>
+        <div class="cards-grid">
+          <a href="{{ url_for('bento_tools') }}" class="card big selectable" aria-label="PDF Editing Tools">
+            <div class="icon"><i class="fa-solid fa-file-pdf"></i></div>
+            <div class="label">PDF Editing Tools</div>
+          </a>
+          <a href="{{ url_for('messages_home') }}" class="card big selectable" aria-label="Mail">
+            <div class="icon"><i class="fa-solid fa-envelope"></i></div>
+            <div class="label">Mail{% if unread_count %} ({{ unread_count }}){% endif %}</div>
+          </a>
+        </div>
+      </section>
+      {% endif %}
     </main>
   </div>
 
@@ -235,27 +211,11 @@
                     <option value="">Case Category</option>
                   </select>
                 </label>
-                <label class="note-field">
-                  <span>Case Subcategory</span>
-                  <select id="note-case-subcategory" autocomplete="off" disabled>
-                    <option value="">Subcategory</option>
-                  </select>
-                </label>
-                <label class="note-field">
-                  <span>Case Type</span>
-                  <select id="note-case-type" autocomplete="off" disabled>
-                    <option value="">Case Type</option>
-                  </select>
-                </label>
-                <label class="note-field note-type-other is-hidden">
-                  <span>Case Type (Other)</span>
-                  <input id="note-case-type-other" type="text" autocomplete="off">
-                </label>
               </div>
             </div>
 
             <div class="note-section">
-              <h4>Court of Origin</h4>
+              <h4>Original Court</h4>
               <div class="note-grid">
                 <label class="note-field">
                   <span>State</span>
@@ -265,29 +225,26 @@
                   <span>District</span>
                   <input id="note-case-origin-district" type="text" autocomplete="off">
                 </label>
-                <label class="note-field">
+                <label class="note-field note-field-wide">
                   <span>Court / Forum</span>
-                  <input id="note-case-origin-forum" type="text" autocomplete="off">
+                  <div id="note-case-origin-forum-host"></div>
                 </label>
               </div>
             </div>
 
             <div class="note-section">
-              <h4>Current Court / Forum</h4>
+              <h4>Current Forum / Place</h4>
               <div class="note-grid">
                 <label class="note-field">
-                  <span>State</span>
-                  <input id="note-case-current-state" type="text" autocomplete="off">
-                </label>
-                <label class="note-field">
-                  <span>District</span>
-                  <input id="note-case-current-district" type="text" autocomplete="off">
-                </label>
-                <label class="note-field">
-                  <span>Court / Forum</span>
-                  <input id="note-case-current-forum" type="text" autocomplete="off">
+                  <span>Status</span>
+                  <select id="note-case-current-status" autocomplete="off">
+                    <option>Same as Original</option>
+                    <option>Transferred</option>
+                    <option>In Appeal</option>
+                  </select>
                 </label>
               </div>
+              <div id="note-case-current-extra"></div>
             </div>
 
             <div class="note-section">

@@ -933,6 +933,54 @@ def _require_setup():
         return redirect(url_for("login"))
 
 
+# ---- Intern guard: interns may reach only a small allowlist of features --
+# Interns get the home page, My Account, Mail/Messages and the PDF (bento)
+# tools — nothing else.  This is a default-deny allowlist (rather than a
+# decorator on every restricted route) so any route added later is
+# automatically off-limits to interns unless it is explicitly listed here.
+_INTERN_ALLOWED_ENDPOINTS = {
+    "home",
+    "account",
+    "messages_home",
+    "message_detail",
+    "delete_message_action",
+    "bento_tools",
+    "api_session_keepalive",
+    "logout",
+    "login",
+    "setup",
+    "forgot_password",
+    "reset_password",
+    "static",
+    "ping",
+}
+
+
+@app.before_request
+def _restrict_interns():
+    if _is_static_request():
+        return
+    user = g.get("current_user")
+    if user is None or user["role"] != "intern":
+        return
+
+    endpoint = request.endpoint or ""
+    if endpoint in _INTERN_ALLOWED_ENDPOINTS:
+        return
+
+    wants_json = request.path.startswith("/api/") or request.path in {
+        "/manage-case/upload",
+        "/case-law/upload",
+        "/search",
+        "/case-law/search",
+        "/create-case",
+    }
+    if wants_json:
+        return jsonify({"ok": False, "msg": "Access denied for this account type."}), 403
+    flash("You don't have access to that section.", "error")
+    return redirect(url_for("home"))
+
+
 # ════════════════════════════════════════════════════════════════════
 # APP SETUP & BOOTSTRAP
 # ════════════════════════════════════════════════════════════════════
@@ -1790,8 +1838,6 @@ def make_note_json(payload: Dict[str, Any]) -> str:
     od["__BLANK3__"] = ""
     # Classification
     od["Case Category"] = payload.get("Case Category", "")
-    od["Case Subcategory"] = payload.get("Case Subcategory", "")
-    od["Case Type"] = payload.get("Case Type", "")
     od["__BLANK4__"] = ""
     # Courts
     od["Court of Origin"] = {
@@ -1800,6 +1846,7 @@ def make_note_json(payload: Dict[str, Any]) -> str:
         "Court/Forum": payload.get("Origin Court/Forum", ""),
     }
     od["__BLANK5__"] = ""
+    od["Current Status"] = payload.get("Current Status", "Same as Original")
     od["Current Court/Forum"] = {
         "State":   payload.get("Current State", ""),
         "District":payload.get("Current District", ""),
@@ -1933,8 +1980,9 @@ def create_case():
     fields = [
         "Petitioner Name", "Petitioner Address", "Petitioner Contact",
         "Respondent Name", "Respondent Address", "Respondent Contact",
-        "Our Party", "Case Category", "Case Subcategory", "Case Type",
+        "Our Party", "Case Category",
         "Origin State", "Origin District", "Origin Court/Forum",
+        "Current Status",
         "Current State", "Current District", "Current Court/Forum",
         "Additional Notes",
     ]
@@ -1966,6 +2014,10 @@ def manage_case_upload():
     # Classification that influences filename
     domain      = normalize_ws(form.get("Domain"))        # Criminal / Civil / Commercial / Case Law
     subcategory = normalize_ws(form.get("Subcategory"))   # optional subfolder
+    # Taxonomy subcategories can contain "/" (e.g. "Section 482 CrPC / Section 528
+    # BNSS"); keep each subcategory a single folder by flattening path separators.
+    if subcategory:
+        subcategory = normalize_ws(subcategory.replace("/", " - ").replace("\\", " - "))
     main_type   = normalize_ws(form.get("Main Type"))     # OPTIONAL now
 
     if not domain:
@@ -2074,6 +2126,10 @@ def manage_case_upload():
 
     # Regular categories (Criminal/Civil/Commercial)
     target_dir = cdir / subcategory if subcategory else cdir
+    try:
+        target_dir = _safe_path(target_dir, FS_ROOT)
+    except ValueError:
+        return jsonify({"ok": False, "msg": "Invalid subcategory."}), 400
     target_dir.mkdir(parents=True, exist_ok=True)
 
     for f in files:
@@ -4905,17 +4961,20 @@ def _apply_letterhead_to_pdf(content_buffer: BytesIO, letterhead_path: Optional[
 # CERTIFICATES
 # ════════════════════════════════════════════════════════════════════
 #
-# Free-form internship certificate generator.  The frontend is a
-# single contenteditable A4 sandbox with a custom formatting toolbar.
-# Rich HTML from four editable regions (title, intern info, body,
-# signature) is sent to the backend, converted to ReportLab flowables
-# via _quill_html_to_reportlab_story(), and rendered to PDF.
+# Internship certificate generator.  Works exactly like the Legal Notice
+# generator: the user drafts the certificate body in their own editor,
+# exports it to an A4 PDF and uploads it.  The backend stamps a centred
+# "CERTIFICATE OF INTERNSHIP" title plus a single line (date on the left,
+# certificate number on the right) on the first page, and merges the chosen
+# letterhead behind every page.  The intern's name and dates live in the
+# uploaded document itself.  Required margins are measured from the
+# letterhead and shown on the page.
 #
 # Certificate numbers use NNN/intern/YYYY format, reset yearly.
 # Storage: FS_ROOT/Certificates/<year>/<num>_<name>.pdf
 #
 # Routes: /certificate (form), /certificate/save,
-#         /api/certificates/next-number
+#         /api/certificates/next-number, /api/certificates/margins
 # ════════════════════════════════════════════════════════════════════
 
 CERTIFICATE_SEQ_PAD = 3
@@ -4980,7 +5039,6 @@ def _certificate_target_path(
     """Compute (pdf_save_path, cert_dir) for a certificate."""
     cert_number = cert_data.get("certificate_number") or "CERT-00000"
     cert_date = cert_data.get("certificate_date") or ""
-    intern_name = cert_data.get("intern_name") or ""
 
     # Determine year from certificate date
     year_str = ""
@@ -5002,8 +5060,7 @@ def _certificate_target_path(
     cert_dir.mkdir(parents=True, exist_ok=True)
 
     safe_num = _sanitize_filename_fragment(cert_number) or "cert"
-    safe_name = _sanitize_filename_fragment(intern_name) or "intern"
-    filename = f"{safe_num}_{safe_name}.pdf"
+    filename = f"{safe_num}.pdf"
     pdf_path = cert_dir / filename
     return pdf_path, cert_dir
 
@@ -5028,303 +5085,166 @@ def _insert_certificate_row(
     return row["id"]
 
 
-# ---- Quill HTML → ReportLab conversion ------------------------------------
-def _quill_html_to_reportlab_story(html_str: str, base_style) -> list:
-    """Convert Quill-generated HTML to a list of ReportLab flowables.
+# ---- Certificate PDF generation (upload + stamp) ---------------------------
+#
+# The certificate works exactly like the Legal Notice generator: the user
+# drafts the certificate body in their own editor, exports it to an A4 PDF and
+# uploads it.  We stamp a proforma header band onto the first page (intern name
+# and internship duration on the left, certificate number and date on the
+# right) and merge the chosen letterhead behind every page.  The margins the
+# user must leave are measured from the letterhead and shown on the page.
+_CERT_TITLE_TEXT = "CERTIFICATE OF INTERNSHIP"  # auto-stamped centred heading
+_CERT_TITLE_BAND_MM = 10.0   # vertical room reserved for the title line
+_CERT_META_BAND_MM = 8.0     # vertical room for the single date / number line
 
-    Supports: <b>, <i>, <u>, <strong>, <em>, font sizes, alignment,
-    line-height.  Each <p> becomes a separate Paragraph with its own
-    ParagraphStyle derived from *base_style*.
+
+def _certificate_margin_guidance(letterhead_id) -> Optional[Dict[str, float]]:
+    """Display-ready margins (cm) for a certificate.
+
+    Top and bottom margins are exactly the letterhead-measured clearances (no
+    extra padding) so the page gives the maximum working room.  The first-page
+    top margin additionally reserves room for the auto-stamped title plus the
+    single date / certificate-number line.  Returns None when the letterhead is
+    not measurable (none selected / blank / render unavailable).
     """
-    from reportlab.platypus import Paragraph, Spacer
-    from reportlab.lib.enums import TA_LEFT, TA_CENTER, TA_RIGHT, TA_JUSTIFY
+    m = _measure_letterhead_margins(letterhead_id)
+    if not m:
+        return None
+    import math
 
-    if not html_str or not html_str.strip():
-        return [Paragraph("&nbsp;", base_style)]
+    def _ceil_cm(mm_val: float) -> float:
+        return math.ceil(mm_val) / 10.0  # round up to the next 0.1 cm (never under)
 
-    import re as _re
-    from html.parser import HTMLParser
-
-    _ALIGN_MAP = {
-        "left": TA_LEFT, "center": TA_CENTER,
-        "right": TA_RIGHT, "justify": TA_JUSTIFY,
+    first_mm = (
+        m["top_margin_mm"] + _LN_BAND_GAP_MM
+        + _CERT_TITLE_BAND_MM + _CERT_META_BAND_MM
+    )
+    return {
+        "top_cm": _ceil_cm(m["top_margin_mm"]),
+        "bottom_cm": _ceil_cm(m["bottom_margin_mm"]),
+        "first_page_cm": _ceil_cm(first_mm),
     }
-    _BLOCK_TAGS = {"p", "div", "h1", "h2", "h3", "h4", "li"}
-
-    # Every font in the certificate is rendered in Times New Roman, regardless
-    # of what the editor requested — so any font-family choice maps to TNR.
-    _cert_font = _register_times_new_roman()
-
-    def _map_font_family(fam: str):
-        return _cert_font
-
-    class _RichParser(HTMLParser):
-        def __init__(self):
-            super().__init__()
-            self.paragraphs = []    # list of (inline_html, align, leading)
-            self._buf = []          # inline markup accumulator
-            self._align = None
-            self._leading = None
-            self._font_stack = []   # number of <font> tags opened per <span>
-
-        def _flush(self):
-            text = "".join(self._buf).strip()
-            if text:
-                self.paragraphs.append((text, self._align, self._leading))
-            self._buf = []
-            self._align = None
-            self._leading = None
-
-        def handle_starttag(self, tag, attrs):
-            a = dict(attrs)
-            if tag in _BLOCK_TAGS:
-                self._flush()
-                style = a.get("style", "")
-                m = _re.search(r'text-align:\s*(left|center|right|justify)', style)
-                if m:
-                    self._align = m.group(1)
-                m = _re.search(r'line-height:\s*([0-9.]+)', style)
-                if m:
-                    try:
-                        self._leading = float(m.group(1))
-                    except ValueError:
-                        pass
-                cls = a.get("class", "")
-                if "ql-align-center" in cls:
-                    self._align = "center"
-                elif "ql-align-right" in cls:
-                    self._align = "right"
-                elif "ql-align-justify" in cls:
-                    self._align = "justify"
-            elif tag in ("strong", "b"):
-                self._buf.append("<b>")
-            elif tag in ("em", "i"):
-                self._buf.append("<i>")
-            elif tag == "u":
-                self._buf.append("<u>")
-            elif tag == "br":
-                self._buf.append("<br/>")
-            elif tag == "span" or tag == "font":
-                opened = 0
-                style = a.get("style", "")
-                cls = a.get("class", "")
-                size_m = _re.search(r'font-size:\s*([0-9.]+)', style)
-                if size_m:
-                    try:
-                        self._buf.append(f'<font size={int(float(size_m.group(1)))}>')
-                        opened += 1
-                    except ValueError:
-                        pass
-                face = None
-                fam_m = _re.search(r'font-family:\s*([^;]+)', style)
-                if fam_m:
-                    face = _map_font_family(fam_m.group(1))
-                if a.get("face"):
-                    face = _map_font_family(a.get("face")) or a.get("face")
-                if "ql-font-times-new-roman" in cls or "ql-font-sans-serif" in cls:
-                    face = _cert_font
-                if face:
-                    self._buf.append(f'<font face="{face}">')
-                    opened += 1
-                self._font_stack.append(opened)
-
-        def handle_endtag(self, tag):
-            if tag in _BLOCK_TAGS:
-                self._flush()
-            elif tag in ("strong", "b"):
-                self._buf.append("</b>")
-            elif tag in ("em", "i"):
-                self._buf.append("</i>")
-            elif tag == "u":
-                self._buf.append("</u>")
-            elif tag == "span" or tag == "font":
-                opened = self._font_stack.pop() if self._font_stack else 0
-                self._buf.append("</font>" * opened)
-
-        def handle_data(self, data):
-            self._buf.append(
-                data.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
-            )
-
-    parser = _RichParser()
-    parser.feed(html_str)
-    parser._flush()
-
-    story = []
-    for inline_html, align, leading in parser.paragraphs:
-        style = base_style.clone(f"rich_{id(inline_html)}")
-        if align:
-            style.alignment = _ALIGN_MAP.get(align, base_style.alignment)
-        if leading:
-            style.leading = style.fontSize * leading
-        story.append(Paragraph(inline_html, style))
-        story.append(Spacer(1, 2))
-
-    return story if story else [Paragraph("&nbsp;", base_style)]
 
 
-# ---- Certificate PDF generation (ReportLab) --------------------------------
-def generate_certificate_pdf(cert: Dict[str, Any]) -> tuple[BytesIO, str]:
-    """Build an A4 certificate PDF from free-form sandbox regions.
+def generate_certificate_pdf(uploaded_bytes: bytes, cert: Dict[str, Any]) -> BytesIO:
+    """Stamp an uploaded certificate PDF with a header block (page 1) + letterhead.
 
-    Expected keys in *cert*:
-        title_html        – rich HTML for the centred title
-        intern_name       – plain text (used for filename / DB)
-        intern_info_html  – rich HTML for the left column (name, address, duration)
-        certificate_number, certificate_date – plain text for right column
-        body_html         – rich HTML for the main body
-        signature_html    – rich HTML for the right-aligned signature block
-        letterhead_id     – optional FK to letterheads table
+    Overlays — on the first page only:
+      • a centred "CERTIFICATE OF INTERNSHIP" title
+      • a single line below it: the date (left) and certificate number (right)
+    The intern's name and internship dates live in the uploaded document itself.
+    Then merges the selected letterhead behind every page.  Returns a BytesIO
+    positioned at 0.  Mirrors :func:`generate_legal_notice_pdf`.
     """
     try:
-        from reportlab.lib.pagesizes import A4
-        from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
+        from pypdf import PdfReader, PdfWriter
         from reportlab.lib.units import mm
-        from reportlab.lib.enums import TA_LEFT, TA_CENTER, TA_RIGHT, TA_JUSTIFY
-        from reportlab.platypus import (
-            Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle,
-        )
+        from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
+        from reportlab.lib.enums import TA_LEFT, TA_RIGHT
+        from reportlab.platypus import Paragraph, Frame
+        from reportlab.pdfgen import canvas as _rl_canvas
     except ImportError as exc:
         raise RuntimeError(
-            "ReportLab is required to generate certificates. "
-            "Install it with `pip install reportlab`."
+            "pypdf and ReportLab are required to process certificates."
         ) from exc
 
-    pdf_buffer = BytesIO()
+    try:
+        reader = PdfReader(BytesIO(uploaded_bytes))
+        page_count = len(reader.pages)
+    except Exception as exc:
+        raise ValueError("The uploaded file is not a readable PDF.") from exc
+    if not page_count:
+        raise ValueError("The uploaded PDF has no pages.")
 
-    # Letterhead handling
-    letterhead_path = _resolve_letterhead_path(cert.get("letterhead_id"))
-    letterhead_margin = 12.7 * mm
-    extra_letterhead_margin = 25.4 * mm
-    top_margin = (24 * mm) + letterhead_margin + extra_letterhead_margin
+    first_page = reader.pages[0]
+    page_w = float(first_page.mediabox.width)
+    page_h = float(first_page.mediabox.height)
 
-    doc = SimpleDocTemplate(
-        pdf_buffer,
-        pagesize=A4,
-        leftMargin=18 * mm,
-        rightMargin=18 * mm,
-        topMargin=top_margin,
-        bottomMargin=25 * mm,  # +0.5cm so content clears the foot of the letterhead
-        title=f"Certificate {cert.get('certificate_number') or ''}".strip() or "Certificate",
-    )
-    page_w, page_h = A4
+    # ── Stamp geometry (points) ──
+    # Reserve exactly as much top space as the letterhead's header actually
+    # occupies (measured from the artwork) — no extra padding, so the page gives
+    # the maximum working room.  Fall back to 38.1 mm — the same reserve legal
+    # notices use — when no letterhead is measurable (None/blank, printed paper).
+    from reportlab.lib.enums import TA_CENTER
 
-    def _on_page(canvas, doc_inner):
-        # Letterhead (image or PDF) is stamped behind every page after the
-        # document is built — see _apply_letterhead_to_pdf below.  The top
-        # margin reserved above keeps content clear of the letterhead band
-        # on every page, including subsequent pages of multi-page documents.
-        pass
+    side_margin = 18 * mm
+    _measured = _measure_letterhead_margins(cert.get("letterhead_id"))
+    if _measured and _measured["header_mm"] > 0:
+        letterhead_reserve = _measured["top_margin_mm"] * mm
+    else:
+        letterhead_reserve = 38.1 * mm
+    band_gap = _LN_BAND_GAP_MM * mm
+    title_h = _CERT_TITLE_BAND_MM * mm
+    meta_h = _CERT_META_BAND_MM * mm
+    content_w = page_w - (2 * side_margin)
+    left_w = content_w * 0.45
+    right_w = content_w - left_w
+    block_top = page_h - letterhead_reserve - band_gap   # top of the stamped block
+    band_top = block_top - title_h                       # date / number line starts here
 
+    proforma_font = _register_times_new_roman()
+    proforma_bold = "TimesNewRoman-Bold" if proforma_font == "TimesNewRoman" else "Times-Bold"
     styles = getSampleStyleSheet()
-
-    # Render the entire certificate in genuine Times New Roman when available,
-    # falling back to ReportLab's built-in Times only if the face is missing.
-    cert_font = _register_times_new_roman()
-    cert_font_bold = "TimesNewRoman-Bold" if cert_font == "TimesNewRoman" else "Times-Bold"
-
     title_style = ParagraphStyle(
         "CertTitle", parent=styles["Title"],
-        fontName=cert_font_bold, fontSize=20, leading=26,
-        alignment=TA_CENTER, spaceAfter=8,
+        fontName=proforma_bold, fontSize=16, leading=19, alignment=TA_CENTER,
+        spaceBefore=0, spaceAfter=0,
     )
-    info_style = ParagraphStyle(
-        "CertInfo", parent=styles["Normal"],
-        fontName=cert_font, fontSize=11, leading=15,
-        alignment=TA_LEFT,
+    left_style = ParagraphStyle(
+        "CertLeft", parent=styles["Normal"],
+        fontName=proforma_font, fontSize=12, leading=16, alignment=TA_LEFT,
     )
-    meta_style = ParagraphStyle(
-        "CertMeta", parent=styles["Normal"],
-        fontName=cert_font, fontSize=11, leading=15,
-        alignment=TA_RIGHT,
-    )
-    body_base_style = ParagraphStyle(
-        "CertBody", parent=styles["Normal"],
-        fontName=cert_font, fontSize=12, leading=18,
-        alignment=TA_JUSTIFY, spaceBefore=4, spaceAfter=4,
-    )
-    sig_base_style = ParagraphStyle(
-        "CertSig", parent=styles["Normal"],
-        fontName=cert_font, fontSize=11, leading=14,
-        alignment=TA_CENTER,
+    right_style = ParagraphStyle(
+        "CertRight", parent=styles["Normal"],
+        fontName=proforma_font, fontSize=12, leading=16, alignment=TA_RIGHT,
     )
 
-    story: list = []
+    def _esc(v: Any) -> str:
+        v = (str(v or "")).strip()
+        return safe_text(v) if v else ""
 
-    # ── 1. Title (rich text from title region) ────────────────────
-    title_html = cert.get("title_html") or ""
-    if title_html.strip():
-        story.extend(_quill_html_to_reportlab_story(title_html, title_style))
-    else:
-        story.append(Paragraph("CERTIFICATE OF INTERNSHIP", title_style))
-    story.append(Spacer(1, 12))
+    # A single line: date on the left, certificate number on the right.
+    # The intern's name / duration live in the uploaded certificate itself.
+    num = (cert.get("certificate_number") or "").strip()
+    date = (cert.get("certificate_date") or "").strip()
+    left_html = f"<b>Date:</b> {_esc(date)}" if date else "&nbsp;"
+    right_html = f"<b>Certificate No:</b> {_esc(num)}" if num else "&nbsp;"
 
-    # ── 2. Two-column header: intern info LEFT | meta RIGHT ──────
-    intern_info_html = cert.get("intern_info_html") or ""
-    cert_number = safe_text(cert.get("certificate_number") or "")
-    cert_date = safe_text(cert.get("certificate_date") or "")
-
-    # Left column — intern details (rich text)
-    if intern_info_html.strip():
-        left_flowables = _quill_html_to_reportlab_story(intern_info_html, info_style)
-    else:
-        left_flowables = [Paragraph("&nbsp;", info_style)]
-
-    # Right column — certificate number + date (structured)
-    meta_parts = []
-    if cert_number:
-        meta_parts.append(f"<b>Certificate No:</b> {cert_number}")
-    if cert_date:
-        meta_parts.append(f"<b>Date:</b> {cert_date}")
-    right_flowable = Paragraph("<br/>".join(meta_parts) if meta_parts else "&nbsp;", meta_style)
-
-    header_table = Table(
-        [[left_flowables, [right_flowable]]],
-        colWidths=[doc.width * 0.6, doc.width * 0.4],
+    overlay_buf = BytesIO()
+    c = _rl_canvas.Canvas(overlay_buf, pagesize=(page_w, page_h))
+    # Centred title across the full content width, just below the letterhead.
+    title_frame = Frame(
+        side_margin, block_top - title_h, content_w, title_h,
+        leftPadding=0, rightPadding=0, topPadding=0, bottomPadding=0,
     )
-    header_table.setStyle(TableStyle([
-        ("VALIGN", (0, 0), (-1, -1), "TOP"),
-        ("LEFTPADDING", (0, 0), (-1, -1), 0),
-        ("RIGHTPADDING", (0, 0), (-1, -1), 0),
-        ("TOPPADDING", (0, 0), (-1, -1), 0),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
-    ]))
-    story.append(header_table)
-    story.append(Spacer(1, 16))
+    title_frame.addFromList([Paragraph(_CERT_TITLE_TEXT, title_style)], c)
+    # Date (left) and certificate number (right) on one line below the title.
+    left_frame = Frame(
+        side_margin, band_top - meta_h, left_w, meta_h,
+        leftPadding=0, rightPadding=6, topPadding=0, bottomPadding=0,
+    )
+    left_frame.addFromList([Paragraph(left_html, left_style)], c)
+    right_frame = Frame(
+        side_margin + left_w, band_top - meta_h, right_w, meta_h,
+        leftPadding=6, rightPadding=0, topPadding=0, bottomPadding=0,
+    )
+    right_frame.addFromList([Paragraph(right_html, right_style)], c)
+    c.showPage()
+    c.save()
+    overlay_buf.seek(0)
+    overlay_page = PdfReader(overlay_buf).pages[0]
 
-    # ── 3. Body (rich text from main body region) ─────────────────
-    body_html = cert.get("body_html") or ""
-    if body_html.strip():
-        story.extend(_quill_html_to_reportlab_story(body_html, body_base_style))
-    story.append(Spacer(1, 30))
+    # Merge the header band over page 1
+    writer = PdfWriter(clone_from=BytesIO(uploaded_bytes))
+    writer.pages[0].merge_page(overlay_page, over=True)
 
-    # ── 4. Signature (rich text, right-aligned block) ─────────────
-    signature_html = cert.get("signature_html") or ""
-    if signature_html.strip():
-        sig_flowables = _quill_html_to_reportlab_story(signature_html, sig_base_style)
-        sig_wrapper = Table(
-            [[sig_flowables]],
-            colWidths=[doc.width * 0.45],
-            hAlign="RIGHT",
-        )
-        sig_wrapper.setStyle(TableStyle([
-            ("VALIGN", (0, 0), (-1, -1), "BOTTOM"),
-            ("LEFTPADDING", (0, 0), (-1, -1), 0),
-            ("RIGHTPADDING", (0, 0), (-1, -1), 0),
-            ("TOPPADDING", (0, 0), (-1, -1), 0),
-            ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
-        ]))
-        story.append(sig_wrapper)
+    merged = BytesIO()
+    writer.write(merged)
+    merged.seek(0)
 
-    doc.build(story, onFirstPage=_on_page, onLaterPages=_on_page)
-    pdf_buffer.seek(0)
-    final_buffer = _apply_letterhead_to_pdf(pdf_buffer, letterhead_path)
-
-    # Suggested filename
-    safe_num = _sanitize_filename_fragment(cert.get("certificate_number") or "") or "cert"
-    safe_name = _sanitize_filename_fragment(cert.get("intern_name") or "") or "intern"
-    filename = f"{safe_num}_{safe_name}.pdf"
-    return final_buffer, filename
+    # Letterhead behind every page
+    letterhead_path = _resolve_letterhead_path(cert.get("letterhead_id"))
+    return _apply_letterhead_to_pdf(merged, letterhead_path)
 
 
 def _normalize_certificate_date(value: Any) -> str:
@@ -5362,37 +5282,47 @@ def certificate_form():
         """)
 
 
-# ---- POST /certificate/save — generate PDF, store on disk, return download -
+# ---- POST /certificate/save — stamp uploaded PDF, store, return download ---
 @app.post("/certificate/save")
 @require_login
 def certificate_save():
-    payload = request.get_json(silent=True)
-    if not isinstance(payload, dict):
-        return jsonify({"ok": False, "msg": "Invalid certificate payload."}), 400
+    if not FS_ROOT:
+        return jsonify({"ok": False, "msg": "Storage not configured."}), 400
 
-    intern_name = str(payload.get("intern_name") or "").strip()[:180]
-    if not intern_name:
-        return jsonify({"ok": False, "msg": "Intern name is required."}), 400
+    f = request.files.get("file")
+    if not f or not f.filename:
+        return jsonify({"ok": False, "msg": "Please upload the certificate PDF."}), 400
 
-    requested_number = str(payload.get("certificate_number") or "").strip()
+    ext = (f.filename.rsplit(".", 1)[1].lower()) if "." in f.filename else ""
+    if ext != "pdf":
+        return jsonify({"ok": False, "msg": "Only PDF files are allowed."}), 400
+
+    header = f.stream.read(8)
+    f.stream.seek(0)
+    if not header.startswith(b"%PDF"):
+        return jsonify({"ok": False, "msg": "File content does not appear to be a valid PDF."}), 400
+
+    uploaded_bytes = f.stream.read()
+    f.stream.seek(0)
 
     try:
-        normalized_date = _normalize_certificate_date(payload.get("certificate_date"))
+        normalized_date = _normalize_certificate_date(request.form.get("certificate_date"))
     except ValueError as exc:
         return jsonify({"ok": False, "msg": str(exc)}), 400
 
-    # Derive year for certificate numbering
     cert_year = _certificate_year(normalized_date)
+    requested_number = (request.form.get("certificate_number") or "").strip()
+    letterhead_id = request.form.get("letterhead_id") or None
+
+    # The intern's name and dates live in the uploaded certificate itself; the
+    # stamp only carries the date + certificate number.  ``intern_name`` is kept
+    # blank (the DB column is NOT NULL, so an empty string satisfies it).
+    intern_name = ""
 
     cert_data: Dict[str, Any] = {
         "certificate_number": requested_number,
         "certificate_date": normalized_date,
-        "title_html": str(payload.get("title_html") or "").strip(),
-        "intern_name": intern_name,
-        "intern_info_html": str(payload.get("intern_info_html") or "").strip(),
-        "body_html": str(payload.get("body_html") or "").strip(),
-        "signature_html": str(payload.get("signature_html") or "").strip(),
-        "letterhead_id": payload.get("letterhead_id"),
+        "letterhead_id": letterhead_id,
     }
 
     conn = get_app_db()
@@ -5410,34 +5340,42 @@ def certificate_save():
         cert_data["certificate_number"] = requested_number
 
     try:
-        pdf_buffer, suggested_filename = generate_certificate_pdf(cert_data)
-    except Exception as exc:
-        log.exception("Certificate PDF generation failed")
-        return jsonify({"ok": False, "msg": "Certificate PDF generation failed."}), 500
+        pdf_buffer = generate_certificate_pdf(uploaded_bytes, cert_data)
+    except (ValueError, RuntimeError) as exc:
+        return jsonify({"ok": False, "msg": f"Could not process the certificate PDF: {exc}"}), 400
+    except Exception:  # pragma: no cover - defensive
+        log.exception("Certificate processing failed")
+        return jsonify({"ok": False, "msg": "PDF processing failed."}), 500
+
+    pdf_bytes = pdf_buffer.getvalue()
 
     try:
         pdf_path, _ = _certificate_target_path(cert_data)
         pdf_path.parent.mkdir(parents=True, exist_ok=True)
-        pdf_path.write_bytes(pdf_buffer.getvalue())
+        pdf_path.write_bytes(pdf_bytes)
     except CertificateStorageError as exc:
         return jsonify({"ok": False, "msg": str(exc)}), 400
-    except OSError as exc:
+    except OSError:
         log.exception("Certificate save failed")
         return jsonify({"ok": False, "msg": "Could not save the certificate."}), 500
 
     user_id = g.current_user.id if g.current_user else None
     payload_json = json.dumps(cert_data, ensure_ascii=False)
-    _insert_certificate_row(
-        conn, cert_data["certificate_number"], intern_name,
-        str(pdf_path), payload_json, user_id,
-    )
+    try:
+        _insert_certificate_row(
+            conn, cert_data["certificate_number"], intern_name,
+            str(pdf_path), payload_json, user_id,
+        )
+    except sqlite3.IntegrityError:
+        with suppress(FileNotFoundError):
+            pdf_path.unlink()
+        return jsonify({"ok": False, "msg": "Certificate number already exists."}), 409
 
-    pdf_buffer.seek(0)
     resp = send_file(
-        pdf_buffer,
+        BytesIO(pdf_bytes),
         mimetype="application/pdf",
         as_attachment=True,
-        download_name=suggested_filename,
+        download_name=pdf_path.name,
     )
     resp.headers["X-Certificate-Number"] = cert_data["certificate_number"]
     return resp
@@ -5454,6 +5392,16 @@ def api_certificate_next_number():
         log.error("Unable to determine next certificate number: %s", exc, exc_info=True)
         return jsonify({"ok": False, "msg": "Unable to determine the next certificate number."}), 500
     return jsonify({"ok": True, "certificate_number": suggestion})
+
+
+# ---- GET /api/certificates/margins — per-letterhead margin guidance -------
+@app.get("/api/certificates/margins")
+@require_login_api
+def api_certificate_margins():
+    """Margins (cm) the user must leave for the selected letterhead, or None."""
+    raw = request.args.get("letterhead_id")
+    letterhead_id = raw if raw not in (None, "", "null") else None
+    return jsonify({"ok": True, "margins": _certificate_margin_guidance(letterhead_id)})
 
 
 # ════════════════════════════════════════════════════════════════════
@@ -6601,7 +6549,7 @@ def admin_settings():
             password = request.form.get("user_password") or ""
 
             password_error = password_policy_error(password)
-            if role not in {"admin", "user"}:
+            if role not in {"admin", "user", "intern"}:
                 flash("Invalid role specified.", "error")
             elif password_error:
                 flash(f"User password: {password_error}", "error")
@@ -6648,7 +6596,7 @@ def admin_settings():
             else:
                 new_email = normalize_ws(request.form.get("new_email") or "").lower()
                 new_role = (request.form.get("new_role") or target_user['role']).lower()
-                if new_role not in {"admin", "user"}:
+                if new_role not in {"admin", "user", "intern"}:
                     flash("Invalid role selected.", "error")
                 else:
                     changes_made = False

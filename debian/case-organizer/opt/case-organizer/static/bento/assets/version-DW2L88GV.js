@@ -1,0 +1,1 @@
+import{c as o,i as t}from"./style-Cp5tcxXl.js";document.addEventListener("DOMContentLoaded",()=>{o({icons:t})});const s="2.1.0",i={version:s},c=i.version;function e(){document.querySelectorAll("#app-version, #app-version-simple").forEach(n=>{n.textContent=c})}typeof document<"u"&&(document.readyState==="loading"?document.addEventListener("DOMContentLoaded",e):e());

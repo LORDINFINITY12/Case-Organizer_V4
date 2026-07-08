@@ -33,7 +33,7 @@ def create_user(email: str, password: str, role: str = "user", is_active: bool =
     email_norm = normalize_email(email)
     if not email_norm:
         raise ValueError("Email is required")
-    if role not in {"admin", "user"}:
+    if role not in {"admin", "user", "intern"}:
         raise ValueError("Invalid role")
     password_hash = hash_password(password)
 
@@ -202,7 +202,7 @@ def update_user_email(user_id: int, new_email: str) -> None:
 
 
 def update_user_role(user_id: int, new_role: str) -> None:
-    if new_role not in {"admin", "user"}:
+    if new_role not in {"admin", "user", "intern"}:
         raise ValueError("Invalid role")
     conn = get_app_db()
     conn.execute(

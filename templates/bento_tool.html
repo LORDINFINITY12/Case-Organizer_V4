@@ -60,47 +60,7 @@
             <i class="fa-solid fa-chevron-down" aria-hidden="true"></i>
           </span>
           <div class="user-menu-panel" data-user-menu-panel role="menu" hidden>
-            <a href="{{ url_for('messages_home') }}" class="user-menu-item" role="menuitem">
-              <i class="fa-solid fa-envelope" aria-hidden="true"></i>
-              <span class="user-menu-label">Mail</span>
-              {% if unread_count %}
-                <span class="badge">{{ unread_count }}</span>
-              {% endif %}
-            </a>
-            <a href="{{ url_for('account') }}" class="user-menu-item" role="menuitem">
-              <i class="fa-solid fa-user" aria-hidden="true"></i>
-              <span class="user-menu-label">My Account</span>
-            </a>
-            <a href="{{ url_for('bento_tools') }}" class="user-menu-item" role="menuitem">
-              <i class="fa-solid fa-file-pdf" aria-hidden="true"></i>
-              <span class="user-menu-label">PDF Editing Tools</span>
-            </a>
-            <a href="{{ url_for('invoice_form') }}" class="user-menu-item" role="menuitem">
-              <i class="fa-solid fa-file-invoice-dollar" aria-hidden="true"></i>
-              <span class="user-menu-label">Generate Invoice</span>
-            </a>
-            <a href="{{ url_for('certificate_form') }}" class="user-menu-item" role="menuitem">
-              <i class="fa-solid fa-certificate" aria-hidden="true"></i>
-              <span class="user-menu-label">Generate Certificate</span>
-            </a>
-            <a href="{{ url_for('vakalatnama_page') }}" class="user-menu-item" role="menuitem">
-              <i class="fa-solid fa-stamp" aria-hidden="true"></i>
-              <span class="user-menu-label">Vakalatnama</span>
-            </a>
-            <a href="{{ url_for('legal_notice_form') }}" class="user-menu-item" role="menuitem">
-              <i class="fa-solid fa-scroll" aria-hidden="true"></i>
-              <span class="user-menu-label">Legal Notices</span>
-            </a>
-            <a href="{{ url_for('letterhead_page') }}" class="user-menu-item" role="menuitem">
-              <i class="fa-solid fa-file-lines" aria-hidden="true"></i>
-              <span class="user-menu-label">Letterhead</span>
-            </a>
-            {% if current_user.role == 'admin' %}
-              <a href="{{ url_for('admin_settings') }}" class="user-menu-item" role="menuitem">
-                <i class="fa-solid fa-gear" aria-hidden="true"></i>
-                <span class="user-menu-label">Settings</span>
-              </a>
-            {% endif %}
+            {% include "_user_menu.html" %}
           </div>
         </div>
       {% endif %}
