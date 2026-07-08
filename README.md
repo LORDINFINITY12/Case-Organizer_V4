@@ -20,6 +20,36 @@ Version 4 continues that foundation with a fully rebuilt Case Law module, a stru
 
 ---
 
+## Screenshots
+
+_Current UI (v4.5.2, default dark theme)._
+
+### New in v4.5.2
+
+**Create Case — one Case Category, one Original court block, and a unified, searchable Supreme Court + High Court picker** (type a lower/trial court and it's offered back as a custom option):
+
+![Create Case with the unified court dropdown](docs/screenshots/create-case-court-dropdown.png)
+
+| Free-text court entry ("use as typed") | "Current Forum/Place" → In Appeal |
+| --- | --- |
+| ![Free-text court option](docs/screenshots/court-dropdown-free-text.png) | ![In Appeal court picker](docs/screenshots/create-case-current-forum.png) |
+
+**Manage Cases — grouped, searchable File Subcategory taxonomy** (47 divisions / 322 filing types under Civil, Criminal and Commercial, each with an "Other"):
+
+![File Subcategory taxonomy dropdown](docs/screenshots/file-subcategory-taxonomy.png)
+
+**Search Case Law — Name tab with each party option on its own full-width row:**
+
+![Search Case Law](docs/screenshots/search-case-law.png)
+
+### Modules
+
+| Dashboard | Certificate generator | Legal Notice |
+| --- | --- | --- |
+| ![Dashboard](docs/screenshots/home-dashboard.png) | ![Certificate generator](docs/screenshots/certificate-generator.png) | ![Legal Notice](docs/screenshots/legal-notice.png) |
+
+---
+
 ## Features
 
 ### Core System
@@ -208,6 +238,70 @@ Logs are available via:
 ```bash
 journalctl -u case-organizer.service
 ```
+
+---
+
+### Option 3 – Docker (Windows / macOS / Linux)
+
+The Docker image is the easiest way to run Case Organizer on **Windows**.
+
+#### Install Docker first
+
+**Windows** (PowerShell, via [winget](https://learn.microsoft.com/windows/package-manager/winget/)):
+
+```powershell
+winget install -e --id Docker.DockerDesktop
+```
+
+**macOS** — install [Homebrew](https://brew.sh) if you don't have it, then Docker Desktop:
+
+```bash
+# Install Homebrew (skip if already installed)
+/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+
+# Install Docker Desktop
+brew install --cask docker
+```
+
+**Linux** (Debian/Ubuntu):
+
+```bash
+curl -fsSL https://get.docker.com | sh
+```
+
+Launch **Docker Desktop** once after installing (Windows/macOS) so the engine is
+running, then continue below.
+
+#### Run Case Organizer
+
+**A. One-click (Windows):** download `case-organizer_<version>_docker.tar.gz` and
+`docker-setup.bat` from the [latest release](https://github.com/LORDINFINITY12/Case-Organizer_V4/releases),
+put them in the same folder, and double-click `docker-setup.bat`. It loads the
+image, starts the container with persistent storage under
+`%USERPROFILE%\CaseOrganizer`, and opens the app in your browser. On
+Linux/macOS run `./docker-setup.sh` instead.
+
+**B. Load the release image manually:**
+
+```bash
+docker load -i case-organizer_4.5.2_docker.tar.gz
+docker run -d --name case-organizer -p 5000:5000 \
+  -e CASEORG_COOKIE_SECURE=0 \
+  -v caseorg-config:/data/config -v caseorg-files:/data/files \
+  --restart unless-stopped case-organizer:4.5.2
+```
+
+**C. Build from source with Compose:**
+
+```bash
+docker compose up -d          # builds and runs; data persists under ./data
+```
+
+Then open `http://localhost:5000`. On first-run **/setup**, set the storage
+location to `/data/files` so case files land on the mounted volume (config lives
+in `/data/config`). `CASEORG_COOKIE_SECURE=0` is required for plain-HTTP
+localhost; put a TLS-terminating reverse proxy in front and set it to `1` for
+HTTPS deployments.
 
 ---
 
