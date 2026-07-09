@@ -1,3 +1,62 @@
+case-organizer (4.6) stable; urgency=high
+
+  * Added the Calendar / court-event tracker (/calendar): per-case hearing
+    and listing dates (with purpose), filing deadlines (mark-filed with the
+    actual filing date), appearance records (who appeared — team members or
+    outside counsel by name), and other deadlines such as limitation
+    periods. The page scales to the full viewport (month rows stretch to
+    fill the screen height with equal top/bottom gaps) with type-coloured
+    chips and overdue markers. A resizable full-height sidebar — position
+    (left/right) and width persisted per browser — holds the per-day agenda
+    (listed / due / filed / appeared) and a per-case timeline reachable by
+    the same case-name search as Manage Case or by year/month browsing
+    (deep-linkable via /calendar?year=&month=&case=). The "Record
+    Appearance" flow captures who appeared and the outcome, and taking a
+    next date auto-creates the linked next hearing. Case pickers in the
+    event and appearance dialogs also offer search-by-name. Dates in the
+    dialogs use the Indian dd/mm/yyyy format — typed digits auto-format
+    and a calendar button opens the native date picker. Navigation lives
+    in the account menu; the home page is unchanged.
+  * Daily digest email: every morning (default 07:00, configurable under
+    Settings -> System -> Daily Digest) active admins and users receive
+    today's listings, filings due, overdue unfiled items, and tomorrow's
+    matters; events can be assigned to users, who get an "ASSIGNED TO YOU"
+    section. Sent by an in-process scheduler thread with a reminder_log
+    claim so restarts never double-send; a "Send test digest now" button
+    verifies SMTP without waiting. Interns never receive the digest.
+  * Schema migration v7 -> v8: new case_events, event_participants,
+    event_assignees, and reminder_log tables. Events reference cases by
+    their year/month/name folder triple; the rename-case and delete-item
+    endpoints now cascade so events follow renamed cases and are removed
+    with deleted ones.
+  * Interns get view-only calendar access: the page and read APIs are
+    allowed, all event writes remain blocked.
+  * Court-data auto-sync (eCourts/SCI/DHC) was researched and deliberately
+    left out: no free official API exists for practitioners (see
+    CALENDAR_PLAN.md for the research summary and options).
+  * Legal notice generator: the recipient block no longer ends with a
+    dangling comma — continuation commas are now placed on every line
+    except the last (previously, when no contact was given, the final
+    address line carried a trailing comma).
+  * Admin Settings: new "Records" tab with "Delete Legal Notice Entries"
+    and "Delete Internship Certificate Entries" tables. Each card carries a
+    red info icon whose hover tooltip explains that deletion also removes
+    the stored PDF (copies added into case folders are left untouched), and
+    every delete asks for confirmation. Backed by admin-only
+    DELETE /api/legal-notices/<id> and /api/certificates/<id> endpoints.
+  * Added CALENDAR_PLAN.md — the approved implementation plan for the
+    upcoming calendar / court-event tracker / daily digest system.
+  * Fixed the first-request bootstrap hook closing the app-context database
+    connection mid-request; the connection is now left to the standard
+    teardown, removing a latent double-open per first request.
+  * Tests: added tests/test_calendar.py (event CRUD, agenda/timeline
+    queries, appearance composite, rename/delete cascades, intern
+    read-only enforcement, digest content and idempotency, scheduler) and
+    tests/test_records.py (recipient block commas, record deletion
+    endpoints, permission checks); suite now 223 tests.
+
+ -- Izumi <swarajswarupaggarwal@gmail.com>  Fri, 10 Jul 2026 12:00:00 +0530
+
 case-organizer (4.5.3) stable; urgency=medium
 
   * Added a third user role, "intern", alongside admin and user. Interns may

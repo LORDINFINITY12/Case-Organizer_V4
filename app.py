@@ -22,12 +22,12 @@ from decimal import Decimal, InvalidOperation
 from io import BytesIO
 from html.parser import HTMLParser
 from contextlib import contextmanager, suppress
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 import time
 from functools import wraps
 from pathlib import Path
 import json
-from typing import Dict, Any, Iterable, Optional
+from typing import Dict, Any, Iterable, List, Optional
 
 # ---- Flask / Werkzeug ---------------------------------------------------
 from flask import (
@@ -68,6 +68,8 @@ from services.users import (
     cleanup_expired_sessions,
 )
 from services.email import send_email_async, EmailConfigError, clear_email_cache
+from services import calendar_events as cal
+from services.digest import send_daily_digest
 from services.rate_limit import is_rate_limited, record_success
 from services.messages import (
     create_message,
@@ -953,6 +955,12 @@ _INTERN_ALLOWED_ENDPOINTS = {
     "reset_password",
     "static",
     "ping",
+    # Calendar is view-only for interns: the page + read APIs are allowed,
+    # every write endpoint stays blocked by this default-deny guard.
+    "calendar_page",
+    "api_calendar_month",
+    "api_calendar_day",
+    "api_calendar_case_timeline",
 }
 
 
@@ -1217,10 +1225,13 @@ def _migrate_plaintext_smtp_password() -> None:
 
 # ---- First-request bootstrap (run once on startup) -----------------------
 def _bootstrap_app_state() -> None:
-    """Initialise the app DB connection and migrate legacy SMTP passwords."""
-    conn = get_app_db()
-    conn.close()
-    g.pop('app_db', None)
+    """Initialise the app DB (run migrations) and migrate legacy SMTP passwords.
+
+    The connection stays bound to the app context — the teardown hook closes
+    it.  Closing it here would kill a connection the rest of the request (or,
+    under pytest, the test's shared app context) is still using.
+    """
+    get_app_db()
     _migrate_plaintext_smtp_password()
 
 
@@ -2382,6 +2393,17 @@ def api_rename_case():
         return jsonify({"ok": False, "msg": "A case with that name already exists"}), 409
 
     source.rename(target)
+
+    # Keep calendar events pointing at the renamed case.  The filesystem is
+    # the source of truth — a cascade failure is logged, never surfaced.
+    if len(rel.parts) == 3:
+        try:
+            conn = get_app_db()
+            cal.rename_case_events(conn, rel.parts[0], rel.parts[1], rel.parts[2], new_name)
+            conn.commit()
+        except Exception:
+            log.exception("Calendar event cascade failed for rename of %s", rel)
+
     return jsonify({"ok": True, "new_path": str(target)})
 
 
@@ -2425,16 +2447,338 @@ def api_delete_item():
         if not target.exists():
             return jsonify({"ok": False, "msg": "Not found"}), 404
 
+        was_case_dir = target.is_dir() and depth == 3
         if target.is_dir():
             shutil.rmtree(target)
         else:
             target.unlink()
+
+        # A deleted case takes its calendar events with it (participants and
+        # assignees fall via ON DELETE CASCADE).  Log-only on failure.
+        if was_case_dir:
+            try:
+                conn = get_app_db()
+                cal.delete_case_events(conn, rel.parts[0], rel.parts[1], rel.parts[2])
+                conn.commit()
+            except Exception:
+                log.exception("Calendar event cascade failed for delete of %s", rel)
+
         return jsonify({"ok": True})
     except FileNotFoundError:
         return jsonify({"ok": False, "msg": "Not found"}), 404
     except Exception as e:
         log.error("Delete failed: %s", e, exc_info=True)
         return jsonify({"ok": False, "msg": "Delete failed."}), 500
+
+
+# ════════════════════════════════════════════════════════════════════
+# CALENDAR / COURT-EVENT TRACKER
+# ════════════════════════════════════════════════════════════════════
+#
+# Hearing/listing dates, filing deadlines, appearance records, and misc
+# deadlines per case.  Events reference cases by the filesystem path
+# triple (year, month, case_name) — see services/calendar_events.py.
+# Interns get read-only access (the write endpoints are simply not in
+# _INTERN_ALLOWED_ENDPOINTS, so the intern guard 403s them).
+# ════════════════════════════════════════════════════════════════════
+
+_CAL_MONTH_NAMES = {
+    "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+    "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
+}
+
+
+def _valid_iso_date(value: str) -> bool:
+    try:
+        datetime.strptime(value or "", "%Y-%m-%d")
+        return True
+    except ValueError:
+        return False
+
+
+def _validate_case_triple(year: str, month: str, case_name: str,
+                          must_exist: bool = False) -> Optional[str]:
+    """Return an error message, or None when the triple is acceptable."""
+    if not re.fullmatch(r"\d{4}", year or ""):
+        return "Invalid year"
+    if (month or "") not in _CAL_MONTH_NAMES:
+        return "Invalid month"
+    if not (case_name or "").strip():
+        return "Missing case name"
+    if "/" in case_name or "\\" in case_name:
+        return "Invalid case name"
+    if must_exist and not (FS_ROOT / year / month / case_name).is_dir():
+        return "Case directory not found"
+    return None
+
+
+def _validate_assignee_ids(raw_ids) -> tuple[list, Optional[str]]:
+    """Assignees must be active admin/user accounts (never interns)."""
+    ids = []
+    for raw in (raw_ids or []):
+        try:
+            uid = int(raw)
+        except (TypeError, ValueError):
+            return [], "Invalid assignee id"
+        user = get_user_by_id(uid)
+        if not user or not user["is_active"] or user["role"] == "intern":
+            return [], f"Invalid assignee: {raw}"
+        ids.append(uid)
+    return ids, None
+
+
+def _validate_participants(raw) -> tuple[list, Optional[str]]:
+    participants = []
+    for p in (raw or []):
+        if not isinstance(p, dict):
+            return [], "Invalid participant entry"
+        display_name = normalize_ws(p.get("display_name") or "")
+        user_id = p.get("user_id")
+        if user_id is not None:
+            user = get_user_by_id(user_id)
+            if not user:
+                return [], f"Unknown participant user: {user_id}"
+            display_name = display_name or user["email"]
+        if not display_name:
+            return [], "Participant name is required"
+        participants.append({"user_id": user_id, "display_name": display_name})
+    return participants, None
+
+
+@app.get("/calendar")
+@require_login
+def calendar_page():
+    return render_template(
+        "calendar.html",
+        hearing_purposes=cal.HEARING_PURPOSES,
+    )
+
+
+@app.get("/api/calendar/events")
+@require_login_api
+def api_calendar_month():
+    try:
+        year = int(request.args.get("year", ""))
+        month = int(request.args.get("month", ""))
+        if not (1 <= month <= 12 and 1900 <= year <= 2200):
+            raise ValueError
+    except ValueError:
+        return jsonify({"ok": False, "msg": "Invalid year/month"}), 400
+    events = cal.events_for_month(get_app_db(), year, month)
+    return jsonify({"ok": True, "events": events})
+
+
+@app.get("/api/calendar/day")
+@require_login_api
+def api_calendar_day():
+    date_iso = (request.args.get("date") or "").strip()
+    if not _valid_iso_date(date_iso):
+        return jsonify({"ok": False, "msg": "Invalid date"}), 400
+    return jsonify({"ok": True, "date": date_iso, **cal.day_agenda(get_app_db(), date_iso)})
+
+
+@app.get("/api/calendar/case-timeline")
+@require_login_api
+def api_calendar_case_timeline():
+    year = (request.args.get("year") or "").strip()
+    month = (request.args.get("month") or "").strip()
+    case_name = (request.args.get("case") or "").strip()
+    err = _validate_case_triple(year, month, case_name)
+    if err:
+        return jsonify({"ok": False, "msg": err}), 400
+    events = cal.case_timeline(get_app_db(), year, month, case_name)
+    case_exists = (FS_ROOT / year / month / case_name).is_dir() if FS_ROOT else False
+    return jsonify({"ok": True, "events": events, "case_exists": case_exists})
+
+
+@app.get("/api/calendar/assignable-users")
+@require_login_api
+def api_calendar_assignable_users():
+    users = [
+        {"id": u["id"], "email": u["email"]}
+        for u in list_users()
+        if u["is_active"] and u["role"] in ("admin", "user")
+    ]
+    return jsonify({"ok": True, "users": users})
+
+
+def _event_payload_error(data: dict, *, creating: bool) -> Optional[str]:
+    if creating:
+        if (data.get("event_type") or "") not in cal.VALID_EVENT_TYPES:
+            return "Invalid event type"
+    if "status" in data and data["status"] not in cal.VALID_STATUSES:
+        return "Invalid status"
+    for key in ("event_date", "filed_on"):
+        if data.get(key) and not _valid_iso_date(data[key]):
+            return f"Invalid {key}"
+    if creating and not data.get("event_date"):
+        return "Missing event_date"
+    return None
+
+
+@app.post("/api/calendar/events")
+@require_login_api
+def api_calendar_create_event():
+    data = request.get_json(silent=True) or {}
+    year = (data.get("case_year") or "").strip()
+    month = (data.get("case_month") or "").strip()
+    case_name = normalize_ws(data.get("case_name") or "")
+
+    err = (_validate_case_triple(year, month, case_name, must_exist=True)
+           or _event_payload_error(data, creating=True))
+    if err:
+        return jsonify({"ok": False, "msg": err}), 400
+
+    assignee_ids, err = _validate_assignee_ids(data.get("assignee_ids"))
+    if err:
+        return jsonify({"ok": False, "msg": err}), 400
+    participants, err = _validate_participants(data.get("participants"))
+    if err:
+        return jsonify({"ok": False, "msg": err}), 400
+
+    conn = get_app_db()
+    try:
+        event_id = cal.create_event(
+            conn,
+            event_type=data["event_type"],
+            case_year=year,
+            case_month=month,
+            case_name=case_name,
+            event_date=data["event_date"],
+            title=normalize_ws(data.get("title") or ""),
+            purpose=normalize_ws(data.get("purpose") or "") or None,
+            status=data.get("status", "pending"),
+            outcome=(data.get("outcome") or "").strip() or None,
+            filed_on=data.get("filed_on") or None,
+            notes=(data.get("notes") or "").strip() or None,
+            created_by=g.current_user["id"],
+            assignee_ids=assignee_ids,
+            participants=participants,
+        )
+        conn.commit()
+    except ValueError as exc:
+        return jsonify({"ok": False, "msg": str(exc)}), 400
+    return jsonify({"ok": True, "event": cal.get_event(conn, event_id)})
+
+
+@app.route("/api/calendar/events/<int:event_id>", methods=["PUT"])
+@require_login_api
+def api_calendar_update_event(event_id: int):
+    data = request.get_json(silent=True) or {}
+    err = _event_payload_error(data, creating=False)
+    if err:
+        return jsonify({"ok": False, "msg": err}), 400
+
+    conn = get_app_db()
+    if cal.get_event(conn, event_id) is None:
+        return jsonify({"ok": False, "msg": "Event not found"}), 404
+
+    try:
+        cal.update_event(conn, event_id, data)
+        if "assignee_ids" in data:
+            assignee_ids, err = _validate_assignee_ids(data.get("assignee_ids"))
+            if err:
+                return jsonify({"ok": False, "msg": err}), 400
+            cal.set_assignees(conn, event_id, assignee_ids)
+        if "participants" in data:
+            participants, err = _validate_participants(data.get("participants"))
+            if err:
+                return jsonify({"ok": False, "msg": err}), 400
+            cal.set_participants(conn, event_id, participants)
+        conn.commit()
+    except ValueError as exc:
+        return jsonify({"ok": False, "msg": str(exc)}), 400
+    return jsonify({"ok": True, "event": cal.get_event(conn, event_id)})
+
+
+@app.route("/api/calendar/events/<int:event_id>", methods=["DELETE"])
+@require_login_api
+def api_calendar_delete_event(event_id: int):
+    conn = get_app_db()
+    if not cal.delete_event(conn, event_id):
+        return jsonify({"ok": False, "msg": "Event not found"}), 404
+    conn.commit()
+    return jsonify({"ok": True})
+
+
+@app.post("/api/calendar/events/<int:event_id>/mark-filed")
+@require_login_api
+def api_calendar_mark_filed(event_id: int):
+    data = request.get_json(silent=True) or {}
+    filed_on = (data.get("filed_on") or date.today().isoformat()).strip()
+    if not _valid_iso_date(filed_on):
+        return jsonify({"ok": False, "msg": "Invalid filed_on"}), 400
+    conn = get_app_db()
+    try:
+        if not cal.mark_filed(conn, event_id, filed_on):
+            return jsonify({"ok": False, "msg": "Event not found"}), 404
+    except ValueError as exc:
+        return jsonify({"ok": False, "msg": str(exc)}), 400
+    conn.commit()
+    return jsonify({"ok": True, "event": cal.get_event(conn, event_id)})
+
+
+@app.post("/api/calendar/record-appearance")
+@require_login_api
+def api_calendar_record_appearance():
+    data = request.get_json(silent=True) or {}
+    year = (data.get("case_year") or "").strip()
+    month = (data.get("case_month") or "").strip()
+    case_name = normalize_ws(data.get("case_name") or "")
+
+    err = _validate_case_triple(year, month, case_name)
+    if err:
+        return jsonify({"ok": False, "msg": err}), 400
+    appearance_date = (data.get("appearance_date") or "").strip()
+    if not _valid_iso_date(appearance_date):
+        return jsonify({"ok": False, "msg": "Invalid appearance_date"}), 400
+    next_date = (data.get("next_date") or "").strip() or None
+    if next_date and not _valid_iso_date(next_date):
+        return jsonify({"ok": False, "msg": "Invalid next_date"}), 400
+
+    participants, err = _validate_participants(data.get("participants"))
+    if err:
+        return jsonify({"ok": False, "msg": err}), 400
+    if not participants:
+        return jsonify({"ok": False, "msg": "At least one participant is required"}), 400
+    assignee_ids, err = _validate_assignee_ids(data.get("assignee_ids"))
+    if err:
+        return jsonify({"ok": False, "msg": err}), 400
+
+    hearing_event_id = data.get("hearing_event_id")
+    conn = get_app_db()
+    if hearing_event_id is not None:
+        hearing = cal.get_event(conn, int(hearing_event_id))
+        if hearing is None or hearing["event_type"] != "hearing":
+            return jsonify({"ok": False, "msg": "Hearing event not found"}), 404
+
+    result = cal.record_appearance(
+        conn,
+        case_year=year,
+        case_month=month,
+        case_name=case_name,
+        appearance_date=appearance_date,
+        participants=participants,
+        outcome=(data.get("outcome") or "").strip() or None,
+        notes=(data.get("notes") or "").strip() or None,
+        hearing_event_id=int(hearing_event_id) if hearing_event_id is not None else None,
+        next_date=next_date,
+        next_purpose=normalize_ws(data.get("next_purpose") or "") or None,
+        assignee_ids=assignee_ids,
+        created_by=g.current_user["id"],
+    )
+    conn.commit()
+    return jsonify({"ok": True, **result})
+
+
+@app.post("/api/calendar/send-test-digest")
+@require_admin_api
+def api_calendar_send_test_digest():
+    try:
+        result = send_daily_digest(force=True)
+    except EmailConfigError as exc:
+        return jsonify({"ok": False, "msg": f"SMTP is not configured: {exc}"}), 400
+    return jsonify({"ok": True, **result})
 
 
 # ---- Directory Search --------------------------
@@ -5404,6 +5748,30 @@ def api_certificate_margins():
     return jsonify({"ok": True, "margins": _certificate_margin_guidance(letterhead_id)})
 
 
+# ---- DELETE /api/certificates/<id> — remove a certificate record ----------
+@app.delete("/api/certificates/<int:cid>")
+@require_admin_api
+def api_certificate_delete(cid: int):
+    """Delete a certificate registry entry and its stored PDF (admin only)."""
+    conn = get_app_db()
+    row = conn.execute("SELECT file_path FROM certificates WHERE id = ?", (cid,)).fetchone()
+    if not row:
+        return jsonify({"ok": False, "msg": "Certificate not found."}), 404
+
+    # Remove the stored PDF when it is still inside FS_ROOT; the registry row
+    # is deleted regardless (the file may have been moved or already removed).
+    try:
+        disk_path = _safe_path(Path(row["file_path"]), FS_ROOT)
+        if disk_path.is_file():
+            disk_path.unlink()
+    except (ValueError, OSError) as exc:
+        log.warning("Certificate %s file cleanup skipped: %s", cid, exc)
+
+    conn.execute("DELETE FROM certificates WHERE id = ?", (cid,))
+    conn.commit()
+    return jsonify({"ok": True})
+
+
 # ════════════════════════════════════════════════════════════════════
 # VAKALATNAMA LIBRARY
 # ════════════════════════════════════════════════════════════════════
@@ -5752,6 +6120,40 @@ def _register_times_new_roman() -> str:
     return "TimesNewRoman"
 
 
+def _legal_notice_recipient_lines(notice: Dict[str, Any]) -> List[str]:
+    """Build the recipient block lines ("To," + name/relation/address/contact).
+
+    Continuation commas go on every line except the last, so the block never
+    ends with a dangling comma (e.g. when no contact is given the final
+    address line used to end with one).
+    """
+    def _esc(v: Any) -> str:
+        v = (str(v or "")).strip()
+        return safe_text(v) if v else ""
+
+    lines = ["To,"]
+    content_lines = []
+    name = (notice.get("recipient_name") or "").strip()
+    if name:
+        content_lines.append(f"<b>{_esc(name)}</b>")
+    relation = " ".join(
+        p for p in [
+            (notice.get("relation_type") or "").strip(),
+            (notice.get("relation_value") or "").strip(),
+        ] if p
+    ).strip()
+    if relation:
+        content_lines.append(_esc(relation))
+    for key in ("address_line1", "address_line2"):
+        val = (notice.get(key) or "").strip()
+        if val:
+            content_lines.append(_esc(val))
+    contact = (notice.get("contact") or "").strip()
+    if contact:
+        content_lines.append(_esc(contact))
+    return lines + [f"{ln}," for ln in content_lines[:-1]] + content_lines[-1:]
+
+
 def generate_legal_notice_pdf(uploaded_bytes: bytes, notice: Dict[str, Any]) -> BytesIO:
     """Stamp an uploaded notice PDF with a header band (page 1) + letterhead.
 
@@ -5814,27 +6216,7 @@ def generate_legal_notice_pdf(uploaded_bytes: bytes, notice: Dict[str, Any]) -> 
         v = (str(v or "")).strip()
         return safe_text(v) if v else ""
 
-    # Left — recipient block
-    recipient_html_lines = ["To,"]
-    name = (notice.get("recipient_name") or "").strip()
-    if name:
-        recipient_html_lines.append(f"<b>{_esc(name)}</b>,")
-    relation = " ".join(
-        p for p in [
-            (notice.get("relation_type") or "").strip(),
-            (notice.get("relation_value") or "").strip(),
-        ] if p
-    ).strip()
-    if relation:
-        recipient_html_lines.append(f"{_esc(relation)},")
-    for key in ("address_line1", "address_line2"):
-        val = (notice.get(key) or "").strip()
-        if val:
-            recipient_html_lines.append(f"{_esc(val)},")
-    contact = (notice.get("contact") or "").strip()
-    if contact:
-        recipient_html_lines.append(_esc(contact))
-    left_html = "<br/>".join(recipient_html_lines)
+    left_html = "<br/>".join(_legal_notice_recipient_lines(notice))
 
     # Right — notice number + date
     right_lines = []
@@ -6008,6 +6390,32 @@ def api_legal_notice_next_number():
     except Exception as exc:
         return jsonify({"ok": False, "msg": f"Unable to determine notice number: {exc}"}), 500
     return jsonify({"ok": True, "notice_number": suggestion})
+
+
+# ---- DELETE /api/legal-notices/<id> — remove a notice record --------------
+@app.delete("/api/legal-notices/<int:nid>")
+@require_admin_api
+def api_legal_notice_delete(nid: int):
+    """Delete a legal notice registry entry and its stored PDF (admin only).
+
+    Copies previously added into case folders are separate files and are
+    intentionally left untouched.
+    """
+    conn = get_app_db()
+    row = conn.execute("SELECT file_path FROM legal_notices WHERE id = ?", (nid,)).fetchone()
+    if not row:
+        return jsonify({"ok": False, "msg": "Legal notice not found."}), 404
+
+    try:
+        disk_path = _safe_path(Path(row["file_path"]), FS_ROOT)
+        if disk_path.is_file():
+            disk_path.unlink()
+    except (ValueError, OSError) as exc:
+        log.warning("Legal notice %s file cleanup skipped: %s", nid, exc)
+
+    conn.execute("DELETE FROM legal_notices WHERE id = ?", (nid,))
+    conn.commit()
+    return jsonify({"ok": True})
 
 
 # ---- POST /api/legal-notices/add-to-case — copy a notice into a case -----
@@ -6543,6 +6951,18 @@ def admin_settings():
                 clear_email_cache()
                 flash("SMTP configuration updated.", "success")
 
+        elif form_name == "digest":
+            enabled = request.form.get("digest_enabled") in {"1", "true", "on"}
+            send_time = (request.form.get("digest_send_time") or "").strip()
+            try:
+                datetime.strptime(send_time, "%H:%M")
+            except ValueError:
+                flash("Digest time must be HH:MM (e.g. 07:00).", "error")
+            else:
+                settings_manager.set("digest_enabled", enabled)
+                settings_manager.set("digest_send_time", send_time)
+                flash("Daily digest settings updated.", "success")
+
         elif form_name == "create_user":
             email = normalize_ws(request.form.get("user_email") or "")
             role = (request.form.get("user_role") or "user").lower()
@@ -6676,6 +7096,14 @@ def admin_settings():
     active_admins = [u for u in users if u['role'] == 'admin' and u['is_active']]
     last_active_admin_id = active_admins[0]['id'] if len(active_admins) == 1 else None
 
+    conn = get_app_db()
+    legal_notice_records = conn.execute(
+        "SELECT id, notice_number, recipient_name, created_at FROM legal_notices ORDER BY id DESC"
+    ).fetchall()
+    certificate_records = conn.execute(
+        "SELECT id, certificate_number, intern_name, created_at FROM certificates ORDER BY id DESC"
+    ).fetchall()
+
     try:
         return render_template(
             "settings.html",
@@ -6684,6 +7112,10 @@ def admin_settings():
             smtp_password_configured=smtp_password_configured,
             users=users,
             last_active_admin_id=last_active_admin_id,
+            legal_notice_records=legal_notice_records,
+            certificate_records=certificate_records,
+            digest_enabled=bool(settings_manager.get("digest_enabled", True)),
+            digest_send_time=str(settings_manager.get("digest_send_time", "07:00")),
         )
     except Exception:
         return render_template_string("""
@@ -6742,14 +7174,22 @@ if __name__ == "__main__":
     _port = int(os.environ.get("CASEORG_PORT", os.environ.get("FLASK_PORT", "5000")))
     _debug = os.environ.get("FLASK_DEBUG", "0") == "1"
 
+    from services.scheduler import start_digest_scheduler
+
     if _debug:
         log.debug("URL map:")
         for r in app.url_map.iter_rules():
             methods = ",".join(sorted(m for m in r.methods if m not in {"HEAD", "OPTIONS"}))
             log.debug("  %-22s [%s]", r.rule, methods)
+        # The dev server forks a reloader child; only that child serves
+        # requests, so only it may run the digest scheduler (avoids a
+        # duplicate thread in the watcher process).
+        if os.environ.get("WERKZEUG_RUN_MAIN") == "true":
+            start_digest_scheduler()
         app.run(host=_host, port=_port, debug=True)
     else:
         from waitress import serve
+        start_digest_scheduler()
         print(f"Case Organizer serving on http://{_host}:{_port}")
         serve(app, host=_host, port=_port, threads=16)
 

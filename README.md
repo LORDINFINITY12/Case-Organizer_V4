@@ -22,7 +22,25 @@ Version 4 continues that foundation with a fully rebuilt Case Law module, a stru
 
 ## Screenshots
 
-_Current UI (v4.5.2, default dark theme)._
+_Current UI (v4.6, default dark theme)._
+
+### New in v4.6 — Calendar & court-event tracker
+
+**A full calendar and per-case event tracker** — hearing / listing dates, filing deadlines (with mark-as-filed), appearance records, and limitation deadlines, all colour-coded on a month grid that scales to fill the window. A resizable, repositionable sidebar (side and width persisted per browser) shows either the day agenda or a per-case timeline:
+
+![Calendar month view with the day agenda](docs/screenshots/calendar-month-day.png)
+
+| Per-case timeline (past → future) | Add event — search a case, dd/mm/yyyy dates, digest assignees |
+| --- | --- |
+| ![Per-case timeline](docs/screenshots/calendar-case-timeline.png) | ![Add event dialog](docs/screenshots/calendar-add-event.png) |
+
+**Record Appearance** captures who appeared (team members or outside counsel by name) and the outcome; entering the next date auto-creates the linked next hearing. **Admin → Records** deletes stored Legal Notice and Certificate entries, with a hover note and a delete confirmation:
+
+| Record appearance → auto next hearing | Records — delete notice / certificate entries |
+| --- | --- |
+| ![Record appearance dialog](docs/screenshots/calendar-record-appearance.png) | ![Records deletion tab](docs/screenshots/settings-records.png) |
+
+A **daily digest email** (configurable send time, opt-in per install) lists each morning's hearings, filings due, overdue items, and tomorrow's matters; events assigned to a user are called out in their copy. Interns get **view-only** access to the calendar.
 
 ### New in v4.5.2
 
@@ -67,10 +85,12 @@ _Current UI (v4.5.2, default dark theme)._
 ### Administration
 - Admins can:
   - Create users with temporary credentials.  
-  - Promote or demote roles between *admin* and *standard*.  
+  - Assign roles between *admin*, *standard user*, and *intern* — interns are restricted to the home page, their account, the PDF tools, internal mail, and view-only calendar access.  
   - Edit or delete user accounts.  
   - Update or relocate the root storage path live.  
-  - Delete server files directly from the dashboard.
+  - Delete server files directly from the dashboard.  
+  - Delete generated **Legal Notice** and **Certificate** registry entries (and their stored PDFs) from the *Records* tab.  
+  - Configure the **daily digest** email (send time, on/off, test send).
 
 ![Admin Account Demo](https://raw.githubusercontent.com/LORDINFINITY12/Case-Organizer_V3/main/static/img/Admin-Account-Demo.png)
 
@@ -131,6 +151,15 @@ _Current UI (v4.5.2, default dark theme)._
   (DDMMYYYY) TYPE DOMAIN Petitioner v. Respondent.ext
   ```
   Reference files keep original names with case suffix.
+
+### Calendar & Court-Event Tracker
+- **Per-case events** on a full-viewport month grid with colour-coded chips: hearings/listings (with purpose), filing deadlines, appearance records, and other deadlines (e.g. limitation periods). Overdue, unfiled items are flagged.
+- **Day agenda** — for any date, what is *listed*, *due*, *filed*, and *who appeared*; **per-case timeline** shows the full history (past → future) with a "today" divider, reachable by the same case-name search as Manage Case or by year/month browsing.
+- **Record Appearance** — a single flow to note who appeared (team members or outside counsel by name) and the outcome; entering the next date auto-creates and links the next hearing.
+- **Filing lifecycle** — a filing carries a due date and is later marked filed on its actual date; "mark filed" moves it into the day's *Filed* bucket.
+- **Resizable sidebar** — the Day/Case panel can be widened by dragging and moved to either side; the choice is saved per browser.
+- **Daily digest email** — an in-process scheduler sends every morning (send time and on/off configurable under *Settings → System → Daily Digest*, with a "Send test digest now" button) to active admins and users, listing today's hearings, filings due, overdue items, and tomorrow's matters. Events can be **assigned** to users, who are called out in their own copy. Idempotent per day, so restarts never double-send.
+- All dialog dates use the Indian **dd/mm/yyyy** format with a calendar-picker button; events follow a renamed case and are removed with a deleted one.
 
 ### Invoicing
 - Full PDF invoice generator using **ReportLab**.  

@@ -72,6 +72,7 @@
         <button class="glow-tab"        role="tab" aria-selected="false" aria-controls="panel-users"       data-tab="users">Users</button>
         <button class="glow-tab"        role="tab" aria-selected="false" aria-controls="panel-letterheads" data-tab="letterheads">Letterheads</button>
         <button class="glow-tab"        role="tab" aria-selected="false" aria-controls="panel-vakalatnama" data-tab="vakalatnama">Vakalatnama</button>
+        <button class="glow-tab"        role="tab" aria-selected="false" aria-controls="panel-records"     data-tab="records">Records</button>
       </nav>
 
       <!-- ============ Panel: System ============ -->
@@ -116,6 +117,28 @@
 
               <button type="submit" class="btn-primary">Save SMTP Settings</button>
             </form>
+          </div>
+
+          <div class="settings-card">
+            <h2>Daily Digest</h2>
+            <p class="form-help">Every morning, active admins and users receive an email listing today's hearings, filings due, overdue items, and tomorrow's matters. Interns are excluded.</p>
+            <form method="post">
+              {{ csrf_input }}
+              <input type="hidden" name="form_name" value="digest">
+              <label class="checkbox-inline">
+                <input type="checkbox" name="digest_enabled" value="1" {% if digest_enabled %}checked{% endif %}>
+                Send the daily digest email
+              </label>
+
+              <label for="digest_send_time">Send time</label>
+              <input id="digest_send_time" name="digest_send_time" type="time" value="{{ digest_send_time }}" required>
+
+              <button type="submit" class="btn-primary">Save Digest Settings</button>
+            </form>
+            <button type="button" id="send-test-digest" class="btn-secondary" style="margin-top:10px;">
+              <i class="fa-solid fa-paper-plane"></i> Send test digest now
+            </button>
+            <p class="form-help" id="test-digest-result" hidden></p>
           </div>
         </div>
       </div>
@@ -258,6 +281,83 @@
         </div>
       </div>
 
+      <!-- ============ Panel: Records ============ -->
+      <div class="glow-panel" id="panel-records" role="tabpanel" hidden>
+        <div class="settings-grid">
+          <section class="settings-card">
+            <div class="settings-card-head">
+              <h2>Delete Legal Notice Entries</h2>
+              <span class="info-tip" tabindex="0" aria-label="Deletion notice"
+                    data-tip="Deleting an entry also deletes its stored PDF. Copies added to case folders stay.">
+                <i class="fa-solid fa-circle-info"></i>
+              </span>
+            </div>
+            <div class="table-wrapper">
+              <table class="settings-table">
+                <thead>
+                  <tr><th>Number</th><th>Recipient</th><th>Created</th><th></th></tr>
+                </thead>
+                <tbody>
+                  {% for rec in legal_notice_records %}
+                    <tr data-record-row="ln-{{ rec.id }}">
+                      <td>{{ rec.notice_number }}</td>
+                      <td>{{ rec.recipient_name }}</td>
+                      <td>{{ rec.created_at }}</td>
+                      <td>
+                        <button type="button" class="icon-btn icon-danger record-delete-btn"
+                                data-record-kind="legal-notices" data-record-id="{{ rec.id }}"
+                                data-record-label="notice {{ rec.notice_number }}"
+                                title="Delete notice record">
+                          <i class="fa-solid fa-trash"></i>
+                        </button>
+                      </td>
+                    </tr>
+                  {% else %}
+                    <tr><td colspan="4" class="empty-state">No legal notices recorded.</td></tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+          </section>
+
+          <section class="settings-card">
+            <div class="settings-card-head">
+              <h2>Delete Internship Certificate Entries</h2>
+              <span class="info-tip" tabindex="0" aria-label="Deletion notice"
+                    data-tip="Deleting an entry also deletes its stored PDF. This action cannot be undone.">
+                <i class="fa-solid fa-circle-info"></i>
+              </span>
+            </div>
+            <div class="table-wrapper">
+              <table class="settings-table">
+                <thead>
+                  <tr><th>Number</th><th>Intern</th><th>Created</th><th></th></tr>
+                </thead>
+                <tbody>
+                  {% for rec in certificate_records %}
+                    <tr data-record-row="cert-{{ rec.id }}">
+                      <td>{{ rec.certificate_number }}</td>
+                      <td>{{ rec.intern_name }}</td>
+                      <td>{{ rec.created_at }}</td>
+                      <td>
+                        <button type="button" class="icon-btn icon-danger record-delete-btn"
+                                data-record-kind="certificates" data-record-id="{{ rec.id }}"
+                                data-record-label="certificate {{ rec.certificate_number }}"
+                                title="Delete certificate record">
+                          <i class="fa-solid fa-trash"></i>
+                        </button>
+                      </td>
+                    </tr>
+                  {% else %}
+                    <tr><td colspan="4" class="empty-state">No certificates recorded.</td></tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+          </section>
+        </div>
+      </div>
+
     </main>
   </div>
 
@@ -305,6 +405,60 @@
       d.textContent = s;
       return d.innerHTML;
     }
+
+    /* ---- Daily Digest: send-test button ---- */
+    const testDigestBtn = document.getElementById('send-test-digest');
+    testDigestBtn?.addEventListener('click', async () => {
+      const out = document.getElementById('test-digest-result');
+      testDigestBtn.disabled = true;
+      out.hidden = false;
+      out.textContent = 'Sending…';
+      try {
+        const r = await fetch('/api/calendar/send-test-digest', {
+          method: 'POST',
+          headers: { 'X-CSRF-Token': csrf },
+        });
+        const data = await r.json().catch(() => ({ ok: false }));
+        if (data.ok) {
+          out.textContent = data.empty
+            ? 'Nothing scheduled today — no email was sent.'
+            : `Sent to ${data.sent} recipient(s)` + (data.failed ? `, ${data.failed} failed.` : '.');
+        } else {
+          out.textContent = data.msg || 'Sending failed.';
+        }
+      } catch (_) {
+        out.textContent = 'Sending failed.';
+      }
+      testDigestBtn.disabled = false;
+    });
+
+    /* ---- Records tab: delete legal notice / certificate entries ---- */
+    document.querySelectorAll('.record-delete-btn').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const kind = btn.dataset.recordKind;
+        const id = btn.dataset.recordId;
+        const label = btn.dataset.recordLabel || 'this entry';
+        if (!kind || !id) return;
+        if (!confirm(`Do you really want to delete ${label}?`)) return;
+        btn.disabled = true;
+        try {
+          const r = await fetch(`/api/${kind}/${id}`, {
+            method: 'DELETE',
+            headers: { 'X-CSRF-Token': csrf },
+          });
+          const data = await r.json().catch(() => ({ ok: false }));
+          if (data.ok) {
+            btn.closest('tr')?.remove();
+          } else {
+            alert(data.msg || 'Delete failed.');
+            btn.disabled = false;
+          }
+        } catch (_) {
+          alert('Delete failed.');
+          btn.disabled = false;
+        }
+      });
+    });
 
     /* ---- Letterheads CRUD ---- */
     const lhList = document.getElementById('letterheads-list');

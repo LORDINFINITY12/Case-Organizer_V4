@@ -135,11 +135,15 @@
       <!-- Intern landing: case tools are hidden; only PDF tools + mail apply -->
       <section class="intern-welcome" aria-label="Welcome">
         <h1 class="intern-welcome-title">Welcome, {{ current_user.email }}</h1>
-        <p class="intern-welcome-sub">Your account has access to the PDF editing tools and internal mail.</p>
+        <p class="intern-welcome-sub">Your account has access to the PDF editing tools, the calendar, and internal mail.</p>
         <div class="cards-grid">
           <a href="{{ url_for('bento_tools') }}" class="card big selectable" aria-label="PDF Editing Tools">
             <div class="icon"><i class="fa-solid fa-file-pdf"></i></div>
             <div class="label">PDF Editing Tools</div>
+          </a>
+          <a href="{{ url_for('calendar_page') }}" class="card big selectable" aria-label="Calendar">
+            <div class="icon"><i class="fa-solid fa-calendar-days"></i></div>
+            <div class="label">Calendar</div>
           </a>
           <a href="{{ url_for('messages_home') }}" class="card big selectable" aria-label="Mail">
             <div class="icon"><i class="fa-solid fa-envelope"></i></div>

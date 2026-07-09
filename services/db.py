@@ -14,7 +14,7 @@ from services.settings import settings_manager
 
 
 # Global schema version for the application database.
-_SCHEMA_VERSION = 7
+_SCHEMA_VERSION = 8
 
 
 def _app_db_path() -> Path:
@@ -71,6 +71,10 @@ def _ensure_schema(conn: sqlite3.Connection) -> None:
     if current_version < 7:
         _migrate_to_v7(conn)
         current_version = 7
+
+    if current_version < 8:
+        _migrate_to_v8(conn)
+        current_version = 8
 
     if current_version != _SCHEMA_VERSION:
         # Placeholder for future migrations.
@@ -418,17 +422,123 @@ def _migrate_to_v7(conn: sqlite3.Connection) -> None:
     )
 
 
+def _migrate_to_v8(conn: sqlite3.Connection) -> None:
+    # Calendar / court-event tracker.  Cases have no database rows — they are
+    # filesystem directories — so events reference them by the path triple
+    # (case_year, case_month, case_name).  related_event_id semantics by type:
+    # on a 'hearing' it points at the next hearing it was adjourned to; on an
+    # 'appearance' it points at the hearing the appearance records.
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS case_events (
+            id               INTEGER PRIMARY KEY AUTOINCREMENT,
+            event_type       TEXT NOT NULL CHECK(event_type IN ('hearing','filing','appearance','deadline')),
+            case_year        TEXT NOT NULL,
+            case_month       TEXT NOT NULL,
+            case_name        TEXT NOT NULL,
+            event_date       TEXT NOT NULL,
+            title            TEXT NOT NULL DEFAULT '',
+            purpose          TEXT,
+            status           TEXT NOT NULL DEFAULT 'pending'
+                             CHECK(status IN ('pending','done','adjourned','cancelled')),
+            outcome          TEXT,
+            filed_on         TEXT,
+            related_event_id INTEGER REFERENCES case_events(id) ON DELETE SET NULL,
+            notes            TEXT,
+            created_by       INTEGER REFERENCES users(id) ON DELETE SET NULL,
+            created_at       TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at       TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        )
+        """
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_case_events_date ON case_events(event_date)"
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_case_events_case "
+        "ON case_events(case_year, case_month, case_name, event_date)"
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_case_events_status ON case_events(status, event_date)"
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_case_events_filed_on "
+        "ON case_events(filed_on) WHERE filed_on IS NOT NULL"
+    )
+    conn.execute(
+        """
+        CREATE TRIGGER IF NOT EXISTS trg_case_events_updated_at
+        AFTER UPDATE ON case_events
+        BEGIN
+            UPDATE case_events SET updated_at = CURRENT_TIMESTAMP WHERE id = NEW.id;
+        END;
+        """
+    )
+
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS event_participants (
+            id           INTEGER PRIMARY KEY AUTOINCREMENT,
+            event_id     INTEGER NOT NULL REFERENCES case_events(id) ON DELETE CASCADE,
+            user_id      INTEGER REFERENCES users(id) ON DELETE SET NULL,
+            display_name TEXT NOT NULL CHECK(display_name <> '')
+        )
+        """
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_event_participants_event ON event_participants(event_id)"
+    )
+
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS event_assignees (
+            event_id INTEGER NOT NULL REFERENCES case_events(id) ON DELETE CASCADE,
+            user_id  INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            PRIMARY KEY (event_id, user_id)
+        )
+        """
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_event_assignees_user ON event_assignees(user_id)"
+    )
+
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS reminder_log (
+            digest_date      TEXT PRIMARY KEY,
+            sent_at          TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            recipients_count INTEGER NOT NULL DEFAULT 0,
+            detail           TEXT
+        )
+        """
+    )
+
+    conn.execute(
+        "INSERT INTO app_meta(key, value) VALUES('schema_version', '8') "
+        "ON CONFLICT(key) DO UPDATE SET value = excluded.value"
+    )
+
+
 def get_app_db() -> sqlite3.Connection:
     """Return a connection to the application database bound to Flask's context."""
     if 'app_db' not in g:
-        db_path = _app_db_path()
-        _ensure_parent_dir(db_path)
-        conn = sqlite3.connect(db_path)
-        conn.row_factory = sqlite3.Row
-        conn.execute('PRAGMA foreign_keys = ON')
-        _ensure_schema(conn)
-        g.app_db = conn
+        g.app_db = open_app_db_direct()
     return g.app_db
+
+
+def open_app_db_direct() -> sqlite3.Connection:
+    """Open an application-DB connection NOT bound to Flask's context.
+
+    For background threads (e.g. the digest scheduler) that run outside any
+    app context — the caller owns the connection and must close it.
+    """
+    db_path = _app_db_path()
+    _ensure_parent_dir(db_path)
+    conn = sqlite3.connect(db_path)
+    conn.row_factory = sqlite3.Row
+    conn.execute('PRAGMA foreign_keys = ON')
+    _ensure_schema(conn)
+    return conn
 
 
 def close_app_db(_: Optional[BaseException]) -> None:
