@@ -177,6 +177,20 @@ def set_user_active(user_id: int, active: bool) -> None:
     conn.commit()
 
 
+def delete_user(user_id: int) -> bool:
+    """Permanently delete a user. Returns True if a row was removed.
+
+    Relies on the schema's foreign keys (foreign_keys is ON for every
+    connection): the user's sessions, messages, password-reset tokens and
+    event assignments cascade away, while authored invoices, certificates,
+    notices and calendar events keep their rows with the author set to NULL.
+    """
+    conn = get_app_db()
+    cur = conn.execute("DELETE FROM users WHERE id = ?", (user_id,))
+    conn.commit()
+    return cur.rowcount > 0
+
+
 def count_admins(active_only: bool = True) -> int:
     conn = get_app_db()
     if active_only:

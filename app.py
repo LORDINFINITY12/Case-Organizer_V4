@@ -59,6 +59,7 @@ from services.users import (
     mark_user_login,
     list_users,
     set_user_active,
+    delete_user,
     update_user_email,
     update_user_role,
     create_session,
@@ -7073,6 +7074,26 @@ def admin_settings():
                         flash(f"Failed to send reset email: {exc}", "error")
                     else:
                         flash("Password reset email sent.", "success")
+
+        elif form_name == "delete_user":
+            try:
+                target_id = int(request.form.get("user_id", "0"))
+            except ValueError:
+                target_id = 0
+            target_user = get_user_by_id(target_id)
+            if not target_user:
+                flash("User not found.", "error")
+            elif target_user['id'] == g.current_user['id']:
+                flash("You cannot delete your own account.", "error")
+            elif target_user['role'] == 'admin' and target_user['is_active'] and count_admins(active_only=True) <= 1:
+                flash("At least one active administrator must remain.", "error")
+            else:
+                try:
+                    invalidate_user_sessions(target_id)
+                    delete_user(target_id)
+                    flash(f"User {target_user['email']} deleted.", "success")
+                except Exception as exc:
+                    flash(f"Failed to delete user: {exc}", "error")
 
         else:
             flash("Unknown action submitted.", "error")

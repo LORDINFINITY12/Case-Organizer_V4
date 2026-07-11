@@ -217,17 +217,36 @@
                       {% if user.role == 'admin' and user.is_active and last_active_admin_id == user.id %}
                         {% set disable_toggle = True %}
                       {% endif %}
-                      <form method="post" style="display:inline-block;">
-                        {{ csrf_input }}
-                        <input type="hidden" name="form_name" value="toggle_user">
-                        <input type="hidden" name="user_id" value="{{ user.id }}">
-                        <input type="hidden" name="new_state" value="{{ 0 if user.is_active else 1 }}">
-                        <button type="submit"
-                                class="{% if user.is_active %}btn-danger{% else %}btn-secondary{% endif %}"
-                                {% if disable_toggle %}disabled{% endif %}>
-                          {{ 'Deactivate' if user.is_active else 'Activate' }}
-                        </button>
-                      </form>
+                      {% set disable_delete = False %}
+                      {% if user.id == current_user.id %}
+                        {% set disable_delete = True %}
+                      {% endif %}
+                      {% if user.role == 'admin' and user.is_active and last_active_admin_id == user.id %}
+                        {% set disable_delete = True %}
+                      {% endif %}
+                      <div class="settings-user-actions">
+                        <form method="post" class="settings-user-action">
+                          {{ csrf_input }}
+                          <input type="hidden" name="form_name" value="toggle_user">
+                          <input type="hidden" name="user_id" value="{{ user.id }}">
+                          <input type="hidden" name="new_state" value="{{ 0 if user.is_active else 1 }}">
+                          <button type="submit"
+                                  class="{% if user.is_active %}btn-danger{% else %}btn-secondary{% endif %}"
+                                  {% if disable_toggle %}disabled{% endif %}>
+                            {{ 'Deactivate' if user.is_active else 'Activate' }}
+                          </button>
+                        </form>
+                        <form method="post" class="settings-user-action">
+                          {{ csrf_input }}
+                          <input type="hidden" name="form_name" value="delete_user">
+                          <input type="hidden" name="user_id" value="{{ user.id }}">
+                          <button type="submit" class="btn-danger"
+                                  data-confirm="Permanently delete {{ user.email }}? This removes the account and all of its sessions and messages, and cannot be undone."
+                                  {% if disable_delete %}disabled{% endif %}>
+                            Delete
+                          </button>
+                        </form>
+                      </div>
                     </td>
                   </tr>
                 {% endfor %}

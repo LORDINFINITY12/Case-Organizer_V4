@@ -10,6 +10,7 @@ from services.users import (
     authenticate_user,
     set_user_password,
     set_user_active,
+    delete_user,
     update_user_email,
     update_user_role,
     list_users,
@@ -18,6 +19,8 @@ from services.users import (
     create_password_reset_token,
     get_password_reset,
     consume_password_reset,
+    create_session,
+    validate_session,
     UserExistsError,
     EmailInUseError,
     normalize_email,
@@ -148,3 +151,56 @@ class TestListAndCount:
     def test_count_admins(self, db):
         create_user("cadm@test.com", "Pass1234!", role="admin")
         assert count_admins() >= 1
+
+
+class TestDeleteUser:
+
+    def test_delete_removes_user(self, db):
+        uid = create_user("del@test.com", "Pass1234!")
+        assert delete_user(uid) is True
+        assert get_user_by_id(uid) is None
+
+    def test_delete_nonexistent_returns_false(self, db):
+        assert delete_user(424242) is False
+
+    def test_delete_cascades_sessions(self, db):
+        uid = create_user("delsess@test.com", "Pass1234!")
+        token = create_session(uid)
+        assert validate_session(token) == uid
+        assert delete_user(uid) is True
+        assert validate_session(token) is None
+
+
+class TestDeleteUserRoute:
+    """The admin Settings -> delete_user action and its guards."""
+
+    def _login_admin(self, client):
+        admin_id = create_user("routeadmin@test.com", "AdminPass1!", role="admin")
+        token = create_session(admin_id)
+        with client.session_transaction() as sess:
+            sess["session_token"] = token
+            sess["user_id"] = admin_id
+            sess["user_role"] = "admin"
+            sess["user_email"] = "routeadmin@test.com"
+            sess["_csrf_token"] = "test-csrf-token"
+        return admin_id
+
+    def _post_delete(self, client, target_id):
+        return client.post("/settings", data={
+            "form_name": "delete_user",
+            "user_id": str(target_id),
+            "_csrf_token": "test-csrf-token",
+        }, follow_redirects=False)
+
+    def test_admin_can_delete_other_user(self, client, db):
+        self._login_admin(client)
+        victim = create_user("victim@test.com", "Pass1234!")
+        resp = self._post_delete(client, victim)
+        assert resp.status_code in (200, 302)
+        assert get_user_by_id(victim) is None
+
+    def test_cannot_delete_self(self, client, db):
+        admin_id = self._login_admin(client)
+        resp = self._post_delete(client, admin_id)
+        assert resp.status_code in (200, 302)
+        assert get_user_by_id(admin_id) is not None

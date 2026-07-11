@@ -922,6 +922,19 @@ input, select, textarea {
 .settings-inline-form button {
     flex: 0 0 auto;
 }
+/* Deactivate / Delete sit side by side and share the row equally. */
+.settings-user-actions {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 6px;
+}
+.settings-user-actions .settings-user-action {
+    flex: 1 1 0;
+    display: flex;
+}
+.settings-user-actions .settings-user-action button {
+    width: 100%;
+}
 .table-wrapper {
     overflow-x: auto;
 }

@@ -1,3 +1,41 @@
+case-organizer (4.6.2) stable; urgency=medium
+
+  * Admin Settings: administrators can now permanently delete a user
+    account, not just deactivate it. A "Delete" button sits beside
+    "Deactivate/Activate" in each user row — the two share the row width
+    equally — and asks for confirmation before removing the account. The
+    delete is guarded so you cannot remove your own account or the last
+    active administrator; deleting a user also revokes their sessions and
+    (via the schema's foreign keys) removes their messages, password-reset
+    tokens and event assignments, while invoices, certificates, notices and
+    calendar events they authored are kept with the author cleared. Backed
+    by the admin-only Settings "delete_user" action and a new
+    services.users.delete_user() helper.
+  * Tests: added delete_user service tests (removal, cascade of sessions,
+    missing-user no-op) and Settings route guard tests (admin can delete
+    another user; self-deletion is refused).
+
+ -- Izumi <swarajswarupaggarwal@gmail.com>  Sat, 11 Jul 2026 14:00:00 +0530
+
+case-organizer (4.6.1) stable; urgency=medium
+
+  * Calendar / event manager: new "Task" event type alongside hearing,
+    filing, deadline and appearance, for general to-do items tracked against
+    a case. A task carries a due date and pending/done status, can be
+    assigned to users, appears in the day agenda's "Due" bucket, is flagged
+    overdue when still pending past its date, and is surfaced in the daily
+    digest (due-today / overdue / tomorrow). The event-type dropdown, month
+    calendar (a "T"-labelled green chip), legend and per-case timeline all
+    render the new type.
+  * Schema migration v8 -> v9: the case_events.event_type CHECK constraint
+    was widened to accept 'task' via a data-preserving table rebuild —
+    existing events, ids, self-references and child assignees/participants
+    are unchanged.
+  * Tests: added task event-type coverage (creation via the API, due-bucket
+    placement and overdue behaviour, migration upgrade preserved).
+
+ -- Izumi <swarajswarupaggarwal@gmail.com>  Sat, 11 Jul 2026 10:00:00 +0530
+
 case-organizer (4.6) stable; urgency=high
 
   * Added the Calendar / court-event tracker (/calendar): per-case hearing
