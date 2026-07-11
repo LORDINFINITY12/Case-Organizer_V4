@@ -116,7 +116,7 @@
 
   /* ---------- month grid ---------- */
 
-  const TYPE_LABEL = { hearing: 'H', filing: 'F', deadline: 'D', appearance: 'A' };
+  const TYPE_LABEL = { hearing: 'H', filing: 'F', deadline: 'D', appearance: 'A', task: 'T' };
 
   function chipFor(ev, filedChip) {
     const cls = filedChip ? 'filing' : ev.event_type;
@@ -267,7 +267,7 @@
 
   /* ---------- case timeline ---------- */
 
-  const TL_ICON = { hearing: 'fa-scale-balanced', filing: 'fa-file-arrow-up', deadline: 'fa-hourglass-half', appearance: 'fa-gavel' };
+  const TL_ICON = { hearing: 'fa-scale-balanced', filing: 'fa-file-arrow-up', deadline: 'fa-hourglass-half', appearance: 'fa-gavel', task: 'fa-list-check' };
 
   function timelineItem(ev) {
     const bits = [];

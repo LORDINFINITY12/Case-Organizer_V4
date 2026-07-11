@@ -92,7 +92,7 @@ class TestEventCrud:
         payload.update(overrides)
         return client.post("/api/calendar/events", json=payload, headers=CSRF)
 
-    @pytest.mark.parametrize("etype", ["hearing", "filing", "appearance", "deadline"])
+    @pytest.mark.parametrize("etype", ["hearing", "filing", "appearance", "deadline", "task"])
     def test_create_each_type(self, user_client, fsroot, etype):
         resp = self._create(user_client, fsroot, event_type=etype)
         assert resp.status_code == 200, resp.get_json()
@@ -161,6 +161,27 @@ class TestQueries:
         assert len(data["filed"]) == 1 and data["filed"][0]["title"] == "Rejoinder"
         assert len(data["appearances"]) == 1
         assert data["appearances"][0]["participants"][0]["display_name"] == "A. Vakil"
+
+    def test_task_due_bucket_and_overdue(self, user_client, fsroot, db):
+        from services import calendar_events as cal
+
+        case = _mk_case(fsroot)
+        cal.create_event(db, event_type="task", event_date=TODAY_ISO,
+                         title="Call client", **case)
+        overdue_id = cal.create_event(
+            db, event_type="task",
+            event_date=(TODAY - timedelta(days=2)).isoformat(),
+            title="Draft notice", **case)
+        db.commit()
+
+        # A task due today lands in the shared "due" bucket alongside filings.
+        data = user_client.get(f"/api/calendar/day?date={TODAY_ISO}", headers=CSRF).get_json()
+        assert data["ok"]
+        assert [e["title"] for e in data["due"]] == ["Call client"]
+
+        # A pending task past its date is flagged overdue.
+        overdue = cal.get_event(db, overdue_id)
+        assert overdue["overdue"] is True
 
     def test_month_range_boundaries(self, user_client, fsroot, db):
         from services import calendar_events as cal

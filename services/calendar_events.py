@@ -20,7 +20,7 @@ import sqlite3
 from datetime import date
 from typing import Any, Dict, Iterable, List, Optional
 
-VALID_EVENT_TYPES = {"hearing", "filing", "appearance", "deadline"}
+VALID_EVENT_TYPES = {"hearing", "filing", "appearance", "deadline", "task"}
 VALID_STATUSES = {"pending", "done", "adjourned", "cancelled"}
 
 # Suggested hearing purposes for the UI dropdown; free text is also allowed.
@@ -43,11 +43,11 @@ _UPDATABLE_FIELDS = {
 
 
 def _is_overdue(row: sqlite3.Row, today_iso: str) -> bool:
-    """A filing that is unfiled, or a pending deadline, past its date."""
+    """A filing that is unfiled, or a pending deadline/task, past its date."""
     if row["event_type"] == "filing":
         return row["filed_on"] is None and row["status"] not in ("done", "cancelled") \
             and row["event_date"] < today_iso
-    if row["event_type"] == "deadline":
+    if row["event_type"] in ("deadline", "task"):
         return row["status"] == "pending" and row["event_date"] < today_iso
     return False
 
@@ -224,7 +224,7 @@ def day_agenda(conn: sqlite3.Connection, date_iso: str) -> Dict[str, List[Dict[s
     due = conn.execute(
         """
         SELECT * FROM case_events
-        WHERE event_type IN ('filing', 'deadline') AND event_date = ?
+        WHERE event_type IN ('filing', 'deadline', 'task') AND event_date = ?
         ORDER BY event_type, id
         """,
         (date_iso,),

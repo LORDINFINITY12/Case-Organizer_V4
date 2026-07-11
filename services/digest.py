@@ -35,19 +35,19 @@ def collect_digest_data(conn: sqlite3.Connection, today: date) -> Dict[str, Any]
         (today_iso,),
     )
     due_today = q(
-        "SELECT * FROM case_events WHERE event_type IN ('filing','deadline') "
+        "SELECT * FROM case_events WHERE event_type IN ('filing','deadline','task') "
         "AND event_date = ? AND status NOT IN ('done','cancelled') ORDER BY event_type, id",
         (today_iso,),
     )
     overdue = q(
         "SELECT * FROM case_events WHERE "
-        "((event_type = 'filing' AND filed_on IS NULL) OR event_type = 'deadline') "
+        "((event_type = 'filing' AND filed_on IS NULL) OR event_type IN ('deadline','task')) "
         "AND status = 'pending' AND event_date < ? ORDER BY event_date, id",
         (today_iso,),
     )
     tomorrow = q(
         "SELECT * FROM case_events WHERE event_date = ? "
-        "AND event_type IN ('hearing','filing','deadline') "
+        "AND event_type IN ('hearing','filing','deadline','task') "
         "AND status NOT IN ('done','cancelled') ORDER BY event_type, id",
         (tomorrow_iso,),
     )
@@ -111,7 +111,7 @@ def _line(ev: Dict[str, Any], today: date) -> str:
     detail = ev.get("purpose") if ev["event_type"] == "hearing" else ev.get("title")
     if detail:
         parts.append(f"— {detail}")
-    if ev["event_type"] in ("filing", "deadline"):
+    if ev["event_type"] in ("filing", "deadline", "task"):
         due = ev["event_date"]
         try:
             days_over = (today - date.fromisoformat(due)).days

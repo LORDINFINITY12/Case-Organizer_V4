@@ -14,7 +14,7 @@ from services.settings import settings_manager
 
 
 # Global schema version for the application database.
-_SCHEMA_VERSION = 8
+_SCHEMA_VERSION = 9
 
 
 def _app_db_path() -> Path:
@@ -75,6 +75,10 @@ def _ensure_schema(conn: sqlite3.Connection) -> None:
     if current_version < 8:
         _migrate_to_v8(conn)
         current_version = 8
+
+    if current_version < 9:
+        _migrate_to_v9(conn)
+        current_version = 9
 
     if current_version != _SCHEMA_VERSION:
         # Placeholder for future migrations.
@@ -515,6 +519,87 @@ def _migrate_to_v8(conn: sqlite3.Connection) -> None:
 
     conn.execute(
         "INSERT INTO app_meta(key, value) VALUES('schema_version', '8') "
+        "ON CONFLICT(key) DO UPDATE SET value = excluded.value"
+    )
+
+
+def _migrate_to_v9(conn: sqlite3.Connection) -> None:
+    # Add 'task' to the case_events.event_type CHECK constraint.  SQLite cannot
+    # alter a CHECK constraint in place, so rebuild the table with the widened
+    # constraint, preserving every row and id (see _migrate_to_v7 for the same
+    # pattern).  event_participants/event_assignees reference case_events(id)
+    # with ON DELETE CASCADE, and case_events references itself via
+    # related_event_id; foreign_keys is disabled during the swap so the DROP
+    # does not cascade-delete children, and the FK targets resolve by name to
+    # the rebuilt table after the rename.  executescript() commits any pending
+    # transaction first (PRAGMA toggles must live outside a transaction).
+    conn.executescript(
+        """
+        PRAGMA foreign_keys=OFF;
+        BEGIN;
+        CREATE TABLE case_events_new (
+            id               INTEGER PRIMARY KEY AUTOINCREMENT,
+            event_type       TEXT NOT NULL CHECK(event_type IN ('hearing','filing','appearance','deadline','task')),
+            case_year        TEXT NOT NULL,
+            case_month       TEXT NOT NULL,
+            case_name        TEXT NOT NULL,
+            event_date       TEXT NOT NULL,
+            title            TEXT NOT NULL DEFAULT '',
+            purpose          TEXT,
+            status           TEXT NOT NULL DEFAULT 'pending'
+                             CHECK(status IN ('pending','done','adjourned','cancelled')),
+            outcome          TEXT,
+            filed_on         TEXT,
+            related_event_id INTEGER REFERENCES case_events(id) ON DELETE SET NULL,
+            notes            TEXT,
+            created_by       INTEGER REFERENCES users(id) ON DELETE SET NULL,
+            created_at       TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at       TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        );
+        INSERT INTO case_events_new
+            (id, event_type, case_year, case_month, case_name, event_date,
+             title, purpose, status, outcome, filed_on, related_event_id,
+             notes, created_by, created_at, updated_at)
+        SELECT
+             id, event_type, case_year, case_month, case_name, event_date,
+             title, purpose, status, outcome, filed_on, related_event_id,
+             notes, created_by, created_at, updated_at
+        FROM case_events;
+        DROP TABLE case_events;
+        ALTER TABLE case_events_new RENAME TO case_events;
+        COMMIT;
+        PRAGMA foreign_keys=ON;
+        """
+    )
+
+    # The indexes and updated_at trigger were attached to the old case_events
+    # table and dropped with it; recreate them (identical to _migrate_to_v8).
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_case_events_date ON case_events(event_date)"
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_case_events_case "
+        "ON case_events(case_year, case_month, case_name, event_date)"
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_case_events_status ON case_events(status, event_date)"
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_case_events_filed_on "
+        "ON case_events(filed_on) WHERE filed_on IS NOT NULL"
+    )
+    conn.execute(
+        """
+        CREATE TRIGGER IF NOT EXISTS trg_case_events_updated_at
+        AFTER UPDATE ON case_events
+        BEGIN
+            UPDATE case_events SET updated_at = CURRENT_TIMESTAMP WHERE id = NEW.id;
+        END;
+        """
+    )
+
+    conn.execute(
+        "INSERT INTO app_meta(key, value) VALUES('schema_version', '9') "
         "ON CONFLICT(key) DO UPDATE SET value = excluded.value"
     )
 
