@@ -1,0 +1,1 @@
+var e=[{label:`DigiCert`,url:`http://timestamp.digicert.com`},{label:`Sectigo`,url:`http://timestamp.sectigo.com`},{label:`SSL.com`,url:`http://ts.ssl.com`},{label:`FreeTSA`,url:`https://freetsa.org/tsr`},{label:`MeSign`,url:`http://tsa.mesign.com`}];export{e as t};

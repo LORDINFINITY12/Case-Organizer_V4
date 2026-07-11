@@ -6,15 +6,20 @@
     "convertFromPdf": "從 PDF 轉換",
     "organizeManage": "組織與管理",
     "optimizeRepair": "優化與修復",
-    "securePdf": "安全 PDF"
+    "securePdf": "安全 PDF",
+    "input": "輸入",
+    "output": "輸出"
   },
+  "convertToPdf": "轉換為 PDF",
   "pdfMultiTool": {
     "name": "PDF 多功能工具",
     "subtitle": "在統一的頁面中合併、分割、組織、刪除、旋轉、添加空白頁面、提取與複製。"
   },
   "mergePdf": {
     "name": "合併 PDF",
-    "subtitle": "將多個 PDF 合併為一個檔案。保留書籤。"
+    "subtitle": "將多個 PDF 合併為一個檔案。保留書籤。",
+    "retainPageLabels": "保留每個檔案的原始頁面標籤",
+    "retainPageLabelsHint": "關閉（預設）：合併後的 PDF 使用自然頁碼 1–N。開啟：保留每個檔案的原始頁面標籤（可能產生重複的標籤）。"
   },
   "splitPdf": {
     "name": "分割 PDF",
@@ -22,7 +27,29 @@
   },
   "compressPdf": {
     "name": "壓縮 PDF",
-    "subtitle": "降低你的 PDF 檔案大小。"
+    "subtitle": "降低你的 PDF 檔案大小。",
+    "algorithmLabel": "壓縮演算法",
+    "condense": "Condense（推薦）",
+    "photon": "Photon（適用於圖片較多的 PDF）",
+    "condenseInfo": "Condense 使用高級壓縮：移除冗餘資料、優化圖片、精簡字型。適用於大多數 PDF。",
+    "photonInfo": "Photon 將頁面轉換為圖片。適用於圖片較多/掃描的 PDF。",
+    "photonWarning": "警告：文字將無法選取，連結將失效。",
+    "levelLabel": "壓縮等級",
+    "light": "輕度（保持品質）",
+    "balanced": "平衡（推薦）",
+    "aggressive": "積極（更小檔案）",
+    "extreme": "極限（最大壓縮）",
+    "grayscale": "轉換為灰階",
+    "grayscaleHint": "透過移除色彩資訊來縮小檔案大小",
+    "customSettings": "自訂設定",
+    "customSettingsHint": "微調壓縮參數：",
+    "outputQuality": "輸出品質",
+    "resizeImagesTo": "調整圖片至",
+    "onlyProcessAbove": "僅處理高於",
+    "removeMetadata": "移除中繼資料",
+    "subsetFonts": "精簡字型（移除未使用的字符）",
+    "removeThumbnails": "移除嵌入的縮圖",
+    "compressButton": "壓縮 PDF"
   },
   "pdfEditor": {
     "name": "PDF 編輯器",
@@ -46,7 +73,8 @@
   },
   "duplicateOrganize": {
     "name": "複製與組織",
-    "subtitle": "複製、重新排序與刪除頁面。"
+    "subtitle": "複製、重新排序與刪除頁面。",
+    "saveChanges": "儲存變更"
   },
   "deletePages": {
     "name": "刪除頁面",
@@ -54,19 +82,102 @@
   },
   "editBookmarks": {
     "name": "編輯書籤",
-    "subtitle": "添加、編輯、匯入、刪除與提取 PDF 書籤。"
+    "subtitle": "添加、編輯、匯入、刪除與提取 PDF 書籤。",
+    "autoExtractExisting": "自動提取現有書簽",
+    "importSectionTitle": "或導入書簽",
+    "csvFormat": "CSV 格式：標題,頁面,級別",
+    "jsonFormat": "JSON 格式",
+    "uploadCsvAction": "點擊上傳 CSV",
+    "uploadJsonAction": "點擊上傳 JSON",
+    "orDragHere": "或拖曳至此"
   },
   "tableOfContents": {
     "name": "目錄",
-    "subtitle": "從 PDF 書籤生成目錄頁。"
+    "subtitle": "從 PDF 書籤生成目錄頁。",
+    "titleLabel": "目錄標題",
+    "fontSize": "字體大小",
+    "fontFamily": "字體繫列",
+    "addBookmark": "為目录頁添加書簽",
+    "generateButton": "產生目錄",
+    "selectPdfFirst": "請先選擇 PDF 文件。",
+    "statusReadingFileMainThread": "正在读取文件（主线程）...",
+    "statusGenerating": "正在產生目錄...",
+    "errorReadingFileWithMessage": "读取文件出錯：{{message}}",
+    "successGeneratedDownloadStarted": "目錄產生成功！下載已開始。",
+    "workerErrorWithMessage": "錯誤：{{message}}",
+    "workerErrorOccurred": "發生 Worker 錯誤。請查看控制台獲取详细信息。"
   },
   "pageNumbers": {
     "name": "頁碼",
     "subtitle": "在你的文件中插入頁碼。"
   },
+  "addPageLabels": {
+    "name": "新增頁面標籤",
+    "subtitle": "使用羅馬數字、前綴與自訂起始值套用 PDF 頁面標籤。",
+    "uploadHint": "PDF 檔案",
+    "howLabelsWorkTitle": "頁面標籤的運作方式",
+    "howLabelsWorkStep1": "將頁面範圍留空即可為所有頁面套用標籤。",
+    "howLabelsWorkStep2": "前置頁可使用羅馬數字，正文則可使用十進位編號等樣式。",
+    "howLabelsWorkStep3": "將前綴搭配起始值 0，可建立像 A-0、A-1、A-2 這樣的標籤。",
+    "howLabelsWorkStep4": "當某條規則使用 1-9,30-40 或奇數頁等不連續範圍時，請啟用連續編號。",
+    "labelRulesTitle": "標籤規則",
+    "addRule": "新增規則",
+    "removeExistingLabels": "套用這些規則前先移除現有頁面標籤",
+    "cpdfNote": "此工具會在你的瀏覽器中使用 CoherentPDF。若 CoherentPDF 尚未設定，系統會提示你在 WASM 設定中完成設定。",
+    "processButton": "新增頁面標籤",
+    "howItWorksUploadTitle": "上傳檔案",
+    "howItWorksUploadDescription": "選擇你要重新標記的 PDF 檔案。",
+    "howItWorksDefineTitle": "定義規則",
+    "howItWorksDefineDescription": "設定一條或多條頁面標籤規則，包括頁面範圍、樣式、前綴與起始值。",
+    "howItWorksDownloadTitle": "下載",
+    "howItWorksDownloadDescription": "儲存套用新頁面標籤後的 PDF。",
+    "relatedToolsTitle": "相關 PDF 工具",
+    "faqWhatIsQuestion": "什麼是頁面標籤？",
+    "faqWhatIsAnswer": "頁面標籤是 PDF 閱讀器在縮圖、頁面導覽與列印對話框中顯示的編號。它不會在頁面本身額外列印新文字。",
+    "faqMixQuestion": "我可以混用羅馬數字和一般數字嗎？",
+    "faqMixAnswer": "可以。你可以新增多條規則，例如 1-4 使用 LowercaseRoman，5-20 使用 DecimalArabic。",
+    "faqPrivacyQuestion": "我的檔案會保持私密嗎？",
+    "faqPrivacyAnswer": "會。處理程序會在你的瀏覽器中使用 CoherentPDF WASM 完成，PDF 不會離開你的裝置。",
+    "invalidFileTitle": "無效檔案",
+    "invalidFileMessage": "請上傳有效的 PDF 檔案。",
+    "loadingPdf": "正在載入 PDF...",
+    "protectedPdfTitle": "受保護的 PDF",
+    "protectedPdfMessage": "此 PDF 受密碼保護。請先使用解密或變更權限工具。",
+    "loadErrorMessage": "無法載入 PDF 檔案。該檔案可能無效、毀損或受密碼保護。",
+    "fileMeta": "{{size}} • {{count}} 頁",
+    "ruleTitle": "標籤規則 {{number}}",
+    "pageRangeLabel": "頁面範圍",
+    "pageRangePlaceholder": "所有頁面，或例如 1-4、7、奇數頁",
+    "labelStyleLabel": "標籤樣式",
+    "labelPrefixLabel": "標籤前綴",
+    "labelPrefixPlaceholder": "可選前綴，例如 A-",
+    "startValueLabel": "起始值",
+    "continueNumbering": "在不連續範圍中持續編號",
+    "examplesNote": "例如：1-4 用於前言的羅馬數字頁碼、15-20 使用前綴 A- 且起始值為 0，或啟用連續編號的奇數頁。",
+    "uploadFirstMessage": "請先上傳 PDF 檔案。",
+    "applyingLabels": "正在套用頁面標籤...",
+    "invalidRangeMessage": "規則 {{number}} 的頁面範圍無效：{{range}}",
+    "allPages": "所有頁面",
+    "emptyOutputMessage": "CoherentPDF 產生了空白檔案。",
+    "successMessage": "頁面標籤新增成功！",
+    "processErrorMessage": "無法新增頁面標籤。",
+    "styleOptions": {
+      "DecimalArabic": "十進位數字",
+      "LowercaseRoman": "小寫羅馬數字",
+      "UppercaseRoman": "大寫羅馬數字",
+      "LowercaseLetters": "小寫字母",
+      "UppercaseLetters": "大寫字母",
+      "NoLabelPrefixOnly": "僅前綴，無編號"
+    }
+  },
+  "batesNumbering": {
+    "name": "Bates編號",
+    "subtitle": "在一個或多個PDF檔案中新增連續的Bates編號。"
+  },
   "addWatermark": {
     "name": "添加浮水印",
-    "subtitle": "在你的 PDF 頁面上壓印文字或圖片。"
+    "subtitle": "在你的 PDF 頁面上壓印文字或圖片。",
+    "applyToAllPages": "套用至所有頁面"
   },
   "headerFooter": {
     "name": "頁首與頁尾",
@@ -120,7 +231,8 @@
     "subtitle": "使用註解工具列在你的 PDF 中添加圖片印章。",
     "usernameLabel": "印章使用者名稱",
     "usernamePlaceholder": "輸入你的名稱（印章用）",
-    "usernameHint": "該名稱會出現在你建立的印章上。"
+    "usernameHint": "該名稱會出現在你建立的印章上。",
+    "saveButton": "儲存蓋章 PDF"
   },
   "removeAnnotations": {
     "name": "移除註解",
@@ -128,15 +240,21 @@
   },
   "pdfFormFiller": {
     "name": "PDF 表單填寫器",
-    "subtitle": "直接在你的瀏覽器中填寫表單。支援 XFA 表單。"
+    "subtitle": "直接在你的瀏覽器中填寫表單。支援 XFA 表單。",
+    "uploadHint": "上传带有表单字段的 PDF。在下方查看器中直接填写，然後點擊按钮保存并下載填写好的表单。也支持 XFA 表单。",
+    "xfaNoteTitle": "關于 XFA 表单的说明：",
+    "xfaNoteDescription": "XFA（XML Forms Architecture）是一种旧版格式，仅 BentoPDF 和 Firefox 等部分 PDF 查看器支持。如果您在其他软件中打开 XFA PDF，看到空白頁面或没有表单字段，则表示該查看器不支持 XFA。要正確查看和填写 XFA 表单，請使用 Firefox 或 BentoPDF 的表单填写器。"
   },
   "createPdfForm": {
     "name": "建立 PDF 表單",
-    "subtitle": "透過拖放文字框建立可填寫的 PDF 表單。"
+    "subtitle": "透過拖放文字框建立可填寫的 PDF 表單。",
+    "orSeparator": "或",
+    "createBlankPdf": "建立空白 PDF"
   },
   "removeBlankPages": {
     "name": "移除空白頁面",
-    "subtitle": "自動偵測並刪除空白頁面。"
+    "subtitle": "自動偵測並刪除空白頁面。",
+    "sensitivityHint": "越高 = 越嚴格，僅偵測純空白頁面。越低 = 允許包含少量內容的頁面。"
   },
   "imageToPdf": {
     "name": "圖片轉 PDF",
@@ -168,31 +286,151 @@
   },
   "textToPdf": {
     "name": "Text 轉 PDF",
-    "subtitle": "將純文字檔案轉換為 PDF。"
+    "subtitle": "將純文字檔案轉換為 PDF。",
+    "uploadFiles": "上传文件",
+    "typeText": "輸入文本",
+    "acceptedFormats": "文本文件 (.txt)",
+    "fontFamily": "字體繫列",
+    "fontSize": "字體大小",
+    "textColor": "文本颜色",
+    "pageSize": "頁面大小",
+    "rtlAutoDetectNote": "自動檢測 RTL 語言（阿拉伯語、乌尔都語、波斯語等）并相應调整文本方向。",
+    "createButton": "創建 PDF"
   },
   "jsonToPdf": {
     "name": "JSON 轉 PDF",
-    "subtitle": "將 JSON 檔案轉換為 PDF 格式。"
+    "subtitle": "將 JSON 檔案轉換為 PDF 格式。",
+    "noteLabel": "注意：",
+    "noteText": "仅支持由 PDF 轉 JSON 工具創建的 JSON 文件。来自其他工具的標準 JSON 文件無法使用。",
+    "acceptedFormats": "多個 JSON 文件",
+    "status": {
+      "selectAtLeastOne": "請至少選擇 1 個 JSON 文件",
+      "selectedReady": "已選擇 {{count}} 個文件。準備轉換！",
+      "readingFiles": "正在读取文件（主线程）...",
+      "converting": "正在将 JSON 文件轉換為 PDF...",
+      "readError": "读取文件出錯：{{message}}",
+      "creatingZip": "正在創建 ZIP 文件...",
+      "success": "JSON 文件已成功轉換為 PDF！ZIP 下載已开始。",
+      "zipError": "創建 ZIP 出錯：{{message}}",
+      "workerError": "Worker 錯誤：{{message}}",
+      "getStarted": "選擇 JSON 文件以开始"
+    }
   },
   "pdfToJpg": {
     "name": "PDF 轉 JPG",
-    "subtitle": "將每個 PDF 頁面轉換為 JPG 圖片。"
+    "subtitle": "將每個 PDF 頁面轉換為 JPG 圖片。",
+    "imageQuality": "圖像质量",
+    "imageQualityExplanation": "质量越高 = 文件越大",
+    "alert": {
+      "invalidFile": "無效文件",
+      "invalidFileExplanation": "請上传 PDF 文件。",
+      "noFile": "無文件",
+      "noFileExplanation": "請先上传 PDF 文件。",
+      "conversionSuccess": "PDF 已成功轉換為 JPG！",
+      "conversionError": "無法将 PDF 轉換為 JPG。文件可能已損壞。"
+    },
+    "loader": {
+      "converting": "正在轉換為 JPG..."
+    }
   },
   "pdfToPng": {
     "name": "PDF 轉 PNG",
-    "subtitle": "將每個 PDF 頁面轉換為 PNG 圖片。"
+    "subtitle": "將每個 PDF 頁面轉換為 PNG 圖片。",
+    "imageScale": "圖像比例",
+    "imageScaleExplanation": "比例越大 = 质量越好但文件越大",
+    "alert": {
+      "invalidFile": "無效文件",
+      "invalidFileExplanation": "請上传 PDF 文件。",
+      "noFile": "無文件",
+      "noFileExplanation": "請先上传 PDF 文件。",
+      "conversionSuccess": "PDF 已成功轉換為 PNG！",
+      "conversionError": "無法将 PDF 轉換為 PNG。文件可能已損壞。"
+    },
+    "loader": {
+      "converting": "正在轉換為 PNG..."
+    }
   },
   "pdfToWebp": {
     "name": "PDF 轉 WebP",
-    "subtitle": "將每個 PDF 頁面轉換為 WebP 圖片。"
+    "subtitle": "將每個 PDF 頁面轉換為 WebP 圖片。",
+    "imageQuality": "圖像质量",
+    "imageQualityExplanation": "质量越高 = 文件越大",
+    "alert": {
+      "invalidFile": "無效文件",
+      "invalidFileExplanation": "請上传 PDF 文件。",
+      "noFile": "無文件",
+      "noFileExplanation": "請先上传 PDF 文件。",
+      "conversionSuccess": "PDF 已成功轉換為 WebP！",
+      "conversionError": "無法将 PDF 轉換為 WebP。文件可能已損壞。"
+    },
+    "loader": {
+      "converting": "正在轉換為 WebP..."
+    }
   },
   "pdfToBmp": {
     "name": "PDF 轉 BMP",
-    "subtitle": "將每個 PDF 頁面轉換為 BMP 圖片。"
+    "subtitle": "將每個 PDF 頁面轉換為 BMP 圖片。",
+    "alert": {
+      "invalidFile": "無效文件",
+      "invalidFileExplanation": "請上传 PDF 文件。",
+      "noFile": "無文件",
+      "noFileExplanation": "請先上传 PDF 文件。",
+      "conversionSuccess": "PDF 已成功轉換為 BMP！",
+      "conversionError": "無法将 PDF 轉換為 BMP。文件可能已損壞。"
+    },
+    "loader": {
+      "converting": "正在轉換為 BMP..."
+    }
   },
   "pdfToTiff": {
     "name": "PDF 轉 TIFF",
-    "subtitle": "將每個 PDF 頁面轉換為 TIFF 圖片。"
+    "subtitle": "將每個 PDF 頁面轉換為 TIFF 圖片。",
+    "dpi": "DPI (解析度)",
+    "dpiExplanation": "DPI 越高 = 列印品質越好，檔案越大",
+    "compression": "壓縮方式",
+    "compressionExplanation": "LZW 和 Deflate 為無損壓縮。CCITT Group 4 最適合黑白掃描文件。",
+    "colorMode": "色彩模式",
+    "multiPage": "儲存為多頁 TIFF (單一檔案)",
+    "loadingVips": "正在載入影像處理器...",
+    "converting": "正在轉換為 TIFF...",
+    "alert": {
+      "invalidFile": "無效文件",
+      "invalidFileExplanation": "請上传 PDF 文件。",
+      "noFile": "無文件",
+      "noFileExplanation": "請先上传 PDF 文件。",
+      "conversionSuccess": "PDF 已成功轉換為 TIFF！",
+      "conversionError": "無法将 PDF 轉換為 TIFF。文件可能已損壞。"
+    }
+  },
+  "pdfToCbz": {
+    "name": "PDF 轉 CBZ",
+    "subtitle": "將 PDF 轉換為 CBZ (漫畫書封存) 檔案，適用於漫畫閱讀器。",
+    "imageFormat": "圖像格式",
+    "quality": "圖像品質",
+    "qualityExplanation": "品質越高 = 檔案越大",
+    "scale": "縮放",
+    "scaleExplanation": "縮放越高 = 高解析度螢幕上品質越好",
+    "grayscale": "轉換為灰階",
+    "manga": "漫畫模式 (從右到左)",
+    "includeMetadata": "包含 ComicInfo.xml 中繼資料",
+    "titleLabel": "標題",
+    "seriesLabel": "系列",
+    "authorLabel": "作者",
+    "numberLabel": "#",
+    "volumeLabel": "卷",
+    "publisherLabel": "出版社",
+    "tagsLabel": "標籤 / 類型",
+    "yearLabel": "出版年份",
+    "ratingLabel": "評分 (0-5)",
+    "converting": "正在轉換為 CBZ...",
+    "alert": {
+      "invalidFile": "無效檔案",
+      "invalidFileExplanation": "請上傳 PDF 檔案。",
+      "noFile": "沒有檔案",
+      "noFileExplanation": "請先上傳 PDF 檔案。",
+      "conversionSuccess": "PDF 已成功轉換為 CBZ!",
+      "conversionError": "無法將 PDF 轉換為 CBZ。檔案可能已損壞。"
+    }
   },
   "pdfToGreyscale": {
     "name": "PDF 轉灰階",
@@ -200,15 +438,81 @@
   },
   "pdfToJson": {
     "name": "PDF 轉 JSON",
-    "subtitle": "將 PDF 檔案轉換為 JSON 格式。"
+    "subtitle": "將 PDF 檔案轉換為 JSON 格式。",
+    "convertButton": "轉換為 JSON",
+    "status": {
+      "selectAtLeastOne": "請至少選擇 1 個 PDF 文件",
+      "selectedReady": "已選擇 {{count}} 個文件。準備轉換！",
+      "checkingEncrypted": "正在檢查加密的 PDF...",
+      "readingFiles": "正在读取文件（主线程）...",
+      "converting": "正在将 PDF 轉換為 JSON...",
+      "readError": "读取文件出錯：{{message}}",
+      "creatingZip": "正在創建 ZIP 文件...",
+      "success": "PDF 已成功轉換為 JSON！ZIP 下載已开始。",
+      "zipError": "創建 ZIP 出錯：{{message}}",
+      "workerError": "Worker 錯誤：{{message}}",
+      "getStarted": "選擇 PDF 文件以开始"
+    }
   },
   "ocrPdf": {
     "name": "OCR PDF",
-    "subtitle": "使 PDF 可搜尋且可複製。"
+    "subtitle": "使 PDF 可搜尋且可複製。",
+    "languagesInDocument": "文檔中的語言",
+    "searchLanguagesPlaceholder": "搜索語言...",
+    "selectedLabel": "已選擇：",
+    "none": "無",
+    "advancedSettingsSummary": "高級設置（建议以提高準確性）",
+    "resolutionLabel": "分辨率",
+    "resolutionStandard": "標準（192 DPI）",
+    "resolutionHigh": "高（288 DPI）",
+    "resolutionUltra": "超高（384 DPI）",
+    "binarizeLabel": "二值化圖像（增強對比度以獲得清晰掃描）",
+    "embedFullFontsLabel": "嵌入完整字體（文件較大，兼容性更好）",
+    "whitelistPresetLabel": "字符白名单預設",
+    "whitelistNone": "無（所有字符）",
+    "whitelistAlphanumeric": "字母數字 + 基本標點",
+    "whitelistNumbersCurrency": "數字 + 货币符號",
+    "whitelistLettersOnly": "仅字母（A-Z、a-z）",
+    "whitelistNumbersOnly": "仅數字（0-9）",
+    "whitelistInvoice": "發票/收據（數字、$、.、-、/）",
+    "whitelistForms": "表单（字母數字 + 常用符號）",
+    "whitelistCustom": "自定義...",
+    "whitelistHelp": "只識別这些字符。留空则識別所有字符。",
+    "whitelistInputLabel": "字符白名单（可選）",
+    "whitelistInputPlaceholder": "例如：abcdefghijklmnopqrstuvwxyz0123456789$.,",
+    "startButton": "開始 OCR",
+    "progressInitializing": "正在初始化...",
+    "resultsTitle": "OCR 完成",
+    "resultsDescription": "您的可搜索 PDF 已準備好。您也可以在下方複制或下載提取的文本。",
+    "copyToClipboard": "複制到剪貼板",
+    "downloadTxt": "下載為 .txt",
+    "downloadSearchablePdf": "下載可搜索 PDF",
+    "statusPrefix": "状态：{{status}}",
+    "availabilityInvalidConfig": "此部署未公开任何有效的 OCR 語言。請使用有效的 Tesseract 代碼設置 VITE_TESSERACT_AVAILABLE_LANGUAGES 後重新構建。",
+    "availabilityBundles": "此部署捆绑了以下 OCR 語言：{{languages}}。",
+    "noLanguagesAvailable": "此部署中没有可用的 OCR 語言。",
+    "noLanguagesTitle": "未選擇語言",
+    "noLanguagesMessage": "請至少選擇一种語言进行 OCR。",
+    "noFileTitle": "無文件",
+    "noFileMessage": "請先上传 PDF 文件。",
+    "languageUnavailableTitle": "OCR 語言不可用",
+    "ocrErrorTitle": "OCR 錯誤",
+    "ocrErrorMessage": "OCR 過程中發生錯誤。Worker 可能加載失敗。請重試。",
+    "howItWorksTitle": "工作原理：",
+    "extractTextLabel": "提取文本：",
+    "extractTextDescription": "使用 Tesseract OCR 從掃描的圖像或 PDF 中識別文本。",
+    "searchableOutputLabel": "可搜索輸出：",
+    "searchableOutputDescription": "創建一個带有不可見文本層的新 PDF，使您的文檔完全可搜索，同时保留原始外觀。",
+    "characterFilteringLabel": "字符過濾：",
+    "characterFilteringDescription": "使用白名单過濾掉不需要的字符并提高特定文檔類型（發票、表单等）的準確性。",
+    "multiLanguageSupportLabel": "多語言支持：",
+    "multiLanguageSupportDescription": "為包含混合語言內容的文檔選擇多种語言。"
   },
-  "alternateMix": {
+  "alternateMerge": {
     "name": "交錯混合頁面",
-    "subtitle": "將每個 PDF 的頁面交錯合併。保留書籤。"
+    "subtitle": "將每個 PDF 的頁面交錯合併。保留書籤。",
+    "retainPageLabels": "保留每個檔案的原始頁面標籤",
+    "retainPageLabelsHint": "關閉（預設）：合併後的 PDF 使用自然頁碼 1–N。開啟：保留每個檔案的原始頁面標籤（可能產生重複的標籤）。"
   },
   "addAttachments": {
     "name": "添加附件",
@@ -238,6 +542,10 @@
     "name": "旋轉 PDF",
     "subtitle": "以 90 度增量旋轉頁面。"
   },
+  "rotateCustom": {
+    "name": "Rotate by Custom Degrees",
+    "subtitle": "Rotate pages by any custom angle."
+  },
   "nUpPdf": {
     "name": "N-Up PDF",
     "subtitle": "將多個頁面排列在單張紙上。"
@@ -260,7 +568,47 @@
   },
   "comparePdfs": {
     "name": "比較 PDF",
-    "subtitle": "並排比較兩個 PDF。"
+    "subtitle": "並排比較兩個 PDF。",
+    "firstPdf": "第一個 PDF",
+    "secondPdf": "第二個 PDF",
+    "clickOrDrop": "點擊或拖放",
+    "page": "頁面",
+    "overlay": "疊加",
+    "sideBySide": "並排",
+    "flicker": "閃爍",
+    "syncScroll": "同步捲動",
+    "export": "匯出",
+    "exportAsPdf": "匯出為 PDF",
+    "splitView": "分割檢視",
+    "alternating": "交替",
+    "leftDocument": "左側文件",
+    "rightDocument": "右側文件",
+    "original": "原始",
+    "modified": "修改後",
+    "searchChanges": "搜尋變更...",
+    "deleted": "已刪除",
+    "added": "已新增",
+    "prevPage": "上一頁",
+    "nextPage": "下一頁",
+    "prevChange": "上一個變更",
+    "nextChange": "下一個變更",
+    "uploadTwoPdfs": "上傳兩個 PDF 以查看差異。",
+    "noDifferences": "此頁面未偵測到差異。",
+    "noMatchingChanges": "沒有符合目前篩選條件的變更。",
+    "pageNotExist": "此 PDF 中不存在第 {{page}} 頁。",
+    "noPairedPage": "此側沒有配對頁面。",
+    "buildingModel": "正在建立頁面配對模型...",
+    "indexingPdf": "正在索引 PDF {{num}}，第 {{page}} / {{total}} 頁...",
+    "loadingComparison": "正在載入比較 {{current}} / {{total}}...",
+    "runningOcr": "正在對第 {{page}} 頁執行 OCR...",
+    "preparingExport": "正在準備 PDF 匯出...",
+    "renderingPage": "正在轉譯第 {{current}} / {{total}} 頁...",
+    "exportError": "匯出錯誤",
+    "exportFailed": "無法匯出比較 PDF。",
+    "loadingFile": "正在載入 {{name}}...",
+    "invalidFile": "無效檔案",
+    "invalidFileMsg": "請選擇有效的 PDF 檔案。",
+    "loadError": "無法載入 PDF。檔案可能已損毀或受密碼保護。"
   },
   "posterizePdf": {
     "name": "海報化 PDF",
@@ -309,24 +657,6 @@
   "changePermissions": {
     "name": "更改權限",
     "subtitle": "設定或變更 PDF 上的使用者權限。"
-  },
-  "emailToPdf": {
-    "name": "Email 轉 PDF",
-    "subtitle": "將電子郵件檔案 (EML, MSG) 轉換為 PDF 格式。支援 Outlook 匯出和標準電子郵件格式。",
-    "acceptedFormats": "EML, MSG 檔案",
-    "convertButton": "轉換為 PDF"
-  },
-  "fontToOutline": {
-    "name": "字型轉外框",
-    "subtitle": "將所有字型轉換為向量外框，確保在所有裝置上呈現一致。"
-  },
-  "deskewPdf": {
-    "name": "PDF 歪斜修正",
-    "subtitle": "使用 OpenCV 自動調正傾斜的掃描頁面。"
-  },
-  "rotateCustom": {
-    "name": "Rotate by Custom Degrees",
-    "subtitle": "Rotate pages by any custom angle."
   },
   "odtToPdf": {
     "name": "ODT to PDF",
@@ -509,16 +839,19 @@
   "pdfToText": {
     "name": "PDF to Text",
     "subtitle": "Extract text from PDF files and save as plain text (.txt). Supports multiple files.",
-    "note": "This tool works ONLY with digitally created PDFs. For scanned documents or image-based PDFs, use our OCR PDF tool instead.",
-    "convertButton": "Extract Text"
+    "noteLabel": "注意：",
+    "noteText": "此工具仅适用于數字創建的 PDF。對于掃描文檔或基于圖像的 PDF，請改用我們的 OCR PDF 工具。",
+    "convertButton": "Extract Text",
+    "note": "This tool works ONLY with digitally created PDFs. For scanned documents or image-based PDFs, use our OCR PDF tool instead."
   },
   "digitalSignPdf": {
     "name": "Digital Signature PDF",
     "pageTitle": "Digital Signature PDF - Add Cryptographic Signature | BentoPDF",
     "subtitle": "Add a cryptographic digital signature to your PDF using X.509 certificates. Supports PKCS#12 (.pfx, .p12) and PEM formats. Your private key never leaves your browser.",
     "certificateSection": "Certificate",
-    "uploadCert": "Upload certificate (.pfx, .p12)",
+    "uploadCert": "Upload certificate (.pfx, .p12, .pem)",
     "certPassword": "Certificate Password",
+    "privateKeyPassword": "私鑰密碼",
     "certPasswordPlaceholder": "Enter certificate password",
     "certInfo": "Certificate Information",
     "certSubject": "Subject",
@@ -531,13 +864,99 @@
     "locationPlaceholder": "e.g., New York, USA",
     "contactInfo": "Contact Info",
     "contactPlaceholder": "e.g., email@example.com",
+    "visibleSignature": "可見簽名",
+    "visibleSignatureDescription": "啟用後，PDF 上會出現可見的簽名框。您可以上传圖像/徽標或添加文本。如果都未提供，将自動显示證書中的簽名者姓名。",
+    "signatureImage": "簽名圖像/徽標（可選）",
+    "uploadSignatureImage": "上传圖像（PNG、JPG、WebP）",
+    "signaturePreviewAlt": "簽名預覽",
+    "remove": "移除",
+    "page": "頁面",
+    "firstPage": "首頁",
+    "lastPage": "末頁",
+    "allPages": "所有頁面",
+    "customPage": "自定義頁 #",
+    "pageNumber": "頁碼 #",
+    "xPosition": "X 位置（左）",
+    "yPosition": "Y 位置（上）",
+    "width": "寬度",
+    "height": "高度",
+    "addTextOverlay": "添加文本覆蓋",
+    "text": "文本",
+    "textPlaceholder": "例如：由張三數字簽名",
+    "textColor": "文本颜色",
+    "fontSize": "字體大小",
+    "invalidImageTitle": "無效圖像",
+    "invalidImageMessage": "請選擇 PNG、JPG 或 WebP 圖像。",
+    "invalidFileTitle": "無效文件",
+    "invalidFileMessage": "請選擇 PDF 文件。",
+    "invalidCertificateTitle": "無效證書",
+    "invalidCertificateMessage": "請選擇 .pfx、.p12 或 .pem 證書文件。",
+    "certificateLoaded": "證書已加載",
+    "certificateUnlocked": "證書已解鎖",
+    "failedParsePem": "無法解析 PEM 文件",
+    "enterPasswordToUnlock": "輸入密碼以解鎖",
+    "invalidPasswordOrCertificate": "無效密碼或證書",
+    "incorrectPassword": "密碼錯誤",
+    "failedParseCertificate": "無法解析證書",
+    "missingDataTitle": "數據缺失",
+    "missingDataMessage": "請同时上传 PDF 和有效證書。",
+    "applyingSignature": "正在應用數字簽名...",
+    "signingFailedTitle": "簽名失敗",
+    "chainFetchFailed": "無法獲取證書鏈。这可能是由于網絡問題或證書代理不可用。請檢查您的互聯網連接并重試。如果問題持續存在，請聯繫支持。",
+    "failedToSignPdf": "無法簽署 PDF：{{message}}",
+    "defaultSignatureText": "由 {{signer}} 數字簽名\n{{date}}",
+    "pageCount": "{{count}} 頁",
+    "howToStep1Title": "上传 PDF",
+    "howToStep1Text": "選擇您要簽署的 PDF 文檔",
+    "howToStep2Title": "上传證書",
+    "howToStep2Text": "提供您的 .pfx 或 .p12 證書文件和密碼",
+    "howToStep3Title": "簽署并下載",
+    "howToStep3Text": "應用數字簽名并下載已簽署的 PDF",
+    "relatedEncryptDesc": "用密碼保護您的 PDF",
+    "relatedDecryptDesc": "刪除 PDF 密碼",
+    "relatedFlattenDesc": "使注釋永久化",
+    "relatedSanitizeDesc": "刪除隱藏數據",
+    "relatedPermissionsDesc": "設置 PDF 權限",
+    "faqWhatIsQuestion": "什么是數字簽名？",
+    "faqWhatIsAnswer": "數字簽名是一种驗證文檔真實性和完整性的加密機制。与绘制的簽名不同，它使用公鑰加密（X.509 證書）来證明簽名者的身份。",
+    "faqFormatsQuestion": "支持哪些證書格式？",
+    "faqFormatsAnswer": "我們支持 PKCS#12 格式的證書（.pfx、.p12），其中包含您的證書和私鑰（一個加密文件）。这些通常由證書頒發機構頒發。",
+    "faqPrivateKeyQuestion": "我的私鑰安全吗？",
+    "faqPrivateKeyAnswer": "是的！所有處理完全在您的浏覽器中进行。您的證書、私鑰和 PDF 文件永远不會离开您的設備或上传到任何服务器。",
+    "faqValidReadersQuestion": "簽名在 PDF 阅读器中有效吗？",
+    "faqValidReadersAnswer": "是的，該工具創建標準的 PKCS#7 分离簽名，所有主要 PDF 阅读器都能識別。要进行完整驗證，請使用受信任的證書頒發機構的證書。",
     "applySignature": "Apply Digital Signature",
-    "successMessage": "PDF signed successfully! The signature can be verified in any PDF reader."
+    "successMessage": "PDF signed successfully! The signature can be verified in any PDF reader.",
+    "internetRequiredTitle": "需要互聯網連接",
+    "internetRequiredDescription": "簽名时可能需要從證書頒發者的服务器獲取證書鏈信息以驗證簽名。"
   },
   "validateSignaturePdf": {
     "name": "Validate PDF Signature",
     "pageTitle": "Validate PDF Signature - Verify Digital Signatures | BentoPDF",
     "subtitle": "Verify digital signatures in your PDF files. Check certificate validity, view signer details, and confirm document integrity. All processing happens in your browser."
+  },
+  "timestampPdf": {
+    "name": "PDF 時間戳記",
+    "pageTitle": "免費線上 PDF 時間戳記 - RFC 3161 文件時間戳記 | BentoPDF",
+    "subtitle": "透過可信賴的 TSA 伺服器為您的 PDF 新增 RFC 3161 時間戳記。證明您的文件在特定時間點存在。無需憑證。",
+    "tsaSectionTitle": "時間戳記伺服器 (TSA)",
+    "selectTsa": "選擇 TSA 伺服器",
+    "applyTimestamp": "套用時間戳記",
+    "successMessage": "PDF 時間戳記新增成功！時間戳記可在任何 PDF 閱讀器中驗證。"
+  },
+  "emailToPdf": {
+    "name": "Email 轉 PDF",
+    "subtitle": "將電子郵件檔案 (EML, MSG) 轉換為 PDF 格式。支援 Outlook 匯出和標準電子郵件格式。",
+    "acceptedFormats": "EML, MSG 檔案",
+    "convertButton": "轉換為 PDF"
+  },
+  "fontToOutline": {
+    "name": "字型轉外框",
+    "subtitle": "將所有字型轉換為向量外框，確保在所有裝置上呈現一致。"
+  },
+  "deskewPdf": {
+    "name": "PDF 歪斜修正",
+    "subtitle": "使用 OpenCV 自動調正傾斜的掃描頁面。"
   },
   "pdfToWord": {
     "name": "PDF 轉 Word",
@@ -566,5 +985,171 @@
   "rasterizePdf": {
     "name": "柵格化 PDF",
     "subtitle": "將 PDF 轉換為基於影像的 PDF。展平圖層並移除可選取的文字。"
+  },
+  "pdfWorkflow": {
+    "name": "PDF 工作流程建構器",
+    "subtitle": "使用視覺化節點編輯器建構自訂 PDF 處理管線。",
+    "nodes": "節點",
+    "searchNodes": "搜尋節點...",
+    "run": "執行",
+    "clear": "清除",
+    "save": "儲存",
+    "load": "載入",
+    "export": "匯出",
+    "import": "匯入",
+    "ready": "就緒",
+    "settings": "設定",
+    "processing": "處理中...",
+    "saveTemplate": "儲存範本",
+    "templateName": "範本名稱",
+    "templatePlaceholder": "例如：發票處理工作流程",
+    "cancel": "取消",
+    "loadTemplate": "載入範本",
+    "noTemplates": "目前沒有已儲存的範本。",
+    "ok": "確定",
+    "workflowCompleted": "工作流程已完成",
+    "errorDuringExecution": "執行過程中發生錯誤",
+    "addNodeError": "請至少新增一個節點以執行工作流程。",
+    "needInputOutput": "您的工作流程至少需要一個輸入節點和一個輸出節點才能執行。",
+    "enterName": "請輸入名稱。",
+    "templateExists": "已存在相同名稱的範本。",
+    "templateSaved": "範本「{{name}}」已儲存。",
+    "templateLoaded": "範本「{{name}}」已載入。",
+    "failedLoadTemplate": "載入範本失敗。",
+    "noSettings": "此節點沒有可設定的選項。",
+    "advancedSettings": "進階設定",
+    "specialNodes": {
+      "pdfInput": {
+        "name": "PDF 輸入",
+        "description": "上傳一個或多個 PDF 檔案"
+      },
+      "download": {
+        "name": "下載",
+        "description": "自動下載為 PDF 或 ZIP"
+      }
+    },
+    "errors": {
+      "noPdfsConnected": "沒有 PDF 連接到 {{node}} 節點",
+      "noPdfInputs": "輸入中沒有 PDF",
+      "expectedPdfInput": "需要 PDF 輸入",
+      "failedToRenderPage": "渲染頁面 {{page}} 失敗",
+      "failedToGetCanvasContext": "無法取得頁面 {{page}} 的畫布內容",
+      "failedToRenderPageToImage": "無法將頁面 {{page}} 渲染為影像",
+      "noPagesProcessed": "未處理任何頁面",
+      "cpdfNotConfigured": "CoherentPDF 未設定。請在進階設定中設定。",
+      "workerError": "Worker 錯誤：{{message}}",
+      "alternateMergeWorkerError": "交替合併 Worker 錯誤：{{message}}",
+      "noPdfFilesUploaded": "PDF 輸入節點中未上傳 PDF 檔案",
+      "failedToLoadFile": "無法載入「{{file}}」— 檔案可能已損毀",
+      "noImagesUploaded": "影像輸入節點中未上傳影像",
+      "noWordDocsUploaded": "Word 輸入節點中未上傳文件",
+      "noExcelUploaded": "Excel 輸入節點中未上傳試算表",
+      "noPowerPointUploaded": "PowerPoint 輸入節點中未上傳簡報",
+      "noCbzUploaded": "CBZ 輸入節點中未上傳漫畫封存檔",
+      "noEmailUploaded": "電子郵件輸入節點中未上傳郵件檔案",
+      "noEpubUploaded": "EPUB 輸入節點中未上傳 EPUB 檔案",
+      "noFb2Uploaded": "FB2 輸入節點中未上傳 FB2 檔案",
+      "noJsonUploaded": "JSON 輸入節點中未上傳 JSON 檔案",
+      "noMarkdownUploaded": "Markdown 輸入節點中未上傳 Markdown 檔案",
+      "noMobiUploaded": "MOBI 輸入節點中未上傳 MOBI 檔案",
+      "noOdgUploaded": "ODG 輸入節點中未上傳 ODG 檔案",
+      "noPagesUploaded": "Pages 輸入節點中未上傳 Pages 檔案",
+      "noPubUploaded": "PUB 輸入節點中未上傳 PUB 檔案",
+      "noSvgUploaded": "SVG 輸入節點中未上傳 SVG 檔案",
+      "noTextUploaded": "文字輸入節點中未上傳文字檔案",
+      "noVsdUploaded": "VSD 輸入節點中未上傳 Visio 檔案",
+      "noWpdUploaded": "WPD 輸入節點中未上傳 WPD 檔案",
+      "noWpsUploaded": "WPS 輸入節點中未上傳 WPS 檔案",
+      "noXmlUploaded": "XML 輸入節點中未上傳 XML 檔案",
+      "noXpsUploaded": "XPS 輸入節點中未上傳 XPS 檔案",
+      "alternateMergeNeedsTwo": "交替合併需要至少連接兩個 PDF 到其輸入",
+      "cropMarginsExceed": "裁切邊距超出頁面尺寸。請減小裁切值。",
+      "digitalSignNoCertificate": "數位簽章節點中未載入憑證",
+      "encryptUserPasswordRequired": "加密需要使用者密碼",
+      "extractImagesNoneFound": "在連接的 PDF 中找不到影像",
+      "invertColorsFailedReadImage": "無法讀取影像資料",
+      "overlayRequiresPdf": "覆蓋節點需要覆蓋 PDF 輸入。",
+      "pdfToCsvNoTables": "PDF 中找不到表格",
+      "pdfToXlsxNoTables": "{{file}} 中找不到表格",
+      "posterizeFailedTileCanvas": "無法取得拼貼畫布內容",
+      "redactNoText": "塗銷：未指定要塗銷的文字",
+      "removeBlankPagesAllBlank": "所有頁面都是空白",
+      "svgFailedToConvert": "SVG 轉換失敗",
+      "svgFailedToLoad": "SVG 載入失敗",
+      "timestampFailed": "使用 TSA {{tsa}} 加蓋時間戳失敗：{{message}}",
+      "noOutputNodes": "找不到輸出節點。新增下載節點以完成您的工作流程。",
+      "circularDependency": "工作流程中偵測到循環相依性。請移除節點之間的任何循環。",
+      "encryptOrdering": "加密節點連接到「{{target}}」，可能在加密資料上失敗。請將加密移到輸出節點之前。",
+      "invalidWorkflowFile": "無效的工作流程檔案：缺少節點或連接陣列。",
+      "storageQuotaExceeded": "儲存工作流程失敗:超出儲存配額。請嘗試刪除舊範本。",
+      "failedToImport": "匯入工作流程失敗:{{message}}"
+    }
+  },
+  "wasmSettings": {
+    "title": "進階功能設定",
+    "description": "配置外部處理模块以啟用高級 PDF 功能。这些模块是可選的，并单独授權。",
+    "status": {
+      "testing": "正在測試...",
+      "customOverride": "自定義覆蓋",
+      "preConfigured": "預配置",
+      "notConfigured": "未配置"
+    },
+    "preconfiguredTitle": "預配置且可立即使用。",
+    "preconfiguredDescription": "高級處理模块從 CDN 自動加載。如果您需要使用自定義源（例如，對于 air-gapped 或自托管部署），可以覆蓋以下 URL。",
+    "usingDefault": "使用預設值：{{url}}",
+    "pymupdfSubtitle": "文檔處理引擎",
+    "pymupdfFeatures": "啟用：PDF 轉文本、Markdown、SVG、DOCX、Excel • 提取圖像/表格 • 格式轉換",
+    "testButton": "測試",
+    "recommendedLabel": "推荐：",
+    "copyTitle": "複制到剪貼板",
+    "ghostscriptSubtitle": "PDF/A 轉換引擎",
+    "ghostscriptFeatures": "啟用：PDF/A-1b、PDF/A-2b、PDF/A-3b 轉換 • 字體轉轮廓",
+    "cpdfSubtitle": "書簽和元數據引擎",
+    "cpdfFeatures": "啟用：按書簽拆分 • 編辑書簽 • PDF 元數據",
+    "saveConfiguration": "儲存設定",
+    "savingConfiguration": "正在儲存設定...",
+    "savedTitle": "已保存",
+    "savedMessage": "設定儲存成功！",
+    "errorTitle": "錯誤",
+    "failedSave": "無法儲存設定：{{message}}",
+    "emptyUrlTitle": "URL 為空",
+    "emptyUrlMessage": "請輸入要測試的 URL。",
+    "testSuccessTitle": "成功",
+    "connectionSuccess": "連接到 {{package}} 成功！",
+    "connectionFailedTitle": "連接失敗",
+    "connectionFailedMessage": "無法連接到 URL。",
+    "resetDefaults": "重設為預設值",
+    "resetTitle": "重置",
+    "resetWithDefaults": "已清除自定義覆蓋。預配置的默認值已激活。",
+    "resetNoDefaults": "所有配置和缓存模块均已清除。",
+    "licenseTitle": "许可證通知：",
+    "licenseDescription": "外部模块（PyMuPDF、Ghostscript、CoherentPDF）根據 AGPL-3.0 或類似的 copyleft 许可證授權。配置和使用这些模块即表示您同意各自的许可證条款。BentoPDF 与遵循預期接口的任何 Ghostscript WASM 和 PyMuPDF WASM 實現兼容。"
+  },
+  "pdfOverlay": {
+    "name": "PDF 疊加",
+    "subtitle": "將一個 PDF 的頁面疊加或墊於另一個 PDF 之上或之下。",
+    "basePdfLabel": "基礎 PDF",
+    "uploadBasePdf": "上傳基礎 PDF",
+    "overlayPdfLabel": "疊加 / 襯底 PDF",
+    "uploadOverlayPdf": "上傳疊加/襯底 PDF",
+    "modeLabel": "模式",
+    "overlayOption": "疊加（在頁面上方）",
+    "underlayOption": "襯底（在頁面下方）",
+    "pageRangeLabel": "套用到頁面（選填）",
+    "pageRangeHint": "使用 \"z\" 表示最後一頁。留空則套用到所有頁面。",
+    "repeatLabel": "如果基礎文件較長，則循環疊加/襯底頁面",
+    "processButton": "套用疊加 / 襯底",
+    "howItWorksUploadTitle": "上傳兩個 PDF",
+    "howItWorksUploadDescription": "上傳您的基礎 PDF 和要疊加或襯底的 PDF。",
+    "howItWorksModeTitle": "選擇模式",
+    "howItWorksModeDescription": "選擇疊加（上方）或襯底（下方）。可選設定頁面範圍和重複。",
+    "howItWorksDownloadTitle": "下載",
+    "howItWorksDownloadDescription": "下載套用了疊加或襯底的 PDF。",
+    "faqDifferenceQuestion": "疊加和襯底有什麼區別？",
+    "faqDifferenceAnswer": "疊加將頁面放在基礎 PDF 上方（如浮水印）。襯底將頁面放在基礎 PDF 下方（如信頭或背景）。",
+    "faqSinglePageQuestion": "我可以使用單頁 PDF 作為所有頁面的疊加嗎？",
+    "faqSinglePageAnswer": "可以！啟用「循環」選項，疊加頁面將在所有基礎頁面上重複。單頁浮水印將套用到每一頁。",
+    "faqPrivacyQuestion": "我的檔案是否私密安全？",
+    "faqPrivacyAnswer": "當然！所有處理都在您的瀏覽器中進行。您的檔案永遠不會離開您的裝置，確保完全隱私。"
   }
 }

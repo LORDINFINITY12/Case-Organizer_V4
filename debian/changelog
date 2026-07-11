@@ -1,3 +1,23 @@
+case-organizer (4.7) stable; urgency=medium
+
+  * BentoPDF suite upgraded from v1.0.0 to v2.8.6 (built from the official
+    upstream release artifact). Six new tools: Add Page Labels, Bates
+    Numbering (useful for court bundles), Overlay PDF, PDF to CBZ,
+    PDF Workflow (chain multiple operations), and Timestamp PDF (RFC 3161).
+    Seven new interface locales (ar, ja, ko, ru, sk, sv, uk) and updated
+    PDF.js viewers. The Case Organizer wrapper (app shell, theme, section
+    stripping, short titles) was re-verified against the new markup — all
+    existing tools keep working unchanged.
+  * Bento CSP: connect-src now also allows rawcdn.githack.com (CJK fallback
+    fonts) and freetsa.org (default RFC 3161 timestamp authority for the new
+    Timestamp PDF tool). Both sit behind the existing CASEORG_BENTO_CDN=0
+    hardening toggle, which strips every external origin.
+  * The bento tree no longer carries precompressed .br/.gz siblings — the
+    app serves files through Waitress, which never used them. This removes
+    ~90 MB of dead weight from the install without any behaviour change.
+
+ -- Izumi <swarajswarupaggarwal@gmail.com>  Sun, 12 Jul 2026 01:00:00 +0530
+
 case-organizer (4.6.2) stable; urgency=medium
 
   * Admin Settings: administrators can now permanently delete a user

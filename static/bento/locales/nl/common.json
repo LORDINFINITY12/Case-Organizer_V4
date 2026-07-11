@@ -5,8 +5,11 @@
     "contact": "Contact",
     "licensing": "Licentie",
     "allTools": "Alle Tools",
+    "docs": "Docs",
     "openMainMenu": "Hoofdmenu openen",
-    "language": "Taal"
+    "language": "Taal",
+    "searchLanguage": "Taal zoeken…",
+    "noLanguagesFound": "Geen talen gevonden"
   },
   "donation": {
     "message": "Vind je BentoPDF geweldig? Help ons het gratis en open source te houden!",
@@ -33,7 +36,7 @@
     },
     "noUploads": {
       "title": "Geen uploads",
-      "description": "100% client-side, je bestanden blijven op jouw apparaat."
+      "description": "100% client-side, jouw bestanden blijven op jouw apparaat."
     },
     "foreverFree": {
       "title": "Voor altijd gratis",
@@ -41,7 +44,7 @@
     },
     "noLimits": {
       "title": "Geen beperkingen",
-      "description": "Gebruik het zoveel je wilt, geen verborgen limiet."
+      "description": "Gebruik het zoveel je wilt, geen verborgen beperkingen."
     },
     "batchProcessing": {
       "title": "Reeksen verwerken",
@@ -56,26 +59,26 @@
     "title": "Aan de slag met",
     "toolsLabel": "Tools",
     "subtitle": "Klik een tool om de bestandslader te openen",
-    "searchPlaceholder": "Zoek een tool (bijv., 'splitsen', 'organiseren'...)",
+    "searchPlaceholder": "Zoek een tool (bijv. 'splitsen', 'organiseren',…)",
     "backToTools": "Terug naar Tools",
-    "firstLoadNotice": "De eerste keer duurt het even om onze conversiemachine te laden. Daarna gaat alles meteen."
+    "firstLoadNotice": "De eerste keer duurt het even om onze machinerie te laden. Daarna laadt alles direct."
   },
   "upload": {
     "clickToSelect": "Klik om een bestand te selecteren",
     "orDragAndDrop": "of sleep er een hierheen",
     "pdfOrImages": "PDF's of afbeeldingen",
-    "filesNeverLeave": "Je bestanden blijven op jouw apparaat.",
+    "filesNeverLeave": "Jouw bestanden blijven op jouw apparaat.",
     "addMore": "Meer bestanden toevoegen",
     "clearAll": "Alles wissen",
     "clearFiles": "Bestanden wissen",
     "hints": {
-      "singlePdf": "Een enkel PDF-bestand",
+      "singlePdf": "Eén enkel PDF-bestand",
       "pdfFile": "PDF-bestand",
       "multiplePdfs2": "Meerdere PDF-bestanden (minimaal 2)",
       "bmpImages": "BMP-afbeeldingen",
-      "oneOrMorePdfs": "Een of meer PDF-bestanden",
+      "oneOrMorePdfs": "Eén of meer PDF-bestanden",
       "pdfDocuments": "PDF-documenten",
-      "oneOrMoreCsv": "Een of meer CSV-bestanden",
+      "oneOrMoreCsv": "Eén of meer CSV-bestanden",
       "multiplePdfsSupported": "Meerdere PDF-bestanden ondersteund",
       "singleOrMultiplePdfs": "Enkel of meerdere PDF-bestanden ondersteund",
       "singlePdfFile": "Enkel PDF-bestand",
@@ -89,14 +92,26 @@
       "multiplePdfs": "Meerdere PDF-bestanden",
       "pngImages": "PNG-afbeeldingen",
       "pdfFilesOneOrMore": "PDF-bestanden (een of meer)",
-      "oneOrMoreRtf": "Een of meer RTF-bestanden",
+      "oneOrMoreRtf": "Eén of meer RTF-bestanden",
       "svgGraphics": "SVG-afbeeldingen",
       "tiffImages": "TIFF-afbeeldingen",
       "webpImages": "WebP-afbeeldingen"
     }
   },
+  "howItWorks": {
+    "title": "Hoe het werkt",
+    "step1Title": "Bestand uploaden",
+    "step1": "Klik of sleep je bestand hierheen",
+    "step2Title": "Verwerken",
+    "step2": "Klik op de verwerkingsknop",
+    "step3Title": "Downloaden",
+    "step3": "Sla je verwerkte bestand direct op"
+  },
+  "relatedTools": {
+    "title": "Gerelateerde PDF-tools"
+  },
   "loader": {
-    "processing": "Verwerken..."
+    "processing": "Verwerken…"
   },
   "alert": {
     "title": "Let op",
@@ -112,7 +127,7 @@
     "shortcuts": "Sneltoetsen",
     "preferences": "Voorkeuren",
     "displayPreferences": "Voorkeuren weergeven",
-    "searchShortcuts": "Sneltoetsen zoeken...",
+    "searchShortcuts": "Sneltoetsen zoeken…",
     "shortcutsInfo": "Houd toetsen ingedrukt om deze in te stellen als sneltoets. Aanpassingen worden automatisch opgeslagen.",
     "shortcutsWarning": "⚠️ Voorkom algemene sneltoetsen voor browsers (Cmd/Ctrl+W, Cmd/Ctrl+T, Cmd/Ctrl+N etc.) aangezien deze niet betrouwbaar kunnen functioneren.",
     "import": "Importeren",
@@ -120,9 +135,13 @@
     "resetToDefaults": "Terugzetten naar standaard",
     "fullWidthMode": "Volledige breedte",
     "fullWidthDescription": "Gebruik de volledige breedte van het scherm in plaats van een gecentreerde kolom",
+    "compactMode": "Compacte modus",
+    "compactModeDescription": "Toon hulpprogramma's als compacte lijst in plaats van kaarten",
+    "advancedSettings": "Geavanceerde instellingen",
+    "advancedSettingsDescription": "Externe verwerkingsmodules configureren (PyMuPDF, Ghostscript, CoherentPDF)",
     "settingsAutoSaved": "Instellingen worden automatisch opgeslagen",
     "clickToSet": "Klik om in te stellen",
-    "pressKeys": "Druk toetsen...",
+    "pressKeys": "Druk toetsen…",
     "warnings": {
       "alreadyInUse": "Sneltoets al in gebruik",
       "assignedTo": "is al toegewezen aan:",
@@ -133,9 +152,9 @@
       "useAnyway": "Wil je het toch gebruiken?",
       "resetTitle": "Sneltoetsen terugzetten",
       "resetMessage": "Weet je zeker dat je alle sneltoetsen wilt terugzetten naar standaard?<br><br>Deze actie kan niet ongedaan worden gemaakt.",
-      "importSuccessTitle": "Import voltooid",
+      "importSuccessTitle": "Importeren is voltooid",
       "importSuccessMessage": "Sneltoetsen zijn met succes geïmporteerd!",
-      "importFailTitle": "Import mislukt",
+      "importFailTitle": "Importeren is mislukt",
       "importFailMessage": "Het importeren van sneltoetsen is mislukt. Ongeldig bestandsformaat."
     }
   },
@@ -166,6 +185,7 @@
   "faq": {
     "title": "Veelgestelde",
     "questions": "Vragen",
+    "sectionTitle": "Veelgestelde vragen",
     "isFree": {
       "question": "Is BentoPDF echt gratis?",
       "answer": "Ja, absoluut. Alle tools op BentoPDF zijn 100% gratis te gebruiken, zonder bestandslimieten, zonder aanmeldingen en zonder watermerken. Wij vinden dat iedereen toegang verdient tot eenvoudige, krachtige PDF-tools zonder betaalmuur."
@@ -197,8 +217,7 @@
     "analytics": {
       "question": "Gebruikt BentoPDF cookies of analytics om mij te volgen?",
       "answer": "We geven om je privacy. BentoPDF houdt geen persoonlijke gegevens bij. We gebruiken Simple Analytics alleen om anonieme bezoekersaantallen te zien. Dit betekent dat we kunnen weten hoeveel mensen onze site bezoeken, maar we weten nooit wie jij bent. Simple Analytics is volledig AVG-conform en respecteert je privacy."
-    },
-    "sectionTitle": "Veelgestelde vragen"
+    }
   },
   "testimonials": {
     "title": "Wat onze",
@@ -250,12 +269,15 @@
     "edit": "Bewerken",
     "add": "Toevoegen",
     "remove": "Verwijderen",
-    "loading": "Laden...",
+    "loading": "Laden…",
+    "loadingPageCount": "Pagina's laden…",
     "error": "Fout",
-    "success": "Success",
+    "success": "Succes",
     "file": "Bestand",
     "files": "Bestanden",
-    "close": "Sluiten"
+    "close": "Sluiten",
+    "convert": "Converteren",
+    "unknownError": "Onbekende fout"
   },
   "about": {
     "hero": {
@@ -328,10 +350,13 @@
     "download": "Laden:",
     "downloadSelected": "Selectie laden",
     "exportPdf": "PDF exporteren",
-    "uploadPdfFiles": "PDF-bestanden selecteren",
-    "dragAndDrop": "Klik om een bestand te selecteren, of sleep er een hierheen",
+    "uploadPdfFiles": "PDF- of afbeeldingsbestanden selecteren",
+    "dragAndDrop": "Klik om een bestand te selecteren, of sleep een PDF of afbeelding hierheen",
     "selectFiles": "Bestanden selecteren",
-    "renderingPages": "Pagina's vewerken...",
+    "dropToAdd": "Sleep PDF- of afbeeldingsbestanden om toe te voegen",
+    "convertingImages": "Afbeeldingen omzetten naar PDF...",
+    "failedToConvertImages": "Afbeeldingen omzetten naar PDF mislukt.",
+    "renderingPages": "Pagina's verwerken…",
     "actions": {
       "duplicatePage": "Deze pagina dupliceren",
       "deletePage": "Deze pagina verwijderen",
@@ -339,7 +364,7 @@
       "toggleSplit": "Splitsing maken na deze pagina"
     },
     "pleaseWait": "Even geduld",
-    "pagesRendering": "Pagina's worden nog verwerkt. Even geduld...",
+    "pagesRendering": "Pagina's worden nog verwerkt. Even geduld…",
     "noPagesSelected": "Geen pagina's geselecteerd",
     "selectOnePage": "Kies tenminste een pagina om te laden.",
     "noPages": "Geen pagina's",
@@ -349,13 +374,14 @@
     "error": "Fout",
     "failedToLoad": "Laden is mislukt"
   },
-  "howItWorks": {
-    "title": "Hoe het werkt",
-    "step1": "Klik of sleep uw bestand hierheen",
-    "step2": "Klik op de verwerkingsknop",
-    "step3": "Sla uw verwerkte bestand direct op"
+  "simpleMode": {
+    "title": "PDF-tools",
+    "subtitle": "Selecteer een tool om te beginnen"
   },
-  "relatedTools": {
-    "title": "Gerelateerde PDF-tools"
+  "disabledTool": {
+    "title": "Tool niet beschikbaar",
+    "heading": "Deze tool is uitgeschakeld",
+    "message": "Deze tool is niet beschikbaar in deze implementatie. Neem contact op met de beheerder voor meer informatie.",
+    "backHome": "Terug naar Thuis"
   }
 }

@@ -5,8 +5,11 @@
     "contact": "Contact",
     "licensing": "Licensing",
     "allTools": "All Tools",
+    "docs": "Docs",
     "openMainMenu": "Open main menu",
-    "language": "Language"
+    "language": "Language",
+    "searchLanguage": "Search language…",
+    "noLanguagesFound": "No languages found"
   },
   "donation": {
     "message": "Love BentoPDF? Help us keep it free and open source!",
@@ -97,8 +100,11 @@
   },
   "howItWorks": {
     "title": "How It Works",
+    "step1Title": "Upload File",
     "step1": "Click or drag and drop your file to begin",
+    "step2Title": "Process",
     "step2": "Click the process button to start",
+    "step3Title": "Download",
     "step3": "Save your processed file instantly"
   },
   "relatedTools": {
@@ -129,6 +135,10 @@
     "resetToDefaults": "Reset to Defaults",
     "fullWidthMode": "Full Width Mode",
     "fullWidthDescription": "Use the full screen width for all tools instead of a centered container",
+    "compactMode": "Compact Mode",
+    "compactModeDescription": "Display tools as a compact list instead of cards",
+    "advancedSettings": "Advanced Settings",
+    "advancedSettingsDescription": "Configure external processing modules (PyMuPDF, Ghostscript, CoherentPDF)",
     "settingsAutoSaved": "Settings are automatically saved",
     "clickToSet": "Click to set",
     "pressKeys": "Press keys...",
@@ -260,11 +270,14 @@
     "add": "Add",
     "remove": "Remove",
     "loading": "Loading...",
+    "loadingPageCount": "Loading pages...",
     "error": "Error",
     "success": "Success",
     "file": "File",
     "files": "Files",
-    "close": "Close"
+    "close": "Close",
+    "convert": "Convert",
+    "unknownError": "Unknown error"
   },
   "about": {
     "hero": {
@@ -337,9 +350,12 @@
     "download": "Download:",
     "downloadSelected": "Download Selected",
     "exportPdf": "Export PDF",
-    "uploadPdfFiles": "Select PDF Files",
-    "dragAndDrop": "Drag and drop PDF files here, or click to select",
+    "uploadPdfFiles": "Select PDF or image files",
+    "dragAndDrop": "Drag and drop PDF or image files here, or click to select",
     "selectFiles": "Select Files",
+    "dropToAdd": "Drop PDF or image files to add",
+    "convertingImages": "Converting images to PDF...",
+    "failedToConvertImages": "Failed to convert images to PDF.",
     "renderingPages": "Rendering pages...",
     "actions": {
       "duplicatePage": "Duplicate this page",
@@ -357,5 +373,15 @@
     "errorRendering": "Failed to render page thumbnails",
     "error": "Error",
     "failedToLoad": "Failed to load"
+  },
+  "simpleMode": {
+    "title": "PDF Tools",
+    "subtitle": "Select a tool to get started"
+  },
+  "disabledTool": {
+    "title": "Tool Unavailable",
+    "heading": "This tool has been disabled",
+    "message": "This tool is not available in your deployment. Contact your administrator for more information.",
+    "backHome": "Back to Home"
   }
 }

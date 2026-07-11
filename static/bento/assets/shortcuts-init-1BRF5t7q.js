@@ -1,0 +1,1 @@
+import{r as e}from"./main-_Y9oAdx3.js";function t(){e.init(),console.log(`Global shortcuts initialized`)}export{t};

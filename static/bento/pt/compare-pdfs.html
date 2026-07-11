@@ -1,9 +1,8 @@
-<!DOCTYPE html><html lang="pt"><head>
+<!DOCTYPE html><html lang="pt" dir="ltr"><head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
     <!-- Primary Meta Tags -->
-    <title>Comparar PDFs - BentoPDF</title>
     <meta name="title" content="Compare Pdfs Online Free - Compare Pdfs Tool | BentoPDF">
     <meta name="description" content="Compare dois PDFs lado a lado.">
     <meta name="keywords" content="compare pdfs, compare pdfs, online pdf">
@@ -11,11 +10,11 @@
     <meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1">
 
     <!-- Canonical URL -->
-    <link rel="canonical" href="https://bentopdf.com/bento/pt/compare-pdfs">
+    <link rel="canonical" href="https://www.bentopdf.com/compare-pdfs">
 
     <!-- Open Graph / Facebook / LinkedIn -->
     <meta property="og:type" content="website">
-    <meta property="og:url" content="https://www.bentopdf.com/compare-pdfs">
+    <meta property="og:url" content="https://www.bentopdf.com/pt/compare-pdfs">
     <meta property="og:title" content="Comparar PDFs - BentoPDF">
     <meta property="og:description" content="Compare dois PDFs lado a lado.">
     <meta property="og:image" content="https://www.bentopdf.com/images/og-compare-pdfs.png">
@@ -25,7 +24,7 @@
 
     <!-- Twitter Card -->
     <meta name="twitter:card" content="summary_large_image">
-    <meta name="twitter:url" content="https://www.bentopdf.com/compare-pdfs">
+    <meta name="twitter:url" content="https://www.bentopdf.com/pt/compare-pdfs">
     <meta name="twitter:title" content="Comparar PDFs - BentoPDF">
     <meta name="twitter:description" content="Compare dois PDFs lado a lado.">
     <meta name="twitter:image" content="https://www.bentopdf.com/images/twitter-compare-pdfs.png">
@@ -36,57 +35,505 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-title" content="Compare Pdfs">
 
-    <title>Compare PDFs - BentoPDF</title>
+    <title>Comparar PDFs - BentoPDF</title>
     <meta name="description" content="Compare two PDF files side by side or with overlay. See differences between PDF versions. Free, secure, and runs entirely in your browser.">
 
     <style>
       .compare-viewer-wrapper.overlay-mode {
         position: relative;
+        display: flex;
+        align-items: stretch;
+        background: #ffffff;
+        overflow: hidden;
+        min-height: 0;
+        padding: 1.5rem;
       }
 
-      .compare-viewer-wrapper.overlay-mode #panel-1,
-      .compare-viewer-wrapper.overlay-mode #panel-2 {
-        position: absolute;
-        top: 0;
-        left: 0;
+      .compare-viewer-wrapper.overlay-mode #panel-1 {
+        flex: 1 1 auto;
         width: 100%;
         height: 100%;
+        min-height: 0;
+        overflow: auto;
+        scrollbar-width: none;
+        -ms-overflow-style: none;
+      }
+
+      .compare-viewer-wrapper.overlay-mode #panel-1::-webkit-scrollbar {
+        display: none;
       }
 
       .compare-viewer-wrapper.overlay-mode #panel-2 {
+        position: absolute;
+        inset: 1.5rem;
+        min-height: 0;
+        overflow: hidden;
         pointer-events: none;
+        background: transparent;
+      }
+
+      .compare-viewer-wrapper.overlay-mode .compare-panel-label {
+        display: none;
+      }
+
+      .compare-viewer-wrapper.overlay-mode .compare-canvas-stage canvas {
+        position: static;
+        top: auto;
+        left: auto;
+        width: auto;
+        height: auto;
+      }
+
+      .compare-viewer-wrapper.overlay-mode
+        #panel-2
+        .compare-canvas-stage
+        canvas {
+        background: transparent;
       }
 
       .compare-viewer-wrapper.side-by-side-mode {
         display: flex;
+        gap: 0;
+        padding: 0;
+        background: #ffffff;
+      }
+
+      .compare-workspace {
+        display: grid;
         gap: 1rem;
+        grid-template-columns: minmax(0, 1fr) 20rem;
+        align-items: stretch;
+        min-height: clamp(32rem, 72vh, 56rem);
+      }
+
+      .compare-viewer-wrapper {
+        height: 100%;
+        min-height: 0;
       }
 
       .compare-viewer-wrapper.side-by-side-mode #panel-1,
       .compare-viewer-wrapper.side-by-side-mode #panel-2 {
         flex: 1;
         overflow: auto;
-        max-height: 70vh;
+        min-height: 0;
+        height: 100%;
+        border: none;
+        border-radius: 0;
+        box-shadow: none;
+      }
+
+      .compare-viewer-wrapper.side-by-side-mode #panel-1 {
+        border-right: 2px solid #cbd5e1;
+      }
+
+      .compare-panel {
+        position: relative;
+        min-width: 0;
+        min-height: 0;
+        background: #ffffff;
+      }
+
+      .compare-panel-label {
+        position: sticky;
+        top: 0;
+        z-index: 5;
+        padding: 0.5rem 1rem;
+        font-size: 0.75rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: #64748b;
+        background: rgba(255, 255, 255, 0.95);
+        border-bottom: 1px solid #e2e8f0;
+        backdrop-filter: blur(4px);
+      }
+
+      .compare-canvas-stage {
+        --compare-stage-pad-top: 1.5rem;
+        --compare-stage-pad-x: 1.75rem;
+        --compare-stage-pad-bottom: 1.75rem;
+        position: relative;
+        width: max-content;
+        margin: 0 auto;
+        padding: var(--compare-stage-pad-top) var(--compare-stage-pad-x)
+          var(--compare-stage-pad-bottom);
+      }
+
+      .compare-canvas-stage canvas {
+        display: block;
+        background: #ffffff;
+      }
+
+      .compare-highlight-layer {
+        position: absolute;
+        inset: var(--compare-stage-pad-top) var(--compare-stage-pad-x)
+          var(--compare-stage-pad-bottom);
+        pointer-events: none;
+      }
+
+      .compare-highlight {
+        position: absolute;
+        border-radius: 2px;
+        border: none;
+      }
+
+      .compare-highlight.added {
+        background: rgba(34, 197, 94, 0.28);
+      }
+
+      .compare-highlight.removed,
+      .compare-highlight.page-removed {
+        background: rgba(239, 68, 68, 0.28);
+      }
+
+      .compare-highlight.modified {
+        background: rgba(245, 158, 11, 0.28);
+      }
+
+      .compare-highlight.moved {
+        background: rgba(168, 85, 247, 0.28);
+      }
+
+      .compare-highlight.style-changed {
+        background: rgba(59, 130, 246, 0.28);
+      }
+
+      .compare-highlight.active {
+        outline: 2px solid rgba(99, 102, 241, 0.7);
+        outline-offset: 1px;
+      }
+
+      .compare-placeholder {
+        position: absolute;
+        inset: 2rem;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        text-align: center;
+        padding: 1rem;
+        border: 1px dashed #94a3b8;
+        border-radius: 0.75rem;
+        color: #475569;
+        background: rgba(255, 255, 255, 0.92);
+      }
+
+      .compare-placeholder.hidden {
+        display: none;
+      }
+
+      .compare-sidebar {
+        display: flex;
+        flex-direction: column;
+        gap: 0;
+        background: rgba(15, 23, 42, 0.6);
+        border: 1px solid rgba(51, 65, 85, 0.5);
+        border-radius: 0.75rem;
+        overflow: hidden;
+        height: 100%;
+        min-height: 0;
+      }
+
+      .compare-sidebar-header {
+        padding: 0.5rem 0.75rem;
+        border-bottom: 1px solid rgba(51, 65, 85, 0.5);
+      }
+
+      .compare-sidebar-filters {
+        display: flex;
+        flex-direction: column;
+        gap: 0;
+        padding: 0;
+        border-bottom: 1px solid rgba(51, 65, 85, 0.4);
+      }
+
+      .compare-filter-group {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 0.25rem;
+        padding: 0.375rem 0.75rem;
+      }
+
+      .compare-filter-group + .compare-filter-group {
+        border-top: 1px solid rgba(51, 65, 85, 0.25);
+      }
+
+      .compare-filter-label {
+        width: 100%;
+        font-size: 0.5625rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        color: #64748b;
+      }
+
+      .compare-pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.1875rem;
+        border-radius: 9999px;
+        padding: 0.125rem 0.5rem;
+        font-size: 0.625rem;
+        font-weight: 600;
+        border: 1px solid transparent;
+        cursor: pointer;
+        transition: all 0.15s;
+        white-space: nowrap;
+      }
+
+      .compare-pill.removed {
+        color: #fca5a5;
+        background: rgba(239, 68, 68, 0.1);
+        border-color: rgba(239, 68, 68, 0.15);
+      }
+
+      .compare-pill.removed.active {
+        background: rgba(239, 68, 68, 0.25);
+        border-color: rgba(239, 68, 68, 0.5);
+      }
+
+      .compare-pill.modified {
+        color: #fcd34d;
+        background: rgba(245, 158, 11, 0.1);
+        border-color: rgba(245, 158, 11, 0.15);
+      }
+
+      .compare-pill.modified.active {
+        background: rgba(245, 158, 11, 0.25);
+        border-color: rgba(245, 158, 11, 0.5);
+      }
+
+      .compare-pill.added {
+        color: #86efac;
+        background: rgba(34, 197, 94, 0.1);
+        border-color: rgba(34, 197, 94, 0.15);
+      }
+
+      .compare-pill.added.active {
+        background: rgba(34, 197, 94, 0.25);
+        border-color: rgba(34, 197, 94, 0.5);
+      }
+
+      .compare-pill.moved {
+        color: #c4b5fd;
+        background: rgba(168, 85, 247, 0.1);
+        border-color: rgba(168, 85, 247, 0.15);
+      }
+
+      .compare-pill.moved.active {
+        background: rgba(168, 85, 247, 0.25);
+        border-color: rgba(168, 85, 247, 0.5);
+      }
+
+      .compare-pill.style-changed {
+        color: #93c5fd;
+        background: rgba(59, 130, 246, 0.1);
+        border-color: rgba(59, 130, 246, 0.15);
+      }
+
+      .compare-pill.style-changed.active {
+        background: rgba(59, 130, 246, 0.25);
+        border-color: rgba(59, 130, 246, 0.5);
+      }
+
+      .compare-pill.category {
+        color: #a5b4fc;
+        background: rgba(99, 102, 241, 0.1);
+        border-color: rgba(99, 102, 241, 0.15);
+      }
+
+      .compare-pill.category.active {
+        background: rgba(99, 102, 241, 0.25);
+        border-color: rgba(99, 102, 241, 0.5);
+      }
+
+      .compare-pill.category.disabled {
+        opacity: 0.35;
+        text-decoration: line-through;
+      }
+
+      .compare-change-list {
+        flex: 1;
+        min-height: 0;
+        overflow-y: auto;
+        padding: 0.75rem;
+      }
+
+      #compare-change-list {
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+      }
+
+      .compare-change-item {
+        padding: 0.5rem 0.75rem;
+        cursor: pointer;
+        transition: background 0.15s;
+        border: 1px solid rgba(51, 65, 85, 0.3);
+        border-radius: 0.5rem;
+        font-size: 0.8125rem;
+        color: #cbd5e1;
+        line-height: 1.5;
+      }
+
+      .compare-change-item:hover {
+        background: rgba(99, 102, 241, 0.06);
+        border-color: rgba(99, 102, 241, 0.2);
+      }
+
+      .compare-change-item.active {
+        background: rgba(99, 102, 241, 0.1);
+        border-color: rgba(99, 102, 241, 0.3);
+      }
+
+      .compare-section-header {
+        display: flex;
+        align-items: center;
+        gap: 0.375rem;
+        padding: 0.25rem 0;
+        margin-top: 0.25rem;
+      }
+
+      .compare-section-label {
+        font-size: 0.6875rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+      }
+
+      .compare-section-label.added,
+      .compare-section-label.page-added {
+        color: #86efac;
+      }
+      .compare-section-label.removed,
+      .compare-section-label.page-removed {
+        color: #fca5a5;
+      }
+      .compare-section-label.modified {
+        color: #fcd34d;
+      }
+      .compare-section-label.moved {
+        color: #c4b5fd;
+      }
+      .compare-section-label.style-changed {
+        color: #93c5fd;
+      }
+
+      .compare-section-count {
+        font-size: 0.625rem;
+        font-weight: 600;
+        color: #64748b;
+      }
+
+      .compare-section-line {
+        flex: 1;
+        height: 1px;
+        background: rgba(51, 65, 85, 0.4);
+      }
+
+      .compare-change-dot {
+        width: 0.375rem;
+        height: 0.375rem;
+        border-radius: 50%;
+        flex-shrink: 0;
+      }
+
+      .compare-change-dot.added {
+        background: #22c55e;
+      }
+      .compare-change-dot.removed {
+        background: #ef4444;
+      }
+      .compare-change-dot.modified {
+        background: #f59e0b;
+      }
+      .compare-change-dot.page-added {
+        background: #22c55e;
+      }
+      .compare-change-dot.page-removed {
+        background: #ef4444;
+      }
+      .compare-change-dot.moved {
+        background: #a855f7;
+      }
+      .compare-change-dot.style-changed {
+        background: #3b82f6;
+      }
+
+      .compare-change-desc {
+        font-size: 0.8125rem;
+        color: #e2e8f0;
+        overflow-wrap: anywhere;
+        white-space: pre-line;
+      }
+
+      .compare-change-empty {
+        padding: 2rem 1rem;
+        font-size: 0.8125rem;
+        color: #64748b;
+        text-align: center;
+      }
+
+      @media (max-width: 1023px) {
+        .compare-workspace {
+          grid-template-columns: minmax(0, 1fr);
+          min-height: 0;
+        }
+
+        .compare-sidebar {
+          height: auto;
+          max-height: 24rem;
+        }
+
+        .compare-viewer-wrapper {
+          height: auto;
+          min-height: 24rem;
+        }
+
+        .compare-viewer-wrapper.side-by-side-mode {
+          gap: 1rem;
+          padding: 1rem;
+        }
+
+        .compare-canvas-stage {
+          --compare-stage-pad-top: 1rem;
+          --compare-stage-pad-x: 1rem;
+          --compare-stage-pad-bottom: 1rem;
+        }
       }
     </style>
 
     <!-- Web App Manifest -->
-    <link rel="manifest" href="/bento/site.webmanifest">
+    <link rel="manifest" href="/site.webmanifest">
 
     <!-- Favicons -->
-    <link rel="icon" type="image/svg+xml" href="/bento/images/favicon.svg">
-    <link rel="icon" type="image/png" sizes="192x192" href="/bento/images/favicon-192x192.png">
-    <link rel="icon" type="image/png" sizes="512x512" href="/bento/images/favicon-512x512.png">
-    <link rel="apple-touch-icon" sizes="180x180" href="/bento/images/apple-touch-icon.png">
-    <link rel="icon" href="/bento/favicon.ico" sizes="32x32">
-    <script type="module" crossorigin="" src="/bento/assets/compare-pdfs-CTu1-fJv.js"></script>
-    <link rel="modulepreload" crossorigin="" href="/bento/assets/style-Cp5tcxXl.js">
-    <link rel="modulepreload" crossorigin="" href="/bento/assets/version-DW2L88GV.js">
-    <link rel="modulepreload" crossorigin="" href="/bento/assets/main-DgzOoPHt.js">
-    <link rel="modulepreload" crossorigin="" href="/bento/assets/simple-mode-footer-BLYI0sJJ.js">
-    <link rel="modulepreload" crossorigin="" href="/bento/assets/mobileMenu-BoMunYmR.js">
-    <link rel="stylesheet" crossorigin="" href="/bento/assets/style-Ds0hahPQ.css">
-  <link rel="alternate" hreflang="be" href="https://bentopdf.com/bento/be/compare-pdfs"><link rel="alternate" hreflang="da" href="https://bentopdf.com/bento/da/compare-pdfs"><link rel="alternate" hreflang="de" href="https://bentopdf.com/bento/de/compare-pdfs"><link rel="alternate" hreflang="en" href="https://bentopdf.com/bento/compare-pdfs"><link rel="alternate" hreflang="es" href="https://bentopdf.com/bento/es/compare-pdfs"><link rel="alternate" hreflang="fr" href="https://bentopdf.com/bento/fr/compare-pdfs"><link rel="alternate" hreflang="id" href="https://bentopdf.com/bento/id/compare-pdfs"><link rel="alternate" hreflang="it" href="https://bentopdf.com/bento/it/compare-pdfs"><link rel="alternate" hreflang="nl" href="https://bentopdf.com/bento/nl/compare-pdfs"><link rel="alternate" hreflang="pt" href="https://bentopdf.com/bento/pt/compare-pdfs"><link rel="alternate" hreflang="tr" href="https://bentopdf.com/bento/tr/compare-pdfs"><link rel="alternate" hreflang="vi" href="https://bentopdf.com/bento/vi/compare-pdfs"><link rel="alternate" hreflang="zh" href="https://bentopdf.com/bento/zh/compare-pdfs"><link rel="alternate" hreflang="zh-TW" href="https://bentopdf.com/bento/zh-TW/compare-pdfs"><link rel="alternate" hreflang="x-default" href="https://bentopdf.com/bento/compare-pdfs"></head>
+    <link rel="icon" type="image/svg+xml" href="/images/favicon.svg">
+    <link rel="icon" type="image/png" sizes="192x192" href="/images/favicon-192x192.png">
+    <link rel="icon" type="image/png" sizes="512x512" href="/images/favicon-512x512.png">
+    <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon.png">
+    <link rel="icon" href="/favicon.ico" sizes="32x32">
+    <script type="module" crossorigin="" src="/assets/compare-pdfs-CoY1KLfZ.js"></script>
+    <link rel="modulepreload" crossorigin="" href="/assets/chunk-2-T-6w9V.js">
+    <link rel="modulepreload" crossorigin="" href="/assets/style-X9TOS9P5.js">
+    <link rel="modulepreload" crossorigin="" href="/assets/preload-helper-CqFqBgT5.js">
+    <link rel="modulepreload" crossorigin="" href="/assets/purify.es-DxpHX2wT.js">
+    <link rel="modulepreload" crossorigin="" href="/assets/dist-CVg9w1Rz.js">
+    <link rel="modulepreload" crossorigin="" href="/assets/dist-DIwQPBgp.js">
+    <link rel="modulepreload" crossorigin="" href="/assets/__vite-browser-external-CSfEiUSk.js">
+    <link rel="modulepreload" crossorigin="" href="/assets/main-_Y9oAdx3.js">
+    <link rel="modulepreload" crossorigin="" href="/assets/es-BBPpdjB2.js">
+    <link rel="modulepreload" crossorigin="" href="/assets/tesseract-runtime-3W8llfh7.js">
+    <link rel="modulepreload" crossorigin="" href="/assets/mobileMenu-BU92ZdYD.js">
+    <link rel="modulepreload" crossorigin="" href="/assets/simple-mode-footer-Blc8EJrq.js">
+    <link rel="modulepreload" crossorigin="" href="/assets/load-pdf-document-7o_Mwgfc.js">
+    <link rel="modulepreload" crossorigin="" href="/assets/lucide-init-4XRqRPqM.js">
+    <link rel="modulepreload" crossorigin="" href="/assets/wasm-provider-r31YVz_6.js">
+    <link rel="modulepreload" crossorigin="" href="/assets/cpdf-helper-I42S7sIA.js">
+    <link rel="modulepreload" crossorigin="" href="/assets/pymupdf-loader-BBuVEKZ0.js">
+    <link rel="modulepreload" crossorigin="" href="/assets/pdf-decrypt-CPlICv3p.js">
+    <link rel="modulepreload" crossorigin="" href="/assets/password-prompt-wWCR_Pye.js">
+    <link rel="stylesheet" crossorigin="" href="/assets/style-twPd8IVR.css">
+  <link rel="alternate" hreflang="ar" href="https://www.bentopdf.com/ar/compare-pdfs"><link rel="alternate" hreflang="be" href="https://www.bentopdf.com/be/compare-pdfs"><link rel="alternate" hreflang="da" href="https://www.bentopdf.com/da/compare-pdfs"><link rel="alternate" hreflang="de" href="https://www.bentopdf.com/de/compare-pdfs"><link rel="alternate" hreflang="en" href="https://www.bentopdf.com/compare-pdfs"><link rel="alternate" hreflang="es" href="https://www.bentopdf.com/es/compare-pdfs"><link rel="alternate" hreflang="fr" href="https://www.bentopdf.com/fr/compare-pdfs"><link rel="alternate" hreflang="id" href="https://www.bentopdf.com/id/compare-pdfs"><link rel="alternate" hreflang="it" href="https://www.bentopdf.com/it/compare-pdfs"><link rel="alternate" hreflang="ja" href="https://www.bentopdf.com/ja/compare-pdfs"><link rel="alternate" hreflang="ko" href="https://www.bentopdf.com/ko/compare-pdfs"><link rel="alternate" hreflang="nl" href="https://www.bentopdf.com/nl/compare-pdfs"><link rel="alternate" hreflang="pt" href="https://www.bentopdf.com/pt/compare-pdfs"><link rel="alternate" hreflang="ru" href="https://www.bentopdf.com/ru/compare-pdfs"><link rel="alternate" hreflang="sk" href="https://www.bentopdf.com/sk/compare-pdfs"><link rel="alternate" hreflang="sv" href="https://www.bentopdf.com/sv/compare-pdfs"><link rel="alternate" hreflang="tr" href="https://www.bentopdf.com/tr/compare-pdfs"><link rel="alternate" hreflang="uk" href="https://www.bentopdf.com/uk/compare-pdfs"><link rel="alternate" hreflang="vi" href="https://www.bentopdf.com/vi/compare-pdfs"><link rel="alternate" hreflang="zh" href="https://www.bentopdf.com/zh/compare-pdfs"><link rel="alternate" hreflang="zh-TW" href="https://www.bentopdf.com/zh-TW/compare-pdfs"><link rel="alternate" hreflang="x-default" href="https://www.bentopdf.com/compare-pdfs"></head>
 
   <body class="antialiased bg-gray-900">
     
@@ -94,19 +541,19 @@
       <div class="container mx-auto px-4">
         <div class="flex justify-between items-center h-16">
           <div class="flex-shrink-0 flex items-center cursor-pointer" id="home-logo">
-            <img src="/bento/images/favicon-no-bg.svg" alt="Bento PDF Logo" class="h-8 w-8">
-            <span class="text-white font-bold text-xl ml-2">
-              <a href="/bento/pt/index.html">BentoPDF</a>
+            <img id="nav-logo" src="/images/favicon-no-bg.svg" alt="Bento PDF Logo" class="h-8 w-8">
+            <span id="nav-brand" class="text-white font-bold text-xl ml-2">
+              <a href="/pt/index.html">BentoPDF</a>
             </span>
           </div>
     
           <!-- Desktop Navigation -->
           <div class="hidden md:flex items-center space-x-8">
-            <a href="/bento/pt/index.html" class="nav-link" data-i18n="nav.home">Home</a>
-            <a href="/bento/pt/about.html" class="nav-link" data-i18n="nav.about">About</a>
-            <a href="/bento/pt/contact.html" class="nav-link" data-i18n="nav.contact">Contact</a>
-            <a href="/bento/pt/licensing.html" class="nav-link" data-i18n="nav.licensing">Licensing</a>
-            <a href="/bento/pt/index.html#tools-header" class="nav-link" data-i18n="nav.allTools">All Tools</a>
+            <a href="/pt/index.html" class="nav-link" data-i18n="nav.home">Home</a>
+            <a href="/pt/about.html" class="nav-link" data-i18n="nav.about">About</a>
+            <a href="/pt/contact.html" class="nav-link" data-i18n="nav.contact">Contact</a>
+            <a href="/pt/licensing.html" class="nav-link" data-i18n="nav.licensing">Licensing</a>
+            <a href="https://bentopdf.com/docs/" class="nav-link" data-i18n="nav.docs">Docs</a>
             <a href="https://github.com/alam00000/bentopdf/" target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-1.5 text-sm font-medium bg-gray-800 text-gray-200 border border-gray-600 pl-2.5 pr-3 py-1 rounded-full transition-colors duration-200 shadow-sm hover:shadow-md hover:bg-gray-700">
               <svg class="w-4 h-4 flex-shrink-0 text-gray-200" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                 <path fill-rule="evenodd" d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.531 1.032 1.531 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z" clip-rule="evenodd"></path>
@@ -141,17 +588,17 @@
       <!-- Mobile Menu Dropdown -->
       <div id="mobile-menu" class="hidden md:hidden bg-gray-800 border-t border-gray-700">
         <div class="px-2 pt-2 pb-3 space-y-1 text-center">
-          <a href="/bento/pt/index.html" class="mobile-nav-link" data-i18n="nav.home">Home</a>
-          <a href="/bento/pt/about.html" class="mobile-nav-link" data-i18n="nav.about">About</a>
-          <a href="/bento/pt/contact.html" class="mobile-nav-link" data-i18n="nav.contact">Contact</a>
-          <a href="/bento/pt/licensing.html" class="mobile-nav-link" data-i18n="nav.licensing">Licensing</a>
-          <a href="/bento/pt/index.html#tools-header" class="mobile-nav-link" data-i18n="nav.allTools">All Tools</a>
+          <a href="/pt/index.html" class="mobile-nav-link" data-i18n="nav.home">Home</a>
+          <a href="/pt/about.html" class="mobile-nav-link" data-i18n="nav.about">About</a>
+          <a href="/pt/contact.html" class="mobile-nav-link" data-i18n="nav.contact">Contact</a>
+          <a href="/pt/licensing.html" class="mobile-nav-link" data-i18n="nav.licensing">Licensing</a>
+          <a href="https://bentopdf.com/docs/" class="mobile-nav-link" data-i18n="nav.docs">Docs</a>
         </div>
       </div>
     </nav>
 
     <div id="uploader" class="min-h-screen flex flex-col items-center justify-start py-12 p-4 bg-gray-900">
-      <div id="tool-uploader" class="bg-gray-800 rounded-xl shadow-xl px-4 py-8 md:p-8 max-w-5xl w-full text-gray-200 border border-gray-700">
+      <div id="tool-uploader" class="bg-gray-800 rounded-xl shadow-xl px-4 py-8 md:p-8 max-w-[96rem] w-full text-gray-200 border border-gray-700">
         <button id="back-to-tools" class="flex items-center gap-2 text-indigo-400 hover:text-indigo-300 mb-6 font-semibold">
           <i data-lucide="arrow-left" class="cursor-pointer"></i>
           <span class="cursor-pointer" data-i18n="tools.backToTools">
@@ -159,12 +606,11 @@
           </span>
         </button>
 
-        <h1 class="text-2xl font-bold text-white mb-2" data-i18n="tools:comparePdfs.name">
-          Compare Pdfs Free Online - Fast &amp; Secure
+        <nav aria-label="Breadcrumb" data-bentopdf-breadcrumb="" class="text-sm text-gray-400 mb-4"><a href="https://www.bentopdf.com/pt" class="hover:text-indigo-300">BentoPDF</a><span aria-hidden="true" class="mx-2">›</span><span class="text-gray-300" aria-current="page">Comparar PDFs</span></nav><h1 class="text-2xl font-bold text-white mb-2" data-i18n="tools:comparePdfs.name">
+          Compare PDFs
         </h1>
         <p class="text-gray-400 mb-6" data-i18n="tools:comparePdfs.subtitle">
-          Upload two PDF files to compare them side by side or with overlay
-          mode.
+          Compare two PDFs side by side.
         </p>
 
         <!-- File Upload Areas -->
@@ -172,16 +618,24 @@
           <div id="drop-zone-1" class="relative flex flex-col items-center justify-center w-full h-48 md:h-64 border-2 border-dashed border-gray-600 rounded-xl cursor-pointer bg-gray-900 hover:bg-gray-700 transition-colors duration-300">
             <div id="file-display-1" class="flex flex-col items-center justify-center">
               <i data-lucide="file-text" class="w-8 h-8 mb-2 text-gray-400"></i>
-              <p class="text-sm text-gray-400">First PDF</p>
-              <p class="text-xs text-gray-500">Click or drop</p>
+              <p class="text-sm text-gray-400" data-i18n="tools:comparePdfs.firstPdf">
+                First PDF
+              </p>
+              <p class="text-xs text-gray-500" data-i18n="tools:comparePdfs.clickOrDrop">
+                Click or drop
+              </p>
             </div>
             <input id="file-input-1" type="file" class="absolute top-0 left-0 w-full h-full opacity-0 cursor-pointer" accept="application/pdf">
           </div>
           <div id="drop-zone-2" class="relative flex flex-col items-center justify-center w-full h-48 md:h-64 border-2 border-dashed border-gray-600 rounded-xl cursor-pointer bg-gray-900 hover:bg-gray-700 transition-colors duration-300">
             <div id="file-display-2" class="flex flex-col items-center justify-center">
               <i data-lucide="file-text" class="w-8 h-8 mb-2 text-gray-400"></i>
-              <p class="text-sm text-gray-400">Second PDF</p>
-              <p class="text-xs text-gray-500">Click or drop</p>
+              <p class="text-sm text-gray-400" data-i18n="tools:comparePdfs.secondPdf">
+                Second PDF
+              </p>
+              <p class="text-xs text-gray-500" data-i18n="tools:comparePdfs.clickOrDrop">
+                Click or drop
+              </p>
             </div>
             <input id="file-input-2" type="file" class="absolute top-0 left-0 w-full h-full opacity-0 cursor-pointer" accept="application/pdf">
           </div>
@@ -189,62 +643,206 @@
 
         <!-- Compare Viewer (hidden until both files loaded) -->
         <div id="compare-viewer" class="hidden">
-          <!-- Unified Toolbar -->
-          <div class="flex flex-wrap items-center justify-center gap-4 mb-4 p-3 bg-gray-900 rounded-lg border border-gray-700">
-            <!-- Page Navigation -->
-            <button id="prev-page-compare" class="btn p-2 rounded-full bg-gray-700 hover:bg-gray-600 disabled:opacity-50" disabled="">
-              <i data-lucide="chevron-left"></i>
+          <!-- Toolbar -->
+          <div class="flex flex-wrap items-center gap-3 mb-3 p-2 bg-gray-900 rounded-lg border border-gray-700">
+            <button id="prev-page-compare" class="btn p-1.5 rounded bg-gray-700 hover:bg-gray-600 disabled:opacity-50" disabled="" title="Previous page">
+              <i data-lucide="chevron-left" class="w-4 h-4"></i>
             </button>
-            <span class="text-white font-medium">
-              Page <span id="current-page-display-compare">1</span> of
+            <span class="text-sm text-white font-medium">
+              Page <span id="current-page-display-compare">1</span> /
               <span id="total-pages-display-compare">1</span>
             </span>
-            <button id="next-page-compare" class="btn p-2 rounded-full bg-gray-700 hover:bg-gray-600 disabled:opacity-50" disabled="">
-              <i data-lucide="chevron-right"></i>
+            <button id="next-page-compare" class="btn p-1.5 rounded bg-gray-700 hover:bg-gray-600 disabled:opacity-50" disabled="" title="Next page">
+              <i data-lucide="chevron-right" class="w-4 h-4"></i>
             </button>
 
-            <!-- Divider -->
-            <div class="border-l border-gray-600 h-6 mx-2 hidden sm:block"></div>
+            <div class="border-l border-gray-700 h-5 mx-1"></div>
 
-            <!-- View Mode Buttons -->
-            <div class="bg-gray-700 p-1 rounded-md flex gap-1">
-              <button id="view-mode-overlay" class="btn bg-indigo-600 px-3 py-1 rounded text-sm font-semibold">
+            <div class="bg-gray-700 p-0.5 rounded flex gap-0.5">
+              <button id="view-mode-overlay" class="btn bg-indigo-600 px-2.5 py-1 rounded text-xs font-semibold">
                 Overlay
               </button>
-              <button id="view-mode-side" class="btn px-3 py-1 rounded text-sm font-semibold">
+              <button id="view-mode-side" class="btn px-2.5 py-1 rounded text-xs font-semibold">
                 Side-by-Side
               </button>
             </div>
 
-            <!-- Divider -->
-            <div class="border-l border-gray-600 h-6 mx-2 hidden sm:block"></div>
+            <div class="border-l border-gray-700 h-5 mx-1"></div>
 
-            <!-- Overlay Controls -->
-            <div id="overlay-controls" class="flex items-center gap-2">
-              <button id="flicker-btn" class="btn bg-gray-700 hover:bg-gray-600 px-3 py-1 rounded-md text-sm font-semibold">
+            <button id="prev-change-btn" class="btn bg-gray-700 hover:bg-gray-600 px-2.5 py-1 rounded text-xs font-semibold disabled:opacity-50" disabled="" title="Previous change">
+              <i data-lucide="chevron-up" class="w-3.5 h-3.5"></i>
+            </button>
+            <button id="next-change-btn" class="btn bg-gray-700 hover:bg-gray-600 px-2.5 py-1 rounded text-xs font-semibold disabled:opacity-50" disabled="" title="Next change">
+              <i data-lucide="chevron-down" class="w-3.5 h-3.5"></i>
+            </button>
+
+            <div class="border-l border-gray-700 h-5 mx-1"></div>
+
+            <button id="zoom-out-btn" class="btn p-1.5 rounded bg-gray-700 hover:bg-gray-600 disabled:opacity-50" title="Zoom out">
+              <i data-lucide="minus" class="w-3.5 h-3.5"></i>
+            </button>
+            <span id="zoom-level-display" class="text-xs text-gray-300 font-medium min-w-[3rem] text-center select-none">100%</span>
+            <button id="zoom-in-btn" class="btn p-1.5 rounded bg-gray-700 hover:bg-gray-600 disabled:opacity-50" title="Zoom in">
+              <i data-lucide="plus" class="w-3.5 h-3.5"></i>
+            </button>
+            <button id="zoom-reset-btn" class="btn px-2.5 py-1 rounded bg-gray-700 hover:bg-gray-600 text-xs font-semibold" title="Reset zoom to fit">
+              Fit
+            </button>
+
+            <div class="flex-1"></div>
+
+            <div id="overlay-controls" class="hidden flex items-center gap-2">
+              <div class="bg-gray-700 p-0.5 rounded flex gap-0.5">
+                <button id="overlay-scope-all" class="btn bg-indigo-600 px-2.5 py-1 rounded text-xs font-semibold">
+                  All changes
+                </button>
+                <button id="overlay-scope-content-only" class="btn px-2.5 py-1 rounded text-xs font-semibold bg-gray-700">
+                  Content only
+                </button>
+              </div>
+              <button id="flicker-btn" class="btn bg-gray-700 hover:bg-gray-600 px-2.5 py-1 rounded text-xs font-semibold">
                 Flicker
               </button>
-              <label for="opacity-slider" class="text-sm font-medium text-gray-300">Opacity:</label>
-              <input type="range" id="opacity-slider" min="0" max="1" step="0.05" value="0.5" class="w-24 accent-indigo-500">
+              <label class="flex items-center gap-1.5 text-xs text-gray-300 cursor-pointer">
+                <input type="checkbox" id="overlay-ocr-toggle" checked="" class="w-3.5 h-3.5 rounded text-indigo-600 bg-gray-700 border-gray-600">
+                OCR
+              </label>
+              <input type="range" id="opacity-slider" min="0" max="1" step="0.05" value="0.5" class="w-20 accent-indigo-500">
             </div>
 
-            <!-- Side-by-side Controls (hidden initially) -->
-            <div id="side-by-side-controls" class="hidden flex items-center gap-2">
-              <label class="flex items-center gap-2 text-sm font-medium text-gray-300 cursor-pointer">
-                <input type="checkbox" id="sync-scroll-toggle" checked="" class="w-4 h-4 rounded text-indigo-600 bg-gray-700 border-gray-600 focus:ring-indigo-500">
-                Sync Scrolling
+            <div id="side-by-side-controls" class="flex items-center gap-2">
+              <label class="flex items-center gap-1.5 text-xs text-gray-300 cursor-pointer">
+                <input type="checkbox" id="sync-scroll-toggle" checked="" class="w-3.5 h-3.5 rounded text-indigo-600 bg-gray-700 border-gray-600">
+                Sync scroll
               </label>
+              <label class="flex items-center gap-1.5 text-xs text-gray-300 cursor-pointer">
+                <input type="checkbox" id="ocr-toggle" checked="" class="w-3.5 h-3.5 rounded text-indigo-600 bg-gray-700 border-gray-600">
+                OCR
+              </label>
+            </div>
+
+            <div class="relative" id="export-dropdown-wrapper">
+              <button id="export-dropdown-btn" class="btn bg-indigo-600 hover:bg-indigo-500 px-3 py-1.5 rounded text-xs font-semibold flex items-center gap-1.5 disabled:opacity-50" disabled="">
+                <i data-lucide="upload" class="w-3.5 h-3.5"></i>
+                Export
+                <i data-lucide="chevron-down" class="w-3 h-3"></i>
+              </button>
+              <div id="export-dropdown-menu" class="hidden absolute right-0 top-full mt-1 w-48 bg-gray-800 border border-gray-600 rounded-lg shadow-xl z-50 py-1">
+                <div class="px-3 py-1.5 text-[10px] font-semibold text-gray-400 uppercase tracking-wider">
+                  Export as PDF
+                </div>
+                <button data-export-mode="overlay" class="export-menu-item export-menu-item-overlay w-full px-3 py-2 text-sm text-left text-gray-200 hover:bg-gray-700 flex items-center gap-2 hidden">
+                  <i data-lucide="layers" class="w-4 h-4 text-gray-400"></i>
+                  Overlay view
+                </button>
+                <button data-export-mode="split" class="export-menu-item export-menu-item-side w-full px-3 py-2 text-sm text-left text-gray-200 hover:bg-gray-700 flex items-center gap-2">
+                  <i data-lucide="columns-2" class="w-4 h-4 text-gray-400"></i>
+                  Split view
+                </button>
+                <button data-export-mode="alternating" class="export-menu-item export-menu-item-side w-full px-3 py-2 text-sm text-left text-gray-200 hover:bg-gray-700 flex items-center gap-2">
+                  <i data-lucide="layers" class="w-4 h-4 text-gray-400"></i>
+                  Alternating
+                </button>
+                <button data-export-mode="left" class="export-menu-item export-menu-item-side w-full px-3 py-2 text-sm text-left text-gray-200 hover:bg-gray-700 flex items-center gap-2">
+                  <i data-lucide="columns-2" class="w-4 h-4 text-gray-400"></i>
+                  Left Document
+                </button>
+                <button data-export-mode="right" class="export-menu-item export-menu-item-side w-full px-3 py-2 text-sm text-left text-gray-200 hover:bg-gray-700 flex items-center gap-2">
+                  <i data-lucide="columns-2" class="w-4 h-4 text-gray-400"></i>
+                  Right Document
+                </button>
+              </div>
             </div>
           </div>
 
-          <!-- Viewer Wrapper -->
-          <div id="compare-viewer-wrapper" class="compare-viewer-wrapper overlay-mode bg-gray-900 rounded-lg border border-gray-700 min-h-[400px] relative">
-            <div id="panel-1" class="overflow-auto">
-              <canvas id="canvas-compare-1" class="block mx-auto"></canvas>
+          <div class="compare-workspace">
+            <div id="compare-viewer-wrapper" class="compare-viewer-wrapper side-by-side-mode border border-slate-200 relative">
+              <div id="panel-1" class="compare-panel overflow-auto">
+                <div class="compare-panel-label" id="compare-panel-label-1">
+                  Original
+                </div>
+                <div class="compare-canvas-stage">
+                  <canvas id="canvas-compare-1" class="block mx-auto"></canvas>
+                  <div id="highlights-1" class="compare-highlight-layer"></div>
+                  <div id="placeholder-1" class="compare-placeholder hidden"></div>
+                </div>
+              </div>
+              <div id="panel-2" class="compare-panel overflow-auto">
+                <div class="compare-panel-label" id="compare-panel-label-2">
+                  Modified
+                </div>
+                <div class="compare-canvas-stage">
+                  <canvas id="canvas-compare-2" class="block mx-auto" style="opacity: 1"></canvas>
+                  <div id="highlights-2" class="compare-highlight-layer"></div>
+                  <div id="placeholder-2" class="compare-placeholder hidden"></div>
+                </div>
+              </div>
             </div>
-            <div id="panel-2" class="overflow-auto">
-              <canvas id="canvas-compare-2" class="block mx-auto" style="opacity: 0.5"></canvas>
-            </div>
+
+            <aside class="compare-sidebar">
+              <div class="compare-sidebar-header">
+                <div class="relative">
+                  <span class="absolute inset-y-0 left-0 flex items-center pl-3">
+                    <i data-lucide="search" class="w-4 h-4 text-gray-400"></i>
+                  </span>
+                  <input type="text" id="compare-search-input" placeholder="Search changes..." class="w-full pl-9 pr-3 py-2 bg-gray-700 text-white text-sm border border-gray-600 rounded-lg focus:ring-indigo-500 focus:border-indigo-500">
+                </div>
+              </div>
+
+              <div class="compare-sidebar-filters">
+                <div class="compare-filter-group">
+                  <div class="compare-filter-label">Change Type</div>
+                  <button id="filter-removed" class="compare-pill removed">
+                    <span class="compare-change-dot removed"></span>
+                    <span id="summary-removed-count">0</span> Deleted
+                  </button>
+                  <button id="filter-added" class="compare-pill added">
+                    <span class="compare-change-dot added"></span>
+                    <span id="summary-added-count">0</span> Added
+                  </button>
+                  <button id="filter-modified" class="compare-pill modified">
+                    <span class="compare-change-dot modified"></span>
+                    <span id="summary-modified-count">0</span> Modified
+                  </button>
+                  <button id="filter-moved" class="compare-pill moved">
+                    <span class="compare-change-dot moved"></span>
+                    <span id="summary-moved-count">0</span> Moved
+                  </button>
+                  <button id="filter-style-changed" class="compare-pill style-changed">
+                    <span class="compare-change-dot style-changed"></span>
+                    <span id="summary-style-changed-count">0</span> Style
+                  </button>
+                </div>
+                <div class="compare-filter-group">
+                  <div class="compare-filter-label">Content</div>
+                  <button id="category-text" class="compare-pill category active">
+                    <span id="category-count-text">0</span> Text
+                  </button>
+                  <button id="category-image" class="compare-pill category active">
+                    <span id="category-count-image">0</span> Images
+                  </button>
+                  <button id="category-header-footer" class="compare-pill category active">
+                    <span id="category-count-header-footer">0</span> Headers
+                  </button>
+                  <button id="category-annotation" class="compare-pill category active">
+                    <span id="category-count-annotation">0</span> Annotations
+                  </button>
+                  <button id="category-formatting" class="compare-pill category active">
+                    <span id="category-count-formatting">0</span> Formatting
+                  </button>
+                  <button id="category-background" class="compare-pill category active">
+                    <span id="category-count-background">0</span> Backgrounds
+                  </button>
+                </div>
+              </div>
+
+              <div class="compare-change-list">
+                <div id="change-list-empty" class="compare-change-empty">
+                  Upload two PDFs to see differences.
+                </div>
+                <div id="compare-change-list" class="hidden"></div>
+              </div>
+            </aside>
           </div>
         </div>
       </div>
@@ -321,23 +919,23 @@
         Related PDF Tools
       </h2>
       <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
-        <a href="/bento/pt/merge-pdf.html" class="block bg-gray-800 p-4 rounded-lg hover:bg-gray-700 transition-colors border border-gray-700">
+        <a href="/pt/merge-pdf.html" class="block bg-gray-800 p-4 rounded-lg hover:bg-gray-700 transition-colors border border-gray-700">
           <h3 class="text-white font-semibold mb-1">Merge Pdf</h3>
           <p class="text-gray-400 text-sm">Free online merge pdf tool</p>
         </a>
-        <a href="/bento/pt/compress-pdf.html" class="block bg-gray-800 p-4 rounded-lg hover:bg-gray-700 transition-colors border border-gray-700">
+        <a href="/pt/compress-pdf.html" class="block bg-gray-800 p-4 rounded-lg hover:bg-gray-700 transition-colors border border-gray-700">
           <h3 class="text-white font-semibold mb-1">Compress Pdf</h3>
           <p class="text-gray-400 text-sm">Free online compress pdf tool</p>
         </a>
-        <a href="/bento/pt/split-pdf.html" class="block bg-gray-800 p-4 rounded-lg hover:bg-gray-700 transition-colors border border-gray-700">
+        <a href="/pt/split-pdf.html" class="block bg-gray-800 p-4 rounded-lg hover:bg-gray-700 transition-colors border border-gray-700">
           <h3 class="text-white font-semibold mb-1">Split Pdf</h3>
           <p class="text-gray-400 text-sm">Free online split pdf tool</p>
         </a>
-        <a href="/bento/pt/edit-pdf.html" class="block bg-gray-800 p-4 rounded-lg hover:bg-gray-700 transition-colors border border-gray-700">
+        <a href="/pt/edit-pdf.html" class="block bg-gray-800 p-4 rounded-lg hover:bg-gray-700 transition-colors border border-gray-700">
           <h3 class="text-white font-semibold mb-1">Edit Pdf</h3>
           <p class="text-gray-400 text-sm">Free online edit pdf tool</p>
         </a>
-        <a href="/bento/pt/rotate-pdf.html" class="block bg-gray-800 p-4 rounded-lg hover:bg-gray-700 transition-colors border border-gray-700">
+        <a href="/pt/rotate-pdf.html" class="block bg-gray-800 p-4 rounded-lg hover:bg-gray-700 transition-colors border border-gray-700">
           <h3 class="text-white font-semibold mb-1">Rotate Pdf</h3>
           <p class="text-gray-400 text-sm">Free online rotate pdf tool</p>
         </a>
@@ -388,15 +986,15 @@
         <div class="grid grid-cols-1 md:grid-cols-4 gap-8 text-center md:text-left">
           <div class="mb-8 md:mb-0">
             <div class="flex items-center justify-center md:justify-start mb-4">
-              <img src="/bento/images/favicon.svg" alt="Bento PDF Logo" class="h-10 w-10 mr-3">
-              <span class="text-xl font-bold text-white">BentoPDF</span>
+              <img id="footer-logo" src="/images/favicon.svg" alt="Bento PDF Logo" class="h-10 w-10 mr-3">
+              <span id="footer-brand" class="text-xl font-bold text-white">BentoPDF</span>
             </div>
-            <p class="text-gray-400 text-sm" data-i18n="footer.copyright">
+            <p id="footer-copyright" class="text-gray-400 text-sm" data-i18n="footer.copyright">
               © 2026 BentoPDF. All rights reserved.
             </p>
-            <p class="text-gray-500 text-xs mt-2">
+            <p class="text-gray-400 text-xs mt-2">
               <span data-i18n="footer.version">Version</span>
-              <span id="app-version"></span>
+              <span id="app-version">2.8.6</span>
             </p>
           </div>
     
@@ -406,13 +1004,13 @@
             </h3>
             <ul class="space-y-2 text-gray-400">
               <li>
-                <a href="/bento/pt/about.html" class="hover:text-indigo-400" data-i18n="footer.aboutUs">About Us</a>
+                <a href="/pt/about.html" class="hover:text-indigo-400" data-i18n="footer.aboutUs">About Us</a>
               </li>
               <li>
-                <a href="/bento/pt/faq.html" class="hover:text-indigo-400" data-i18n="footer.faqLink">FAQ</a>
+                <a href="/pt/faq.html" class="hover:text-indigo-400" data-i18n="footer.faqLink">FAQ</a>
               </li>
               <li>
-                <a href="/bento/pt/contact.html" class="hover:text-indigo-400" data-i18n="footer.contactUs">Contact Us</a>
+                <a href="/pt/contact.html" class="hover:text-indigo-400" data-i18n="footer.contactUs">Contact Us</a>
               </li>
             </ul>
           </div>
@@ -423,16 +1021,16 @@
             </h3>
             <ul class="space-y-2 text-gray-400">
               <li>
-                <a href="/bento/pt/licensing.html" class="hover:text-indigo-400" data-i18n="nav.licensing">Licensing</a>
+                <a href="/pt/licensing.html" class="hover:text-indigo-400" data-i18n="nav.licensing">Licensing</a>
               </li>
               <li>
-                <a href="/bento/pt/terms.html" class="hover:text-indigo-400" data-i18n="footer.termsAndConditions">Terms and Conditions</a>
+                <a href="/pt/terms.html" class="hover:text-indigo-400" data-i18n="footer.termsAndConditions">Terms and Conditions</a>
               </li>
               <li>
-                <a href="/bento/pt/privacy.html" class="hover:text-indigo-400" data-i18n="footer.privacyPolicy">Privacy Policy</a>
+                <a href="/pt/privacy.html" class="hover:text-indigo-400" data-i18n="footer.privacyPolicy">Privacy Policy</a>
               </li>
               <li>
-                <a href="/bento/pt/wasm-settings.html" class="hover:text-indigo-400">Advanced Settings</a>
+                <a href="/pt/wasm-settings.html" class="hover:text-indigo-400">Advanced Settings</a>
               </li>
             </ul>
           </div>
@@ -452,10 +1050,10 @@
                   <path d="M20.317 4.37a19.791 19.791 0 0 0-4.885-1.515a.074.074 0 0 0-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 0 0-5.487 0a12.64 12.64 0 0 0-.617-1.25a.077.077 0 0 0-.079-.037A19.736 19.736 0 0 0 3.677 4.37a.07.07 0 0 0-.032.027C.533 9.046-.32 13.58.099 18.057a.082.082 0 0 0 .031.057a19.9 19.9 0 0 0 5.993 3.03a.078.078 0 0 0 .084-.028a14.09 14.09 0 0 0 1.226-1.994a.076.076 0 0 0-.041-.106a13.107 13.107 0 0 1-1.872-.892a.077.077 0 0 1-.008-.128a10.2 10.2 0 0 0 .372-.292a.074.074 0 0 1 .077-.01c3.928 1.793 8.18 1.793 12.062 0a.074.074 0 0 1 .078.01c.12.098.246.198.373.292a.077.077 0 0 1-.006.127a12.299 12.299 0 0 1-1.873.892a.077.077 0 0 0-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 0 0 .084.028a19.839 19.839 0 0 0 6.002-3.03a.077.077 0 0 0 .032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 0 0-.031-.03zM8.02 15.33c-1.183 0-2.157-1.085-2.157-2.419c0-1.333.956-2.419 2.157-2.419c1.21 0 2.176 1.096 2.157 2.42c0 1.333-.956 2.418-2.157 2.418zm7.975 0c-1.183 0-2.157-1.085-2.157-2.419c0-1.333.955-2.419 2.157-2.419c1.21 0 2.176 1.096 2.157 2.42c0 1.333-.946 2.418-2.157 2.418z"></path>
                 </svg>
               </a>
-              <a href="https://www.instagram.com/thebentopdf/" class="text-gray-400 hover:text-indigo-400" title="Instagram">
+              <a href="https://www.instagram.com/thebentopdf/" target="_blank" rel="noopener noreferrer" class="text-gray-400 hover:text-indigo-400" title="Instagram">
                 <i data-lucide="instagram"></i>
               </a>
-              <a href="https://www.linkedin.com/company/bentopdf/" class="text-gray-400 hover:text-indigo-400" title="LinkedIn">
+              <a href="https://www.linkedin.com/company/bentopdf/" target="_blank" rel="noopener noreferrer" class="text-gray-400 hover:text-indigo-400" title="LinkedIn">
                 <i data-lucide="linkedin"></i>
               </a>
               <a href="https://x.com/BentoPDF" class="text-gray-400 hover:text-indigo-400" title="X (Twitter)">
@@ -482,11 +1080,6 @@
           "@type": "Offer",
           "price": "0",
           "priceCurrency": "USD"
-        },
-        "aggregateRating": {
-          "@type": "AggregateRating",
-          "ratingValue": "4.9",
-          "ratingCount": "2494"
         }
       }
     </script>
@@ -542,4 +1135,33 @@
     </script>
   
 
-</body></html>
+<script type="application/ld+json" data-bentopdf-organization="">{
+  "@context": "https://schema.org",
+  "@type": "Organization",
+  "name": "BentoPDF",
+  "url": "https://www.bentopdf.com",
+  "logo": "https://www.bentopdf.com/images/favicon.svg",
+  "sameAs": [
+    "https://github.com/alam00000/bentopdf",
+    "https://x.com/BentoPDF",
+    "https://www.linkedin.com/company/bentopdf/",
+    "https://www.instagram.com/thebentopdf/"
+  ]
+}</script><script type="application/ld+json" data-bentopdf-breadcrumb="">{
+  "@context": "https://schema.org",
+  "@type": "BreadcrumbList",
+  "itemListElement": [
+    {
+      "@type": "ListItem",
+      "position": 1,
+      "name": "BentoPDF",
+      "item": "https://www.bentopdf.com/pt"
+    },
+    {
+      "@type": "ListItem",
+      "position": 2,
+      "name": "Comparar PDFs",
+      "item": "https://www.bentopdf.com/pt/compare-pdfs"
+    }
+  ]
+}</script></body></html>

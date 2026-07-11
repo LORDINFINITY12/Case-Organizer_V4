@@ -5,8 +5,11 @@
     "contact": "Contact",
     "licensing": "Licence",
     "allTools": "Tous les outils",
+    "docs": "Docs",
     "openMainMenu": "Ouvrir le menu principal",
-    "language": "Langue"
+    "language": "Langue",
+    "searchLanguage": "Rechercher une langue…",
+    "noLanguagesFound": "Aucune langue trouvée"
   },
   "donation": {
     "message": "Vous aimez BentoPDF ? Aidez-nous à le garder open source !",
@@ -95,6 +98,18 @@
       "webpImages": "Images WebP"
     }
   },
+  "howItWorks": {
+    "title": "Comment ça marche",
+    "step1Title": "Téléverser le fichier",
+    "step1": "Cliquez ou glissez votre fichier ici",
+    "step2Title": "Traiter",
+    "step2": "Cliquez sur le bouton de traitement",
+    "step3Title": "Télécharger",
+    "step3": "Enregistrez votre fichier traité instantanément"
+  },
+  "relatedTools": {
+    "title": "Outils PDF associés"
+  },
   "loader": {
     "processing": "Traitement en cours..."
   },
@@ -120,6 +135,10 @@
     "resetToDefaults": "Rétablir les paramètres par défaut",
     "fullWidthMode": "Mode pleine largeur",
     "fullWidthDescription": "Utiliser toute la largeur de l’écran au lieu d’un affichage centré",
+    "compactMode": "Mode compact",
+    "compactModeDescription": "Afficher les outils sous forme de liste compacte au lieu de cartes",
+    "advancedSettings": "Paramètres avancés",
+    "advancedSettingsDescription": "Configurer les modules de traitement externes (PyMuPDF, Ghostscript, CoherentPDF)",
     "settingsAutoSaved": "Les paramètres sont enregistrés automatiquement",
     "clickToSet": "Cliquez pour définir",
     "pressKeys": "Appuyez sur les touches...",
@@ -166,6 +185,7 @@
   "faq": {
     "title": "Questions",
     "questions": "fréquentes",
+    "sectionTitle": "Questions fréquemment posées",
     "isFree": {
       "question": "BentoPDF est-il vraiment gratuit ?",
       "answer": "Oui, totalement. Tous les outils BentoPDF sont 100 % gratuits, sans limite de fichiers, sans inscription et sans filigrane. Nous pensons que chacun doit avoir accès à des outils PDF simples et puissants, sans barrière payante."
@@ -197,8 +217,7 @@
     "analytics": {
       "question": "Utilisez-vous des cookies ou des outils de suivi ?",
       "answer": "Nous respectons votre vie privée. BentoPDF utilise uniquement des statistiques anonymes pour connaître le nombre de visites, sans jamais identifier les utilisateurs."
-    },
-    "sectionTitle": "Questions fréquemment posées"
+    }
   },
   "testimonials": {
     "title": "Ce que disent",
@@ -251,11 +270,14 @@
     "add": "Ajouter",
     "remove": "Retirer",
     "loading": "Chargement...",
+    "loadingPageCount": "Chargement des pages…",
     "error": "Erreur",
     "success": "Succès",
     "file": "Fichier",
     "files": "Fichiers",
-    "close": "Fermer"
+    "close": "Fermer",
+    "convert": "Convertir",
+    "unknownError": "Erreur inconnue"
   },
   "about": {
     "hero": {
@@ -328,9 +350,12 @@
     "download": "Téléchargement :",
     "downloadSelected": "Télécharger la sélection",
     "exportPdf": "Exporter en PDF",
-    "uploadPdfFiles": "Sélectionner des fichiers PDF",
-    "dragAndDrop": "Glissez-déposez vos fichiers PDF ici ou cliquez pour sélectionner",
+    "uploadPdfFiles": "Sélectionner des fichiers PDF ou des images",
+    "dragAndDrop": "Glissez-déposez vos fichiers PDF ou images ici, ou cliquez pour sélectionner",
     "selectFiles": "Sélectionner des fichiers",
+    "dropToAdd": "Déposez des fichiers PDF ou images à ajouter",
+    "convertingImages": "Conversion des images en PDF...",
+    "failedToConvertImages": "Échec de la conversion des images en PDF.",
     "renderingPages": "Rendu des pages...",
     "actions": {
       "duplicatePage": "Dupliquer cette page",
@@ -349,13 +374,14 @@
     "error": "Erreur",
     "failedToLoad": "Échec du chargement"
   },
-  "howItWorks": {
-    "title": "Comment ça marche",
-    "step1": "Cliquez ou glissez votre fichier ici",
-    "step2": "Cliquez sur le bouton de traitement",
-    "step3": "Enregistrez votre fichier traité instantanément"
+  "simpleMode": {
+    "title": "Outils PDF",
+    "subtitle": "Sélectionnez un outil pour commencer"
   },
-  "relatedTools": {
-    "title": "Outils PDF associés"
+  "disabledTool": {
+    "title": "Outil indisponible",
+    "heading": "Cet outil a été désactivé",
+    "message": "Cet outil n'est pas disponible dans votre déploiement. Contactez votre administrateur pour plus d'informations.",
+    "backHome": "Retour à l'accueil"
   }
 }

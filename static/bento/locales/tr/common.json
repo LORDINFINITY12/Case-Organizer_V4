@@ -5,8 +5,11 @@
     "contact": "İletişim",
     "licensing": "Lisanslama",
     "allTools": "Tüm Araçlar",
+    "docs": "Docs",
     "openMainMenu": "Ana menüyü aç",
-    "language": "Dil"
+    "language": "Dil",
+    "searchLanguage": "Dil ara…",
+    "noLanguagesFound": "Dil bulunamadı"
   },
   "donation": {
     "message": "BentoPDF'i seviyor musunuz? Ücretsiz ve açık kaynaklı kalmasına yardımcı olun!",
@@ -95,6 +98,18 @@
       "webpImages": "WebP Görüntüler"
     }
   },
+  "howItWorks": {
+    "title": "Nasıl Çalışır",
+    "step1Title": "Dosya Yükle",
+    "step1": "Dosyanızı tıklayın veya sürükleyin",
+    "step2Title": "İşle",
+    "step2": "İşlem düğmesine tıklayın",
+    "step3Title": "İndir",
+    "step3": "İşlenmiş dosyanızı anında kaydedin"
+  },
+  "relatedTools": {
+    "title": "İlgili PDF Araçları"
+  },
   "loader": {
     "processing": "İşleniyor..."
   },
@@ -120,6 +135,10 @@
     "resetToDefaults": "Varsayılanlara Sıfırla",
     "fullWidthMode": "Tam Genişlik Modu",
     "fullWidthDescription": "Ortalanmış bir konteyner yerine tüm ekran genişliğini kullan",
+    "compactMode": "Kompakt Mod",
+    "compactModeDescription": "Araçları kart yerine kompakt liste olarak göster",
+    "advancedSettings": "Gelişmiş Ayarlar",
+    "advancedSettingsDescription": "Harici işleme modüllerini yapılandır (PyMuPDF, Ghostscript, CoherentPDF)",
     "settingsAutoSaved": "Ayarlar otomatik olarak kaydedildi",
     "clickToSet": "Ayarlamak için tıklayın",
     "pressKeys": "Tuşlara basın...",
@@ -166,6 +185,7 @@
   "faq": {
     "title": "Sıkça Sorulan",
     "questions": "Sorular",
+    "sectionTitle": "Sıkça Sorulan Sorular",
     "isFree": {
       "question": "BentoPDF gerçekten ücretsiz mi?",
       "answer": "Evet, kesinlikle. BentoPDF'deki tüm araçlar %100 ücretsizdir, dosya sınırı yoktur, kayıt gerekmez ve filigran eklenmez. Herkesin ödeme duvarı olmadan basit, güçlü PDF araçlarına erişimi hak ettiğine inanıyoruz."
@@ -197,8 +217,7 @@
     "analytics": {
       "question": "Beni takip etmek için çerez veya analiz kullanıyor musunuz?",
       "answer": "Gizliliğinizi önemsiyoruz. BentoPDF kişisel bilgileri takip etmez. Sadece anonim ziyaretçi sayılarını görmek için Simple Analytics kullanıyoruz. Bu, sitemizi kaç kişinin ziyaret ettiğini görebileceğimiz, ancak kim olduğunuzu asla bilemeyeceğimiz anlamına gelir. Simple Analytics tamamen GDPR uyumludur ve gizliliğinize saygı gösterir."
-    },
-    "sectionTitle": "Sıkça Sorulan Sorular"
+    }
   },
   "testimonials": {
     "title": "Kullanıcılarımız",
@@ -251,11 +270,14 @@
     "add": "Ekle",
     "remove": "Kaldır",
     "loading": "Yükleniyor...",
+    "loadingPageCount": "Sayfalar yükleniyor...",
     "error": "Hata",
     "success": "Başarılı",
     "file": "Dosya",
     "files": "Dosya",
-    "close": "Kapat"
+    "close": "Kapat",
+    "convert": "Dönüştür",
+    "unknownError": "Bilinmeyen hata"
   },
   "about": {
     "hero": {
@@ -328,9 +350,12 @@
     "download": "İndir:",
     "downloadSelected": "Seçilenleri İndir",
     "exportPdf": "PDF Olarak Dışa Aktar",
-    "uploadPdfFiles": "PDF Dosyalarını Seçin",
-    "dragAndDrop": "PDF dosyalarını buraya sürükleyip bırakın veya seçmek için tıklayın",
+    "uploadPdfFiles": "PDF veya Görsel Dosyalarını Seçin",
+    "dragAndDrop": "PDF veya görsel dosyalarını buraya sürükleyip bırakın veya seçmek için tıklayın",
     "selectFiles": "Dosya Seç",
+    "dropToAdd": "Eklemek için PDF veya görsel dosyalarını bırakın",
+    "convertingImages": "Görseller PDF'e dönüştürülüyor...",
+    "failedToConvertImages": "Görseller PDF'e dönüştürülemedi.",
     "renderingPages": "Sayfalar oluşturuluyor...",
     "actions": {
       "duplicatePage": "Bu sayfayı çoğalt",
@@ -349,13 +374,14 @@
     "error": "Hata",
     "failedToLoad": "Yüklenemedi"
   },
-  "howItWorks": {
-    "title": "Nasıl Çalışır",
-    "step1": "Dosyanızı tıklayın veya sürükleyin",
-    "step2": "İşlem düğmesine tıklayın",
-    "step3": "İşlenmiş dosyanızı anında kaydedin"
+  "simpleMode": {
+    "title": "PDF Araçları",
+    "subtitle": "Başlamak için bir araç seçin"
   },
-  "relatedTools": {
-    "title": "İlgili PDF Araçları"
+  "disabledTool": {
+    "title": "Araç Kullanılamıyor",
+    "heading": "Bu araç devre dışı bırakıldı",
+    "message": "Bu araç, dağıtımınızda mevcut değil. Daha fazla bilgi için yöneticinizle iletişime geçin.",
+    "backHome": "Ana Sayfaya Dön"
   }
 }

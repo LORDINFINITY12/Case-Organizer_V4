@@ -526,6 +526,14 @@ _BENTO_CDN_ORIGIN = (
     if os.environ.get("CASEORG_BENTO_CDN", "1") != "0"
     else ""
 )
+# Runtime fetch origins used by BentoPDF v2.8.6 tools, behind the same
+# hardening toggle: CJK fallback fonts (Noto, via githack) and the RFC 3161
+# timestamp authority the timestamp-pdf tool defaults to.
+_BENTO_FETCH_ORIGINS = (
+    " https://rawcdn.githack.com https://freetsa.org"
+    if os.environ.get("CASEORG_BENTO_CDN", "1") != "0"
+    else ""
+)
 _CSP_BENTO = (
     "default-src 'self'; "
     "script-src 'self' 'unsafe-inline' 'unsafe-eval' 'wasm-unsafe-eval'"
@@ -534,7 +542,7 @@ _CSP_BENTO = (
     f"https://cdnjs.cloudflare.com https://unpkg.com{_BENTO_CDN_ORIGIN}; "
     "font-src 'self' https://fonts.gstatic.com https://cdnjs.cloudflare.com https://unpkg.com; "
     "img-src 'self' data: blob:; "
-    f"connect-src 'self'{_BENTO_CDN_ORIGIN} blob: data:; "
+    f"connect-src 'self'{_BENTO_CDN_ORIGIN}{_BENTO_FETCH_ORIGINS} blob: data:; "
     "frame-src 'self' blob:; "
     "worker-src 'self' blob:; "
     "object-src 'self'; "
