@@ -18,33 +18,23 @@ Version 3 introduced secure email-based authentication, internal messaging, inte
 
 Version 4 continues that foundation with a fully rebuilt Case Law module, a structured citation system, PDF editing integration, and a consistent custom UI component layer.
 
+The current release (**v4.7**) adds a **native Windows one-click installer** (tray app or Windows service, no Docker needed — see [Installation](#installation), Option 4) and upgrades the bundled **BentoPDF** editing suite to v2.8.6.
+
 ---
 
 ## Screenshots
 
-_Current UI (v4.6, default dark theme)._
+_Current UI (v4.7, default dark theme)._
 
-### New in v4.6 — Calendar & court-event tracker
+### Dashboard
 
-**A full calendar and per-case event tracker** — hearing / listing dates, filing deadlines (with mark-as-filed), appearance records, and limitation deadlines, all colour-coded on a month grid that scales to fill the window. A resizable, repositionable sidebar (side and width persisted per browser) shows either the day agenda or a per-case timeline:
+The home dashboard is the launchpad for every core feature — create and manage cases, upload and search case law, generate invoices/certificates/notices, and reach the PDF tools:
 
-![Calendar month view with the day agenda](static/img/screenshots/calendar-month-day.png)
+![Dashboard](static/img/screenshots/home-dashboard.png)
 
-| Per-case timeline (past → future) | Add event — search a case, dd/mm/yyyy dates, digest assignees |
-| --- | --- |
-| ![Per-case timeline](static/img/screenshots/calendar-case-timeline.png) | ![Add event dialog](static/img/screenshots/calendar-add-event.png) |
+### Case management
 
-**Record Appearance** captures who appeared (team members or outside counsel by name) and the outcome; entering the next date auto-creates the linked next hearing. **Admin → Records** deletes stored Legal Notice and Certificate entries, with a hover note and a delete confirmation:
-
-| Record appearance → auto next hearing | Records — delete notice / certificate entries |
-| --- | --- |
-| ![Record appearance dialog](static/img/screenshots/calendar-record-appearance.png) | ![Records deletion tab](static/img/screenshots/settings-records.png) |
-
-A **daily digest email** (configurable send time, opt-in per install) lists each morning's hearings, filings due, overdue items, and tomorrow's matters; events assigned to a user are called out in their copy. Interns get **view-only** access to the calendar.
-
-### New in v4.5.2
-
-**Create Case — one Case Category, one Original court block, and a unified, searchable Supreme Court + High Court picker** (type a lower/trial court and it's offered back as a custom option):
+**Create Case** — one Case Category, one Original court block, and a unified, searchable Supreme Court + High Court picker (type a lower/trial court and it's offered back as a custom option):
 
 ![Create Case with the unified court dropdown](static/img/screenshots/create-case-court-dropdown.png)
 
@@ -52,19 +42,43 @@ A **daily digest email** (configurable send time, opt-in per install) lists each
 | --- | --- |
 | ![Free-text court option](static/img/screenshots/court-dropdown-free-text.png) | ![In Appeal court picker](static/img/screenshots/create-case-current-forum.png) |
 
-**Manage Cases — grouped, searchable File Subcategory taxonomy** (47 divisions / 322 filing types under Civil, Criminal and Commercial, each with an "Other"):
+**Manage Cases** — grouped, searchable File Subcategory taxonomy (47 divisions / 322 filing types under Civil, Criminal and Commercial, each with an "Other"):
 
 ![File Subcategory taxonomy dropdown](static/img/screenshots/file-subcategory-taxonomy.png)
 
-**Search Case Law — Name tab with each party option on its own full-width row:**
+### Case law
+
+**Search Case Law** — Name tab with each party option on its own full-width row, over an FTS5-indexed case-law store with structured citations:
 
 ![Search Case Law](static/img/screenshots/search-case-law.png)
 
-### Modules
+### Document generators
 
-| Dashboard | Certificate generator | Legal Notice |
-| --- | --- | --- |
-| ![Dashboard](static/img/screenshots/home-dashboard.png) | ![Certificate generator](static/img/screenshots/certificate-generator.png) | ![Legal Notice](static/img/screenshots/legal-notice.png) |
+Invoices, internship certificates, and stamped legal notices, each with its own generator and per-case archiving:
+
+| Certificate generator | Legal Notice |
+| --- | --- |
+| ![Certificate generator](static/img/screenshots/certificate-generator.png) | ![Legal Notice](static/img/screenshots/legal-notice.png) |
+
+**Admin → Records** deletes stored Legal Notice and Certificate entries (and their PDFs), with a hover note and a delete confirmation:
+
+![Records deletion tab](static/img/screenshots/settings-records.png)
+
+---
+
+### Also included — Calendar & court-event tracker
+
+A secondary but fully featured module: a calendar and per-case event tracker — hearing / listing dates, filing deadlines (with mark-as-filed), appearance records, and limitation deadlines, colour-coded on a month grid that scales to fill the window. A resizable, repositionable sidebar (side and width persisted per browser) shows either the day agenda or a per-case timeline:
+
+![Calendar month view with the day agenda](static/img/screenshots/calendar-month-day.png)
+
+| Per-case timeline (past → future) | Add event — search a case, dd/mm/yyyy dates, digest assignees |
+| --- | --- |
+| ![Per-case timeline](static/img/screenshots/calendar-case-timeline.png) | ![Add event dialog](static/img/screenshots/calendar-add-event.png) |
+
+**Record Appearance** captures who appeared (team members or outside counsel by name) and the outcome; entering the next date auto-creates the linked next hearing. A **daily digest email** (configurable send time, opt-in per install) lists each morning's hearings, filings due, overdue items, and tomorrow's matters; events assigned to a user are called out in their copy. Interns get **view-only** calendar access:
+
+![Record appearance dialog](static/img/screenshots/calendar-record-appearance.png)
 
 ---
 
@@ -152,15 +166,6 @@ A **daily digest email** (configurable send time, opt-in per install) lists each
   ```
   Reference files keep original names with case suffix.
 
-### Calendar & Court-Event Tracker
-- **Per-case events** on a full-viewport month grid with colour-coded chips: hearings/listings (with purpose), filing deadlines, appearance records, and other deadlines (e.g. limitation periods). Overdue, unfiled items are flagged.
-- **Day agenda** — for any date, what is *listed*, *due*, *filed*, and *who appeared*; **per-case timeline** shows the full history (past → future) with a "today" divider, reachable by the same case-name search as Manage Case or by year/month browsing.
-- **Record Appearance** — a single flow to note who appeared (team members or outside counsel by name) and the outcome; entering the next date auto-creates and links the next hearing.
-- **Filing lifecycle** — a filing carries a due date and is later marked filed on its actual date; "mark filed" moves it into the day's *Filed* bucket.
-- **Resizable sidebar** — the Day/Case panel can be widened by dragging and moved to either side; the choice is saved per browser.
-- **Daily digest email** — an in-process scheduler sends every morning (send time and on/off configurable under *Settings → System → Daily Digest*, with a "Send test digest now" button) to active admins and users, listing today's hearings, filings due, overdue items, and tomorrow's matters. Events can be **assigned** to users, who are called out in their own copy. Idempotent per day, so restarts never double-send.
-- All dialog dates use the Indian **dd/mm/yyyy** format with a calendar-picker button; events follow a renamed case and are removed with a deleted one.
-
 ### Invoicing
 - Full PDF invoice generator using **ReportLab**.  
 - Accessible both globally and per-case.  
@@ -201,6 +206,15 @@ A **daily digest email** (configurable send time, opt-in per install) lists each
 
 ![PDF Editing Tools](https://raw.githubusercontent.com/LORDINFINITY12/Case-Organizer_V3/main/static/img/PDF-Editing-Tools.png)
 
+### Calendar & Court-Event Tracker *(secondary module)*
+- **Per-case events** on a full-viewport month grid with colour-coded chips: hearings/listings (with purpose), filing deadlines, appearance records, tasks, and other deadlines (e.g. limitation periods). Overdue, unfiled items are flagged.
+- **Day agenda** — for any date, what is *listed*, *due*, *filed*, and *who appeared*; **per-case timeline** shows the full history (past → future) with a "today" divider, reachable by the same case-name search as Manage Case or by year/month browsing.
+- **Record Appearance** — a single flow to note who appeared (team members or outside counsel by name) and the outcome; entering the next date auto-creates and links the next hearing.
+- **Filing lifecycle** — a filing carries a due date and is later marked filed on its actual date; "mark filed" moves it into the day's *Filed* bucket.
+- **Resizable sidebar** — the Day/Case panel can be widened by dragging and moved to either side; the choice is saved per browser.
+- **Daily digest email** — an in-process scheduler sends every morning (send time and on/off configurable under *Settings → System → Daily Digest*, with a "Send test digest now" button) to active admins and users, listing today's hearings, filings due, overdue items, and tomorrow's matters. Events can be **assigned** to users, who are called out in their own copy. Idempotent per day, so restarts never double-send. Requires [email (SMTP) to be configured](#email-smtp-setup).
+- All dialog dates use the Indian **dd/mm/yyyy** format with a calendar-picker button; events follow a renamed case and are removed with a deleted one.
+
 ---
 
 ## Requirements
@@ -232,8 +246,8 @@ System packages for PDF tooling (recommended):
 ### Option 1 – From Source
 
 ```bash
-git clone https://github.com/<your-org>/case-organizer-v3.git
-cd case-organizer-v3
+git clone https://github.com/LORDINFINITY12/Case-Organizer_V4.git
+cd Case-Organizer_V4
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
@@ -251,11 +265,11 @@ http://localhost:5000
 ### Option 2 – Debian Package
 
 ```bash
-# Download the latest release
-wget https://github.com/LORDINFINITY12/case-organizer-v3/releases/download/v4.2/case-organizer_4.2_all.deb
-
-# Install the package
-sudo dpkg -i case-organizer_4.2_all.deb
+# Download the .deb from the latest release:
+#   https://github.com/LORDINFINITY12/Case-Organizer_V4/releases/latest
+# then install it (adjust the version in the filename):
+sudo dpkg -i case-organizer_4.7.2_all.deb
+sudo apt-get -f install          # pull in any missing system dependencies
 
 # Enable and start the service
 sudo systemctl enable --now case-organizer.service
@@ -368,15 +382,92 @@ Building the installer yourself: see
 
 ## First-Run Setup
 
-1. **Storage and Users**  
-   On first launch you’ll be redirected to `/setup`.  
-   Select your storage root (`fs-files`) and define allowed users.
+On first launch (any install method) the app redirects to **`/setup`**. It is a
+single page with three parts:
 
-2. **Email Configuration**  
-   Provide SMTP details for outgoing mail (password resets and notifications).
+1. **Storage Folder** — where all case files live. On Windows the field is
+   pre-filled with a sensible default (`Documents\Case Organizer Files`, or a
+   `ProgramData` folder for service installs); on Linux/Docker point it at your
+   data volume (e.g. `/data/files`). The folder is created if it doesn't exist.
+2. **Outbound Email (SMTP)** — credentials for sending mail. See
+   [Email (SMTP) setup](#email-smtp-setup) below for exactly what to enter and
+   where to get it. *You can leave this and fill it in later under
+   **Settings → System** — the app runs fine without it, but password resets
+   and the daily digest won't send until it's configured.*
+3. **Administrator Account** — your admin email and password. This is the
+   account you'll log in with.
 
-3. **Login**  
-   Sign in using your registered email and password.
+Submit the page and you're signed in as the administrator.
+
+---
+
+## Email (SMTP) setup
+
+Case Organizer sends email for three things: **password-reset links**, the
+optional **daily digest**, and admin-triggered notifications. It does **not**
+run its own mail server — you give it SMTP credentials for an email account
+you already have (or create), and it hands each message to that account's
+server. This is the same on Linux, Docker, and both Windows installs; the
+credentials are saved (encrypted) in your config folder.
+
+### 1. Get SMTP credentials
+
+Use any email account that offers SMTP. Two common paths:
+
+**A — A normal mailbox** (Gmail, Outlook, Zoho, your web host's email).
+Most providers no longer accept your normal login password from apps; you
+create a one-off **app password** instead (login password stays private):
+
+- **Gmail:** enable 2-Step Verification, then create an *App Password* and use
+  that 16-character value as the SMTP password —
+  <https://support.google.com/accounts/answer/185833>
+- **Outlook / Microsoft 365:** create an app password —
+  <https://support.microsoft.com/en-us/account-billing/using-app-passwords-with-apps-that-don-t-support-two-step-verification-5896ed9b-4263-e681-128a-a6f2979a7944>
+
+**B — A transactional email provider** (recommended for an office server or
+anything sending more than a handful of mails a day; free tiers are ample and
+they deliver more reliably than a personal mailbox):
+[Brevo](https://www.brevo.com/), [Mailgun](https://www.mailgun.com/), or
+[SendGrid](https://sendgrid.com/). Sign up, verify your sending address or
+domain, and copy the SMTP **host, port, login and key** they show you.
+
+For a deeper primer on what SMTP/STARTTLS/ports mean, see
+[Brevo's SMTP explainer](https://www.brevo.com/blog/what-is-smtp/).
+
+### 2. Enter them on the setup page (or Settings → System)
+
+| Field | What to enter | Example |
+|---|---|---|
+| **SMTP Host** | your provider's outgoing mail server | `smtp.gmail.com` |
+| **SMTP Port** | `587` for STARTTLS (usual) or `465` for SSL | `587` |
+| **SMTP Username** | usually your full email / the provider login | `you@gmail.com` |
+| **SMTP Password** | the **app password** or API key from step 1 (not your normal password) | `abcd efgh ijkl mnop` |
+| **Use TLS/STARTTLS** | tick for port `587` | ✔ |
+| **From Email** | the address recipients see (often the same as the username) | `you@gmail.com` |
+
+Settings for the most common providers:
+
+| Provider | Host | Port | TLS |
+|---|---|---|---|
+| Gmail | `smtp.gmail.com` | 587 | STARTTLS |
+| Outlook / M365 | `smtp.office365.com` | 587 | STARTTLS |
+| Zoho | `smtp.zoho.com` | 587 | STARTTLS |
+| Brevo | `smtp-relay.brevo.com` | 587 | STARTTLS |
+
+### 3. Verify it works
+
+After saving, go to **Settings → System → Daily Digest** and click
+**"Send test digest now"**, or trigger a password reset for a test user. If
+nothing arrives:
+
+- Confirm you used an **app password / API key**, not your login password.
+- Confirm **Port + TLS** match the table (587 → STARTTLS ticked; 465 → SSL).
+- Confirm the **From Email** is an address your provider is allowed to send as
+  (with Gmail it must be your own address; with a transactional provider it
+  must be a verified sender).
+- Windows: the tray and service installs behave identically here — the config
+  lives under `%APPDATA%\CaseOrganizer` (tray) or `%ProgramData%\CaseOrganizer`
+  (service); no separate mail setup is needed on the machine.
 
 ---
 
