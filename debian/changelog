@@ -1,3 +1,22 @@
+case-organizer (4.7.2) stable; urgency=medium
+
+  * Windows installer: fixed the Inno Setup compile (a brace constant inside
+    a Pascal brace-comment terminated the comment early). The CI workflow now
+    builds CaseOrganizer-Setup-<version>.exe end to end, with the full test
+    suite passing on windows-latest as the parity gate.
+  * Repository hygiene: removed build artifacts and caches that were being
+    tracked — the debian/case-organizer/ dpkg staging tree (a full second
+    copy of the app, ~230 MB), debhelper build files, and all __pycache__
+    bytecode — and added a .gitignore so they cannot return. README
+    screenshots moved from docs/ into static/img/screenshots/.
+  * Documentation: README reorganised to lead with the primary feature set
+    (case management, case law, document generators) and present the Calendar
+    / court-event tracker as a secondary module; added a detailed Email
+    (SMTP) setup guide (obtaining credentials, the /setup fields, common
+    providers, verification) for Linux, Docker and Windows users.
+
+ -- Izumi <swarajswarupaggarwal@gmail.com>  Sun, 12 Jul 2026 09:00:00 +0530
+
 case-organizer (4.7) stable; urgency=medium
 
   * BentoPDF suite upgraded from v1.0.0 to v2.8.6, rebuilt from upstream
