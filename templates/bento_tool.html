@@ -107,6 +107,21 @@
         }, true);
       }
     });
+
+    // BentoPDF's JS renders tool links at the site root (/merge-pdf.html);
+    // under Case Organizer the suite lives at /bento/.  Rewrite such
+    // navigations on click — covers the dynamically rendered tools grid,
+    // search results, and any in-tool cross-links.  A server-side 404
+    // fallback (app.py) catches non-anchor navigations the same way.
+    document.addEventListener("click", (event) => {
+      const anchor = event.target.closest && event.target.closest("a[href]");
+      if (!anchor) return;
+      const href = anchor.getAttribute("href");
+      if (/^\/[A-Za-z0-9._-]+\.html([?#].*)?$/.test(href)) {
+        event.preventDefault();
+        window.location.assign("/bento" + href);
+      }
+    }, true);
   </script>
 </body>
 </html>

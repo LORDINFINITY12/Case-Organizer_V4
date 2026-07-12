@@ -1,0 +1,34 @@
+import{n as e,t}from"./style-yQMupAn_.js";import"./lucide-init-BK205kYR.js";import{g as n,o as r,w as i,y as a}from"./main-9bhvmph8.js";import"./mobileMenu-BU92ZdYD.js";import"./simple-mode-footer-BeIijqQw.js";import{n as o}from"./password-prompt-DVIDI3bB.js";import{t as s}from"./load-pdf-document-DdhTAQJ8.js";var c={file:null,pdfDoc:null},l=[];function u(e,t){return(e/t).toFixed(3)}function d(e,t,n){let r=e*t,i,a;switch(n){case`in`:i=r/5184,a=`in²`;break;case`mm`:i=r/5184*(25.4*25.4),a=`mm²`;break;case`px`:{let e=96/72;i=e*e*r,a=`px²`;break}default:i=r,a=`pt²`;break}return`${i.toFixed(2)} ${a}`}function f(){let e=l.length,t=new Map;l.forEach(e=>{let n=`${e.width.toFixed(2)}x${e.height.toFixed(2)}`,r=`${e.standardSize} (${e.orientation})`;t.set(n,{count:(t.get(n)?.count||0)+1,label:r,width:e.width,height:e.height})});let n=t.size>1;return{totalPages:e,uniqueSizesCount:t.size,uniqueSizes:Array.from(t.values()),hasMixedSizes:n}}function p(){let n=document.getElementById(`dimensions-summary`);if(!n)return;let r=f(),i=`
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+      <div class="bg-gray-900 border border-gray-700 rounded-lg p-4">
+        <p class="text-sm text-gray-400 mb-1">Total Pages</p>
+        <p class="text-2xl font-bold text-white">${r.totalPages}</p>
+      </div>
+      <div class="bg-gray-900 border border-gray-700 rounded-lg p-4">
+        <p class="text-sm text-gray-400 mb-1">Unique Page Sizes</p>
+        <p class="text-2xl font-bold text-white">${r.uniqueSizesCount}</p>
+      </div>
+      <div class="bg-gray-900 border border-gray-700 rounded-lg p-4">
+        <p class="text-sm text-gray-400 mb-1">Document Type</p>
+        <p class="text-2xl font-bold ${r.hasMixedSizes?`text-yellow-400`:`text-green-400`}">
+          ${r.hasMixedSizes?`Mixed Sizes`:`Uniform`}
+        </p>
+      </div>
+    </div>
+  `;r.hasMixedSizes&&(i+=`
+      <div class="bg-yellow-900/20 border border-yellow-500/30 rounded-lg p-4 mb-4">
+        <div class="flex items-start gap-3">
+          <i data-lucide="alert-triangle" class="w-5 h-5 text-yellow-400 mt-0.5 flex-shrink-0"></i>
+          <div>
+            <h4 class="text-yellow-200 font-semibold mb-2">Mixed Page Sizes Detected</h4>
+            <p class="text-sm text-gray-300 mb-3">This document contains pages with different dimensions:</p>
+            <ul class="space-y-1 text-sm text-gray-300">
+              ${r.uniqueSizes.map(e=>`
+                <li>• ${e.label}: ${e.count} page${e.count>1?`s`:``}</li>
+              `).join(``)}
+            </ul>
+          </div>
+        </div>
+      </div>
+    `),n.innerHTML=i,r.hasMixedSizes&&t({icons:e})}function m(e){let t=document.getElementById(`dimensions-table-body`);t&&(t.textContent=``,l.forEach(r=>{let i=n(r.width,e),a=n(r.height,e),o=u(r.width,r.height),s=d(r.width,r.height,e),c=document.createElement(`tr`),l=document.createElement(`td`);l.className=`px-4 py-3 text-white`,l.textContent=String(r.pageNum);let f=document.createElement(`td`);f.className=`px-4 py-3 text-gray-300`,f.textContent=`${i} x ${a} ${e}`;let p=document.createElement(`td`);p.className=`px-4 py-3 text-gray-300`,p.textContent=r.standardSize;let m=document.createElement(`td`);m.className=`px-4 py-3 text-gray-300`,m.textContent=r.orientation;let h=document.createElement(`td`);h.className=`px-4 py-3 text-gray-300`,h.textContent=o;let g=document.createElement(`td`);g.className=`px-4 py-3 text-gray-300`,g.textContent=s;let _=document.createElement(`td`);_.className=`px-4 py-3 text-gray-300`,_.textContent=`${r.rotation}°`,c.append(l,f,p,m,h,g,_),t.appendChild(c)}))}function h(){let e=document.getElementById(`units-select`)?.value||`pt`,t=[[`Page #`,`Width (${e})`,`Height (${e})`,`Standard Size`,`Orientation`,`Aspect Ratio`,`Area (${e}²)`,`Rotation`].join(`,`)];l.forEach(r=>{let i=n(r.width,e),a=n(r.height,e),o=u(r.width,r.height),s=d(r.width,r.height,e),c=[r.pageNum,i,a,r.standardSize,r.orientation,o,s,`${r.rotation}°`];t.push(c.join(`,`))});let r=t.join(`
+`),i=new Blob([r],{type:`text/csv;charset=utf-8;`}),a=URL.createObjectURL(i),o=document.createElement(`a`);o.href=a,o.download=`page-dimensions.csv`,document.body.appendChild(o),o.click(),document.body.removeChild(o),URL.revokeObjectURL(a)}function g(){if(!c.pdfDoc)return;l=[],c.pdfDoc.getPages().forEach((e,t)=>{let{width:n,height:r}=e.getSize(),a=e.getRotation().angle||0;l.push({pageNum:t+1,width:n,height:r,orientation:n>r?`Landscape`:`Portrait`,standardSize:i(n,r),rotation:a})});let n=document.getElementById(`dimensions-results`),r=document.getElementById(`units-select`);p(),m(r.value),n&&n.classList.remove(`hidden`),r.addEventListener(`change`,e=>{m(e.target.value)});let a=document.getElementById(`export-csv-btn`);a&&a.addEventListener(`click`,h),t({icons:e})}function _(){c.file=null,c.pdfDoc=null,l=[];let e=document.getElementById(`file-display-area`);e&&(e.innerHTML=``);let t=document.getElementById(`dimensions-results`);t&&t.classList.add(`hidden`);let n=document.getElementById(`file-input`);n&&(n.value=``)}async function v(){let n=document.getElementById(`file-display-area`);if(n&&(n.innerHTML=``,c.file)){let r=document.createElement(`div`);r.className=`flex items-center justify-between bg-gray-700 p-3 rounded-lg text-sm`;let i=document.createElement(`div`);i.className=`flex flex-col overflow-hidden`;let o=document.createElement(`div`);o.className=`truncate font-medium text-gray-200 text-sm mb-1`,o.textContent=c.file.name;let s=document.createElement(`div`);s.className=`text-xs text-gray-400`,s.textContent=a(c.file.size),i.append(o,s);let l=document.createElement(`button`);l.className=`ml-4 text-red-400 hover:text-red-300 flex-shrink-0`,l.innerHTML=`<i data-lucide="trash-2" class="w-4 h-4"></i>`,l.onclick=function(){_()},r.append(i,l),n.appendChild(r),t({icons:e})}}async function y(e){if(e&&e.length>0){let t=e[0];if(t.type===`application/pdf`||t.name.toLowerCase().endsWith(`.pdf`))try{let e=await o(t);if(!e)return;e.pdf.destroy(),c.file=e.file,c.pdfDoc=await s(e.bytes),v(),g()}catch(e){console.error(`Error loading PDF:`,e),r(`Error`,`Failed to load PDF file.`)}}}document.addEventListener(`DOMContentLoaded`,function(){let e=document.getElementById(`file-input`),t=document.getElementById(`drop-zone`),n=document.getElementById(`back-to-tools`);n&&n.addEventListener(`click`,function(){window.location.href=`/bento/`}),e&&t&&(e.addEventListener(`change`,function(e){y(e.target.files)}),t.addEventListener(`dragover`,function(e){e.preventDefault(),t.classList.add(`bg-gray-700`)}),t.addEventListener(`dragleave`,function(e){e.preventDefault(),t.classList.remove(`bg-gray-700`)}),t.addEventListener(`drop`,function(e){e.preventDefault(),t.classList.remove(`bg-gray-700`),y(e.dataTransfer?.files)}),e.addEventListener(`click`,function(){e.value=``}))});

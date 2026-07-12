@@ -1,0 +1,1 @@
+import{wn as e}from"./markdown-to-pdf-CY9jSw5A.js";var t=class{constructor(e){this.init=e,this.records=this.init()}static{e(this,`ImperativeState`)}reset(){this.records=this.init()}};export{t};

@@ -1,0 +1,1 @@
+import{n as e,t}from"./style-yQMupAn_.js";document.addEventListener(`DOMContentLoaded`,()=>{t({icons:e})});

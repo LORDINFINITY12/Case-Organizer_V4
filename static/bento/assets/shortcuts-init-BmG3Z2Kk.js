@@ -1,0 +1,1 @@
+import{r as e}from"./main-9bhvmph8.js";function t(){e.init(),console.log(`Global shortcuts initialized`)}export{t};

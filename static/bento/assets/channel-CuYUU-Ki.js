@@ -1,0 +1,1 @@
+import{Sn as e,xn as t}from"./markdown-to-pdf-CY9jSw5A.js";var n=(n,r)=>e.lang.round(t.parse(n)[r]);export{n as t};

@@ -1,0 +1,1 @@
+import{wn as e}from"./markdown-to-pdf-CY9jSw5A.js";function t(e,t){e.accDescr&&t.setAccDescription?.(e.accDescr),e.accTitle&&t.setAccTitle?.(e.accTitle),e.title&&t.setDiagramTitle?.(e.title)}e(t,`populateCommonDb`);export{t};

@@ -1,13 +1,20 @@
 case-organizer (4.7) stable; urgency=medium
 
-  * BentoPDF suite upgraded from v1.0.0 to v2.8.6 (built from the official
-    upstream release artifact). Six new tools: Add Page Labels, Bates
-    Numbering (useful for court bundles), Overlay PDF, PDF to CBZ,
-    PDF Workflow (chain multiple operations), and Timestamp PDF (RFC 3161).
-    Seven new interface locales (ar, ja, ko, ru, sk, sv, uk) and updated
-    PDF.js viewers. The Case Organizer wrapper (app shell, theme, section
-    stripping, short titles) was re-verified against the new markup — all
-    existing tools keep working unchanged.
+  * BentoPDF suite upgraded from v1.0.0 to v2.8.6, rebuilt from upstream
+    source with BASE_URL=/bento/ so every baked asset, chunk-import, locale
+    and worker URL resolves under the /bento/ mount (the official release
+    dist is built for a site root and breaks when embedded). Six new tools:
+    Add Page Labels, Bates Numbering (useful for court bundles), Overlay
+    PDF, PDF to CBZ, PDF Workflow (chain multiple operations), and
+    Timestamp PDF (RFC 3161). Seven new interface locales and updated
+    PDF.js viewers.
+  * Bento tool links fixed under the wrapper: v2.8.6's JS renders the tools
+    directory with site-root links (/merge-pdf.html) that bypassed /bento/.
+    The wrapper now rewrites such navigations on click, and a server-side
+    404 fallback redirects any root-level tool page to its /bento/
+    counterpart — covering search results and direct URLs too. Verified in
+    the browser: tools directory, tool click-through, Compress and OCR
+    pages load with no console errors or failed requests.
   * Bento CSP: connect-src now also allows rawcdn.githack.com (CJK fallback
     fonts) and freetsa.org (default RFC 3161 timestamp authority for the new
     Timestamp PDF tool). Both sit behind the existing CASEORG_BENTO_CDN=0
@@ -15,6 +22,34 @@ case-organizer (4.7) stable; urgency=medium
   * The bento tree no longer carries precompressed .br/.gz siblings — the
     app serves files through Waitress, which never used them. This removes
     ~90 MB of dead weight from the install without any behaviour change.
+  * Native Windows support: new one-click EXE installer
+    (CaseOrganizer-Setup-<version>.exe) built with PyInstaller + Inno Setup.
+    Two install modes — a per-user tray app (no admin rights; Open / Open
+    data folder / Quit menu, optional start-with-Windows) and an
+    administrator "Windows service" mode (WinSW-wrapped, starts at boot
+    before login, auto-restarts on failure; shortcuts open the browser at
+    the running server). Tesseract OCR (+eng), Poppler, qpdf and
+    Ghostscript are bundled, so the PDF suite has full feature parity with
+    Linux out of the box. Localhost-only binding (127.0.0.1, ports
+    5000-5010 scanned), data under %APPDATA%\CaseOrganizer (tray) or
+    %ProgramData%\CaseOrganizer (service); uninstall preserves all data.
+  * Windows portability fixes that also apply on Linux: Ghostscript is now
+    found via gs/gswin64c/gswin32c; case, rename and calendar names are
+    validated by a shared validate_fs_component() that additionally rejects
+    Windows-reserved device names (CON, COM1, nul.txt, ...) and names
+    ending in a dot or space — previously-accepted names like "X v. Ltd."
+    now return a clear error instead of silently creating a folder Windows
+    cannot read; Manage-Case subcategories and case-law fragments are
+    sanitized to the same rules; the setup wizard prefills a sensible
+    storage folder on Windows (Documents\Case Organizer Files, or
+    ProgramData for service installs).
+  * New CI workflow (.github/workflows/windows-installer.yml — the repo's
+    first): on every published release it runs the full pytest suite on
+    windows-latest as a parity gate, builds the installer with the same
+    windows/build.ps1 maintainers use locally (vendor downloads pinned by
+    SHA256 and cached), and attaches the EXE to the release.
+  * Tests: suite now 277 tests, including Windows-name validation, the
+    Ghostscript binary shim, and setup-prefill behaviour.
 
  -- Izumi <swarajswarupaggarwal@gmail.com>  Sun, 12 Jul 2026 01:00:00 +0530
 

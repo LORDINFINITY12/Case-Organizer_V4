@@ -436,12 +436,46 @@ def normalize_ws(s: str) -> str:
 
 _ILLEGAL_FS_CHARS = re.compile(r"[\\/:*?\"<>|]")  # characters forbidden in Win/Linux filenames
 
+# Device names Windows reserves in every directory, with or without an
+# extension (CON, con.txt, COM1.pdf ... all resolve to the device).
+_WINDOWS_RESERVED_NAMES = frozenset({
+    "CON", "PRN", "AUX", "NUL",
+    *(f"COM{i}" for i in range(1, 10)),
+    *(f"LPT{i}" for i in range(1, 10)),
+})
+
+
+def validate_fs_component(name: str) -> Optional[str]:
+    """Return an error message if *name* is not a safe single path component,
+    else None.  The same rules apply on Linux and Windows so a case store
+    created on one OS stays readable on the other:
+
+    * no path separators or other Windows-illegal characters,
+    * no trailing dot/space (Windows strips them silently, so the on-disk
+      name would no longer match the requested one),
+    * no reserved device base-names (CON, COM1, nul.txt, ...).
+    """
+    if not (name or "").strip():
+        return "Name is required"
+    if name in {".", ".."}:
+        return "Invalid name"
+    if _ILLEGAL_FS_CHARS.search(name):
+        return "Name contains characters not allowed in folder names (\\ / : * ? \" < > |)"
+    if name != name.rstrip(". "):
+        return "Name may not end with a dot or space"
+    if name.split(".", 1)[0].rstrip(" ").upper() in _WINDOWS_RESERVED_NAMES:
+        return f"'{name}' is a reserved name on Windows"
+    return None
+
 
 def sanitize_case_law_component(text: str, replacement: str = " ") -> str:
     """Remove filesystem-illegal characters from a case-law path fragment."""
     cleaned = normalize_ws(text)
     cleaned = _ILLEGAL_FS_CHARS.sub(replacement, cleaned)
     cleaned = normalize_ws(cleaned)
+    cleaned = cleaned.rstrip(". ")
+    if cleaned.split(".", 1)[0].rstrip(" ").upper() in _WINDOWS_RESERVED_NAMES:
+        cleaned += "_"
     return cleaned
 
 
@@ -591,6 +625,23 @@ def _set_security_headers(response):
 
 
 # ---- Error handlers (JSON for API endpoints, HTML otherwise) -------------
+_BENTO_ROOT_PAGE = re.compile(r"/[A-Za-z0-9._-]+\.html")
+
+
+@app.errorhandler(404)
+def _handle_not_found(exc):
+    # BentoPDF's JS renders tool links at the site root (/merge-pdf.html);
+    # under Case Organizer the suite lives at /bento/.  Redirect any
+    # root-level .html request whose page exists in the bento tree, so
+    # navigation from the tools directory (and any in-tool link) works.
+    path = request.path
+    if _BENTO_ROOT_PAGE.fullmatch(path):
+        candidate = Path(app.static_folder) / "bento" / path.lstrip("/")
+        if candidate.is_file():
+            return redirect("/bento" + path, code=302)
+    return exc
+
+
 @app.errorhandler(RequestEntityTooLarge)
 def _handle_request_entity_too_large(_: RequestEntityTooLarge):
     if _wants_json_response():
@@ -1259,6 +1310,22 @@ else:
         _bootstrap_app_state_ran = True
 
 
+def _default_fs_root_hint() -> str:
+    """Platform-appropriate Storage Folder prefill for the setup wizard.
+
+    Windows users get a sensible default instead of an empty field; on the
+    service install (launcher --headless) the default must be writable by the
+    service account, so it lives under ProgramData.  Linux keeps the empty
+    field (deployments choose deliberate paths like /mnt/data).
+    """
+    if os.name == "nt":
+        if os.environ.get("CASEORG_HEADLESS") == "1":
+            program_data = os.environ.get("PROGRAMDATA", r"C:\ProgramData")
+            return os.path.join(program_data, "CaseOrganizer", "Case Files")
+        return os.path.join(os.path.expanduser("~"), "Documents", "Case Organizer Files")
+    return ""
+
+
 # ---- /setup — first-run wizard (FS_ROOT, SMTP config, admin account) -----
 @app.route("/setup", methods=["GET", "POST"])
 def setup():
@@ -1278,7 +1345,7 @@ def setup():
     existing_tls = settings_manager.get("smtp_use_tls", None)
 
     form_state = {
-        "fs_root": config.FS_ROOT or "",
+        "fs_root": config.FS_ROOT or _default_fs_root_hint(),
         "smtp_host": settings_manager.get("smtp_host", ""),
         "smtp_port": settings_manager.get("smtp_port", ""),
         "smtp_username": settings_manager.get("smtp_username", ""),
@@ -1980,6 +2047,10 @@ def create_case():
     if not case_name:
         case_name = auto_case_name
 
+    err = validate_fs_component(case_name)
+    if err:
+        return jsonify({"ok": False, "msg": f"Case Name: {err}"}), 400
+
     # Date (YYYY-MM-DD) or today
     date_str = normalize_ws(form.get("Date"))
     try:
@@ -2036,8 +2107,11 @@ def manage_case_upload():
     subcategory = normalize_ws(form.get("Subcategory"))   # optional subfolder
     # Taxonomy subcategories can contain "/" (e.g. "Section 482 CrPC / Section 528
     # BNSS"); keep each subcategory a single folder by flattening path separators.
+    # The remaining Windows-illegal characters / reserved names are sanitized
+    # the same way case-law fragments are, so the folder works on any OS.
     if subcategory:
         subcategory = normalize_ws(subcategory.replace("/", " - ").replace("\\", " - "))
+        subcategory = sanitize_case_law_component(subcategory)
     main_type   = normalize_ws(form.get("Main Type"))     # OPTIONAL now
 
     if not domain:
@@ -2374,8 +2448,9 @@ def api_rename_case():
     if not raw_path or not new_name:
         return jsonify({"ok": False, "msg": "Missing 'path' or 'new_name'"}), 400
 
-    if "/" in new_name or "\\" in new_name:
-        return jsonify({"ok": False, "msg": "Invalid case name"}), 400
+    err = validate_fs_component(new_name)
+    if err:
+        return jsonify({"ok": False, "msg": err}), 400
 
     try:
         source = _safe_path(Path(raw_path), FS_ROOT)
@@ -2514,7 +2589,7 @@ def _validate_case_triple(year: str, month: str, case_name: str,
         return "Invalid month"
     if not (case_name or "").strip():
         return "Missing case name"
-    if "/" in case_name or "\\" in case_name:
+    if validate_fs_component(case_name):
         return "Invalid case name"
     if must_exist and not (FS_ROOT / year / month / case_name).is_dir():
         return "Case directory not found"
