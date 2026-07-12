@@ -272,7 +272,8 @@ journalctl -u case-organizer.service
 
 ### Option 3 – Docker (Windows / macOS / Linux)
 
-The Docker image is the easiest way to run Case Organizer on **Windows**.
+> **Windows users:** the native one-click installer (Option 4 below) is now the
+> recommended way to run Case Organizer on Windows — no Docker required.
 
 #### Install Docker first
 
@@ -331,6 +332,37 @@ location to `/data/files` so case files land on the mounted volume (config lives
 in `/data/config`). `CASEORG_COOKIE_SECURE=0` is required for plain-HTTP
 localhost; put a TLS-terminating reverse proxy in front and set it to `1` for
 HTTPS deployments.
+
+### Option 4 – Windows (one-click installer) — recommended for Windows
+
+Download `CaseOrganizer-Setup-<version>.exe` from the
+[latest release](https://github.com/LORDINFINITY12/Case-Organizer_V4/releases)
+and run it. No Docker, no Python, no admin rights needed — the installer
+bundles everything, including the OCR/PDF tools (Tesseract, Poppler, qpdf,
+Ghostscript).
+
+1. Run the installer. Windows SmartScreen may warn about an unknown
+   publisher — click **More info → Run anyway** (the exe is unsigned).
+2. Pick an install mode when asked *"for all users / only for me"*:
+   * **Only for me** *(default — right for a personal laptop)*: installs a
+     **tray app**. Case Organizer runs while the tray icon is visible;
+     optionally tick *Start with Windows*. Right-click the icon for
+     **Open / Open data folder / Quit**.
+   * **All users + "Install as a Windows service"** *(office/always-on PC)*:
+     Case Organizer runs as a background **service** from boot, before
+     anyone logs in, and restarts automatically if it crashes. Shortcuts
+     simply open the app in your browser.
+3. Your browser opens at the first-run setup page. Accept the suggested
+   storage folder (or pick another) and create the administrator account.
+
+Everything runs locally at `http://127.0.0.1:5000` (ports 5000–5010 are
+tried automatically). Your data lives in `%APPDATA%\CaseOrganizer`
+(`%ProgramData%\CaseOrganizer` for service installs) plus the storage folder
+you chose — **uninstalling never deletes them**. Server logs:
+`<data folder>\logs\server.log`.
+
+Building the installer yourself: see
+[windows/README-BUILD.md](windows/README-BUILD.md).
 
 ---
 

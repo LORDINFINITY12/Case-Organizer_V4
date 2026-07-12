@@ -1,0 +1,8 @@
+# Windows build + launcher-only dependencies.
+# Installed by windows/build.ps1 into the build venv alongside
+# requirements.txt.  pystray/Pillow are runtime deps of the tray launcher
+# (PyInstaller collects them into the bundle); they are deliberately NOT in
+# requirements.txt because Linux installs never need them.
+pyinstaller>=6.6
+pystray>=0.19.5
+Pillow>=10.0.0

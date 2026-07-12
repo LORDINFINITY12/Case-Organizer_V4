@@ -1,0 +1,23 @@
+<!--
+  WinSW service definition for the Case Organizer service install.
+
+  The installer copies this file INTO _internal\vendor\winsw\ next to
+  CaseOrganizerService.exe — WinSW pairs with the XML sharing its basename —
+  then runs `CaseOrganizerService.exe install` / `start`.
+  %BASE% is that directory, so the app exe is three levels up.
+-->
+<service>
+  <id>CaseOrganizer</id>
+  <name>Case Organizer</name>
+  <description>Case Organizer legal case-management server (http://127.0.0.1:5000)</description>
+  <executable>%BASE%\..\..\..\CaseOrganizer.exe</executable>
+  <arguments>--headless</arguments>
+  <env name="XDG_CONFIG_HOME" value="%ProgramData%\CaseOrganizer"/>
+  <onfailure action="restart" delay="10 sec"/>
+  <stoptimeout>15 sec</stoptimeout>
+  <logpath>%ProgramData%\CaseOrganizer\logs</logpath>
+  <log mode="roll-by-size">
+    <sizeThreshold>1024</sizeThreshold>
+    <keepFiles>3</keepFiles>
+  </log>
+</service>

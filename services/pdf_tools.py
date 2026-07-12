@@ -17,6 +17,15 @@ from pathlib import Path
 from typing import Callable, Iterable, Optional
 
 
+def _gs_binary() -> Optional[str]:
+    """Ghostscript CLI — 'gs' on POSIX; gswin64c/gswin32c on Windows."""
+    for name in ("gs", "gswin64c", "gswin32c"):
+        found = shutil.which(name)
+        if found:
+            return found
+    return None
+
+
 @dataclass(frozen=True)
 class CompressionResult:
     input_bytes: int
@@ -154,7 +163,7 @@ def _compress_rectal(*, input_pdf: Path, output_pdf: Path, level: str) -> int:
 
 
 def _compress_photon(*, input_pdf: Path, output_pdf: Path, level: str) -> int:
-    gs = shutil.which("gs")
+    gs = _gs_binary()
     if not gs:
         raise RuntimeError("Ghostscript is required for Photon compression. Please install ghostscript.")
 
