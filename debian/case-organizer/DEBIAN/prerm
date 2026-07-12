@@ -1,5 +1,0 @@
-#!/bin/sh
-set -e
-# Debhelper will inject systemd stop snippets
-exit 0
-

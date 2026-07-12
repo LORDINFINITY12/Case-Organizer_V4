@@ -28,17 +28,17 @@ _Current UI (v4.6, default dark theme)._
 
 **A full calendar and per-case event tracker** — hearing / listing dates, filing deadlines (with mark-as-filed), appearance records, and limitation deadlines, all colour-coded on a month grid that scales to fill the window. A resizable, repositionable sidebar (side and width persisted per browser) shows either the day agenda or a per-case timeline:
 
-![Calendar month view with the day agenda](docs/screenshots/calendar-month-day.png)
+![Calendar month view with the day agenda](static/img/screenshots/calendar-month-day.png)
 
 | Per-case timeline (past → future) | Add event — search a case, dd/mm/yyyy dates, digest assignees |
 | --- | --- |
-| ![Per-case timeline](docs/screenshots/calendar-case-timeline.png) | ![Add event dialog](docs/screenshots/calendar-add-event.png) |
+| ![Per-case timeline](static/img/screenshots/calendar-case-timeline.png) | ![Add event dialog](static/img/screenshots/calendar-add-event.png) |
 
 **Record Appearance** captures who appeared (team members or outside counsel by name) and the outcome; entering the next date auto-creates the linked next hearing. **Admin → Records** deletes stored Legal Notice and Certificate entries, with a hover note and a delete confirmation:
 
 | Record appearance → auto next hearing | Records — delete notice / certificate entries |
 | --- | --- |
-| ![Record appearance dialog](docs/screenshots/calendar-record-appearance.png) | ![Records deletion tab](docs/screenshots/settings-records.png) |
+| ![Record appearance dialog](static/img/screenshots/calendar-record-appearance.png) | ![Records deletion tab](static/img/screenshots/settings-records.png) |
 
 A **daily digest email** (configurable send time, opt-in per install) lists each morning's hearings, filings due, overdue items, and tomorrow's matters; events assigned to a user are called out in their copy. Interns get **view-only** access to the calendar.
 
@@ -46,25 +46,25 @@ A **daily digest email** (configurable send time, opt-in per install) lists each
 
 **Create Case — one Case Category, one Original court block, and a unified, searchable Supreme Court + High Court picker** (type a lower/trial court and it's offered back as a custom option):
 
-![Create Case with the unified court dropdown](docs/screenshots/create-case-court-dropdown.png)
+![Create Case with the unified court dropdown](static/img/screenshots/create-case-court-dropdown.png)
 
 | Free-text court entry ("use as typed") | "Current Forum/Place" → In Appeal |
 | --- | --- |
-| ![Free-text court option](docs/screenshots/court-dropdown-free-text.png) | ![In Appeal court picker](docs/screenshots/create-case-current-forum.png) |
+| ![Free-text court option](static/img/screenshots/court-dropdown-free-text.png) | ![In Appeal court picker](static/img/screenshots/create-case-current-forum.png) |
 
 **Manage Cases — grouped, searchable File Subcategory taxonomy** (47 divisions / 322 filing types under Civil, Criminal and Commercial, each with an "Other"):
 
-![File Subcategory taxonomy dropdown](docs/screenshots/file-subcategory-taxonomy.png)
+![File Subcategory taxonomy dropdown](static/img/screenshots/file-subcategory-taxonomy.png)
 
 **Search Case Law — Name tab with each party option on its own full-width row:**
 
-![Search Case Law](docs/screenshots/search-case-law.png)
+![Search Case Law](static/img/screenshots/search-case-law.png)
 
 ### Modules
 
 | Dashboard | Certificate generator | Legal Notice |
 | --- | --- | --- |
-| ![Dashboard](docs/screenshots/home-dashboard.png) | ![Certificate generator](docs/screenshots/certificate-generator.png) | ![Legal Notice](docs/screenshots/legal-notice.png) |
+| ![Dashboard](static/img/screenshots/home-dashboard.png) | ![Certificate generator](static/img/screenshots/certificate-generator.png) | ![Legal Notice](static/img/screenshots/legal-notice.png) |
 
 ---
 
