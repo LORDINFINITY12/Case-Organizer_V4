@@ -82,7 +82,7 @@ end;
 
 procedure CurPageChanged(CurPageID: Integer);
 begin
-  { Per-user installs land in {localappdata}\Programs instead of Program Files. }
+  // Per-user installs land under LocalAppData\Programs instead of Program Files.
   if (CurPageID = wpSelectDir) and not IsAdminInstallMode then
     WizardForm.DirEdit.Text := ExpandConstant('{localappdata}\Programs\CaseOrganizer');
 end;
