@@ -105,6 +105,7 @@
             <span class="cal-chip cal-chip--filing">Filing</span>
             <span class="cal-chip cal-chip--deadline">Deadline</span>
             <span class="cal-chip cal-chip--task">Task</span>
+            <span class="cal-chip cal-chip--meeting">Meeting</span>
             <span class="cal-chip cal-chip--appearance">Appearance</span>
             <span class="cal-chip overdue">Overdue</span>
           </div>
@@ -172,6 +173,7 @@
             <option value="filing">Filing deadline</option>
             <option value="deadline">Other deadline</option>
             <option value="task">Task</option>
+            <option value="meeting">Meeting / Conference</option>
             <option value="appearance">Appearance (past)</option>
           </select>
         </label>
@@ -182,6 +184,13 @@
             <input type="date" class="cal-date-native" tabindex="-1" aria-hidden="true" />
           </span>
         </label>
+        <label class="cal-field cal-allday-field">All day
+          <input type="checkbox" id="ev-all-day" checked />
+        </label>
+        <div class="cal-field cal-time-fields" id="ev-time-fields" hidden>
+          <label>Start <input type="time" id="ev-start-time" /></label>
+          <label>End <input type="time" id="ev-end-time" /></label>
+        </div>
         <div class="cal-case-block full-span" id="ev-case-block">
           <div class="mc-name-search">
             <input id="ev-case-q" type="text" placeholder="Search case by party name…" aria-label="Search case by name" />
@@ -211,12 +220,39 @@
             <option value="cancelled">Cancelled</option>
           </select>
         </label>
+        <div class="cal-field full-span cal-recur-field" id="ev-recur-field" hidden>
+          <label>Repeat
+            <select id="ev-recur-freq">
+              <option value="">Does not repeat</option>
+              <option value="daily">Daily</option>
+              <option value="weekly">Weekly</option>
+              <option value="monthly">Monthly</option>
+              <option value="yearly">Yearly</option>
+              <option value="hourly">Hourly</option>
+            </select>
+          </label>
+          <span class="cal-recur-extra" id="ev-recur-extra" hidden>
+            every <input type="number" id="ev-recur-interval" min="1" value="1" />
+            until <input type="text" id="ev-recur-until" inputmode="numeric" placeholder="dd/mm/yyyy (optional)" maxlength="10" autocomplete="off" />
+          </span>
+        </div>
+        <label class="cal-field full-span cal-continuing-field" id="ev-continuing-field" hidden>
+          <input type="checkbox" id="ev-continuing" />
+          Continuing — keep rolling forward while overdue until marked complete
+        </label>
         <label class="cal-field full-span">Notes
           <textarea id="ev-notes" rows="2" maxlength="2000"></textarea>
         </label>
         <fieldset class="cal-field full-span cal-assignees">
           <legend>Assign to (optional — assignees are called out in the daily digest)</legend>
           <div id="ev-assignees" class="assignee-list"></div>
+        </fieldset>
+        <fieldset class="cal-field full-span cal-reminders" id="ev-reminders-field">
+          <legend>Reminders (emailed + sent to each assignee's inbox)</legend>
+          <div id="ev-reminders-list"></div>
+          <button type="button" class="btn-ghost" id="ev-add-reminder">
+            <i class="fa-solid fa-bell"></i> Add reminder
+          </button>
         </fieldset>
       </div>
       <div class="modal-actions">

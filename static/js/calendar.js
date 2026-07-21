@@ -116,7 +116,12 @@
 
   /* ---------- month grid ---------- */
 
-  const TYPE_LABEL = { hearing: 'H', filing: 'F', deadline: 'D', appearance: 'A', task: 'T' };
+  const TYPE_LABEL = { hearing: 'H', filing: 'F', deadline: 'D', appearance: 'A', task: 'T', meeting: 'M' };
+
+  // "HH:MM " prefix for timed events (blank for all-day).
+  function timePrefix(ev) {
+    return (!ev.all_day && ev.start_time) ? `${ev.start_time} ` : '';
+  }
 
   function chipFor(ev, filedChip) {
     const cls = filedChip ? 'filing' : ev.event_type;
@@ -124,7 +129,7 @@
       ? `Filed: ${ev.title || ev.case_name}`
       : (ev.event_type === 'hearing'
           ? (ev.purpose ? `${ev.case_name} — ${ev.purpose}` : ev.case_name)
-          : `${ev.case_name}${ev.title ? ' — ' + ev.title : ''}`);
+          : `${timePrefix(ev)}${ev.case_name}${ev.title ? ' — ' + ev.title : ''}`);
     const over = !filedChip && ev.overdue ? ' overdue' : '';
     return `<span class="cal-chip cal-chip--${cls}${over}" title="${esc(text)}">` +
            `${TYPE_LABEL[ev.event_type] || '?'} · ${esc(text)}</span>`;
@@ -211,6 +216,10 @@
     if (ev.event_type === 'filing' && !ev.filed_on) {
       html += btn('file', 'fa-check', 'Mark filed (today)');
     }
+    if ((ev.event_type === 'task' || ev.event_type === 'deadline')
+        && !ev.completed_at && ev.status === 'pending') {
+      html += btn('complete', 'fa-circle-check', 'Mark complete');
+    }
     html += btn('edit', 'fa-pen', 'Edit');
     html += btn('del', 'fa-trash', 'Delete', true);
     return `<span class="cal-act-row">${html}</span>`;
@@ -218,10 +227,18 @@
 
   function agendaItem(ev) {
     const bits = [];
+    if (!ev.all_day && ev.start_time) bits.push(`<span class="cal-time">${esc(ev.start_time)}</span>`);
     if (ev.event_type === 'hearing' && ev.purpose) bits.push(esc(ev.purpose));
     if (ev.event_type !== 'hearing' && ev.title) bits.push(esc(ev.title));
-    if (ev.status && ev.status !== 'pending') bits.push(`<em>${esc(ev.status)}</em>`);
-    if (ev.overdue) bits.push('<strong class="overdue-text">overdue</strong>');
+    if (ev.completed_on) {
+      bits.push(`<span class="cal-done">✓ ${esc(ev.display_note || ('completed on ' + ev.completed_on))}</span>`);
+    } else {
+      if (ev.status && ev.status !== 'pending') bits.push(`<em>${esc(ev.status)}</em>`);
+      if (ev.overdue) {
+        bits.push(`<strong class="overdue-text">${ev.rolled_forward
+          ? 'overdue since ' + esc(isoToIn(ev.due_date || ev.event_date)) : 'overdue'}</strong>`);
+      }
+    }
     if (ev.participants && ev.participants.length) {
       bits.push('by ' + esc(ev.participants.map((p) => p.display_name).join(', ')));
     }
@@ -260,6 +277,7 @@
     if (!data.ok) { host.innerHTML = `<p class="empty-state">${esc(data.msg || 'Failed')}</p>`; return; }
     host.innerHTML =
       agendaSection('Listed', data.listings) +
+      agendaSection('Meetings', data.meetings || []) +
       agendaSection('Due', data.due) +
       agendaSection('Filed', data.filed) +
       agendaSection('Appearances', data.appearances);
@@ -267,7 +285,7 @@
 
   /* ---------- case timeline ---------- */
 
-  const TL_ICON = { hearing: 'fa-scale-balanced', filing: 'fa-file-arrow-up', deadline: 'fa-hourglass-half', appearance: 'fa-gavel', task: 'fa-list-check' };
+  const TL_ICON = { hearing: 'fa-scale-balanced', filing: 'fa-file-arrow-up', deadline: 'fa-hourglass-half', appearance: 'fa-gavel', task: 'fa-list-check', meeting: 'fa-people-group' };
 
   function timelineItem(ev) {
     const bits = [];
@@ -526,8 +544,75 @@
     const t = $id('ev-type').value;
     $id('ev-purpose-field').hidden = t !== 'hearing';
     $id('ev-title-field').hidden = t === 'hearing';
+    $id('ev-recur-field').hidden = !(t === 'task' || t === 'deadline' || t === 'meeting');
+    $id('ev-continuing-field').hidden = !(t === 'task' || t === 'deadline');
+    $id('ev-reminders-field').hidden = (t === 'appearance');
   }
   $id('ev-type')?.addEventListener('change', syncEventTypeFields);
+
+  // All-day toggle reveals the start/end time inputs.
+  $id('ev-all-day')?.addEventListener('change', () => {
+    $id('ev-time-fields').hidden = $id('ev-all-day').checked;
+  });
+  // Recurrence frequency reveals interval/until.
+  $id('ev-recur-freq')?.addEventListener('change', () => {
+    $id('ev-recur-extra').hidden = !$id('ev-recur-freq').value;
+  });
+
+  /* ----- reminder rows ----- */
+  function reminderRow(spec) {
+    spec = spec || {};
+    const row = document.createElement('div');
+    row.className = 'cal-reminder-row';
+    row.innerHTML =
+      `<select class="rem-kind">
+         <option value="at_event">At the event time</option>
+         <option value="at_time">At a set time that day</option>
+         <option value="repeating">Repeating before</option>
+       </select>
+       <input type="time" class="rem-attime" hidden />
+       <span class="rem-repeat" hidden>every
+         <select class="rem-every">
+           <option value="30min">30 min</option>
+           <option value="hourly">hour</option>
+           <option value="daily">day</option>
+         </select>
+         from <input type="number" class="rem-lead" min="0" value="60" /> min before</span>
+       <button type="button" class="btn-ghost rem-del" title="Remove reminder">
+         <i class="fa-solid fa-xmark"></i></button>`;
+    const kind = row.querySelector('.rem-kind');
+    const attime = row.querySelector('.rem-attime');
+    const repeat = row.querySelector('.rem-repeat');
+    const sync = () => {
+      attime.hidden = kind.value !== 'at_time';
+      repeat.hidden = kind.value !== 'repeating';
+    };
+    kind.addEventListener('change', sync);
+    row.querySelector('.rem-del').addEventListener('click', () => row.remove());
+    if (spec.kind) kind.value = spec.kind;
+    if (spec.at_time) attime.value = spec.at_time;
+    if (spec.repeat_every) row.querySelector('.rem-every').value = spec.repeat_every;
+    if (spec.lead_minutes != null) row.querySelector('.rem-lead').value = spec.lead_minutes;
+    sync();
+    return row;
+  }
+  $id('ev-add-reminder')?.addEventListener('click', () => {
+    $id('ev-reminders-list').appendChild(reminderRow());
+  });
+  function collectReminders() {
+    return [...document.querySelectorAll('#ev-reminders-list .cal-reminder-row')].map((r) => {
+      const kind = r.querySelector('.rem-kind').value;
+      if (kind === 'at_time') {
+        const at = r.querySelector('.rem-attime').value;
+        return at ? { kind, at_time: at } : null;
+      }
+      if (kind === 'repeating') {
+        return { kind, repeat_every: r.querySelector('.rem-every').value,
+                 lead_minutes: Number(r.querySelector('.rem-lead').value) || 0 };
+      }
+      return { kind: 'at_event' };
+    }).filter(Boolean);
+  }
 
   async function openEventModal(existing, presetDate) {
     await loadUsers();
@@ -542,6 +627,25 @@
     $id('ev-status-field').hidden = !existing;
     if (existing) $id('ev-status').value = existing.status;
     renderAssignees('ev-assignees', (existing?.assignees || []).map((a) => a.user_id));
+
+    // Timing / recurrence / continuing
+    const allDay = existing ? !!existing.all_day : true;
+    $id('ev-all-day').checked = allDay;
+    $id('ev-time-fields').hidden = allDay;
+    $id('ev-start-time').value = existing ? (existing.start_time || '') : '';
+    $id('ev-end-time').value = existing ? (existing.end_time || '') : '';
+    $id('ev-recur-freq').value = existing ? (existing.recur_freq || '') : '';
+    $id('ev-recur-interval').value = existing ? (existing.recur_interval || 1) : 1;
+    $id('ev-recur-until').value = (existing && existing.recur_until) ? isoToIn(existing.recur_until) : '';
+    $id('ev-recur-extra').hidden = !$id('ev-recur-freq').value;
+    $id('ev-continuing').checked = existing ? !!existing.continuing : false;
+
+    // Reminders — load existing on edit
+    $id('ev-reminders-list').innerHTML = '';
+    if (existing) {
+      const rl = await api(`/api/calendar/events/${existing.id}/reminders`);
+      (rl.reminders || []).forEach((r) => $id('ev-reminders-list').appendChild(reminderRow(r)));
+    }
     syncEventTypeFields();
 
     if (!eventPicker) {
@@ -567,12 +671,23 @@
     const editing = state.editingEvent;
     const eventDate = dateFields.ev.get();
     if (!eventDate) { alert('Enter the date as dd/mm/yyyy.'); return; }
+    const allDay = $id('ev-all-day').checked;
+    const freq = $id('ev-recur-freq').value;
     const payload = {
       event_date: eventDate,
       title: $id('ev-title').value,
       purpose: $id('ev-purpose').value,
       notes: $id('ev-notes').value,
       assignee_ids: checkedIds('ev-assignees'),
+      all_day: allDay,
+      start_time: allDay ? null : ($id('ev-start-time').value || null),
+      end_time: allDay ? null : ($id('ev-end-time').value || null),
+      continuing: $id('ev-continuing').checked && !$id('ev-continuing-field').hidden,
+      recur_freq: (!$id('ev-recur-field').hidden && freq) ? freq : null,
+      recur_interval: Number($id('ev-recur-interval').value) || 1,
+      recur_until: (!$id('ev-recur-field').hidden && freq)
+        ? (inToIso($id('ev-recur-until').value) || null) : null,
+      reminders: $id('ev-reminders-field').hidden ? [] : collectReminders(),
     };
     let data;
     if (editing) {
@@ -727,6 +842,17 @@
     } else if (act === 'file') {
       const data = await api(`/api/calendar/events/${id}/mark-filed`, {
         method: 'POST', body: JSON.stringify({}),
+      });
+      if (!data.ok) { alert(data.msg || 'Failed'); return; }
+      await refreshAll();
+    } else if (act === 'complete') {
+      const input = prompt('Mark complete — completion date (dd/mm/yyyy). You can back-date.',
+        isoToIn(TODAY_ISO));
+      if (input === null) return;
+      const iso = inToIso(input);
+      if (!iso) { alert('Enter the date as dd/mm/yyyy.'); return; }
+      const data = await api(`/api/calendar/events/${id}/mark-complete`, {
+        method: 'POST', body: JSON.stringify({ completed_at: iso }),
       });
       if (!data.ok) { alert(data.msg || 'Failed'); return; }
       await refreshAll();

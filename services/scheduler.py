@@ -54,6 +54,17 @@ def _already_sent(conn, date_iso: str) -> bool:
 
 def _tick(now: Optional[datetime] = None) -> None:
     now = now or datetime.now()
+
+    # Per-event reminders run every wake, independent of the daily digest
+    # toggle, in their own guarded block so a reminder failure never suppresses
+    # the digest (or vice-versa).
+    if settings_manager.get("reminders_enabled", True):
+        try:
+            from services.reminders import fire_due_reminders
+            fire_due_reminders(now)
+        except Exception:
+            log.exception("Reminder pass failed; will retry next wake")
+
     if not settings_manager.get("digest_enabled", True):
         return
     send_time_raw = str(settings_manager.get("digest_send_time", _DEFAULT_SEND_TIME))

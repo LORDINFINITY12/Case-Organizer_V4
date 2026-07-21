@@ -136,6 +136,7 @@
 .cal-chip--filing     { border-left-color: var(--accent-2); background: color-mix(in srgb, var(--accent-2) 18%, transparent); }
 .cal-chip--deadline   { border-left-color: #ef4444;         background: color-mix(in srgb, #ef4444 13%, transparent); }
 .cal-chip--task       { border-left-color: #10b981;         background: color-mix(in srgb, #10b981 14%, transparent); }
+.cal-chip--meeting    { border-left-color: #8b5cf6;         background: color-mix(in srgb, #8b5cf6 14%, transparent); }
 .cal-chip--appearance { border-left-color: var(--muted); }
 .cal-chip.overdue     { outline: 1px solid #ef4444; }
 .cal-more { font-size: clamp(0.66rem, 0.6rem + 0.15vw, 0.8rem); color: var(--muted); }
@@ -289,6 +290,17 @@ body.cal-resizing {
 .agenda-item--hearing    { border-left-color: var(--accent); }
 .agenda-item--filing     { border-left-color: var(--accent-2); }
 .agenda-item--deadline   { border-left-color: #ef4444; }
+.agenda-item--meeting    { border-left-color: #8b5cf6; }
+.cal-time { font-variant-numeric: tabular-nums; font-weight: 600; }
+.cal-done { color: #10b981; font-weight: 600; }
+/* Event modal — timing / recurrence / reminders */
+.cal-allday-field { flex-direction: row; align-items: center; gap: 8px; }
+.cal-time-fields { display: flex; gap: 12px; align-items: center; }
+.cal-recur-field { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.cal-recur-extra input[type="number"] { width: 4em; }
+.cal-recur-extra input[type="text"] { width: 12em; }
+.cal-reminder-row { display: flex; gap: 8px; align-items: center; margin-bottom: 6px; flex-wrap: wrap; }
+.cal-reminder-row .rem-lead { width: 5em; }
 .agenda-item--task       { border-left-color: #10b981; }
 /* Empty row keyed like a real agenda item, so section headers and their
    content read differently at a glance even on an empty day. */
@@ -339,6 +351,7 @@ body.cal-resizing {
 .timeline-item--hearing .timeline-icon  { border-color: var(--accent);   color: var(--accent); }
 .timeline-item--filing .timeline-icon   { border-color: var(--accent-2); color: var(--accent-2); }
 .timeline-item--deadline .timeline-icon { border-color: #ef4444;         color: #ef4444; }
+.timeline-item--meeting .timeline-icon  { border-color: #8b5cf6;         color: #8b5cf6; }
 .timeline-item--task .timeline-icon     { border-color: #10b981;         color: #10b981; }
 .timeline-body { min-width: 0; flex: 1; }
 .timeline-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }

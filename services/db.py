@@ -14,7 +14,14 @@ from services.settings import settings_manager
 
 
 # Global schema version for the application database.
-_SCHEMA_VERSION = 9
+_SCHEMA_VERSION = 10
+
+# Reserved internal account used as the sender of automated notifications
+# (e.g. calendar reminder inbox messages posted from the scheduler thread).
+# It is is_active=0 so it can never log in, and is excluded from count_users()
+# / list_users() so it never affects the first-run setup guard or the admin
+# user list.
+SYSTEM_USER_EMAIL = "system@caseorg.local"
 
 
 def _app_db_path() -> Path:
@@ -79,6 +86,10 @@ def _ensure_schema(conn: sqlite3.Connection) -> None:
     if current_version < 9:
         _migrate_to_v9(conn)
         current_version = 9
+
+    if current_version < 10:
+        _migrate_to_v10(conn)
+        current_version = 10
 
     if current_version != _SCHEMA_VERSION:
         # Placeholder for future migrations.
@@ -600,6 +611,154 @@ def _migrate_to_v9(conn: sqlite3.Connection) -> None:
 
     conn.execute(
         "INSERT INTO app_meta(key, value) VALUES('schema_version', '9') "
+        "ON CONFLICT(key) DO UPDATE SET value = excluded.value"
+    )
+
+
+def _migrate_to_v10(conn: sqlite3.Connection) -> None:
+    # v4.8 calendar upgrade: timed events, recurrence, continuing-overdue
+    # rollover, and reminders.  Rebuild case_events to (a) widen the
+    # event_type CHECK with 'meeting' and (b) add the timing/recurrence/
+    # completion columns.  Same data-preserving rebuild pattern as v9:
+    # every existing row keeps its id and takes the new columns' DDL defaults
+    # (all_day=1, recur_interval=1, continuing=0, everything else NULL), which
+    # is exactly "behavior unchanged" for pre-v4.8 events.
+    conn.executescript(
+        """
+        PRAGMA foreign_keys=OFF;
+        BEGIN;
+        CREATE TABLE case_events_new (
+            id               INTEGER PRIMARY KEY AUTOINCREMENT,
+            event_type       TEXT NOT NULL CHECK(event_type IN
+                               ('hearing','filing','appearance','deadline','task','meeting')),
+            case_year        TEXT NOT NULL,
+            case_month       TEXT NOT NULL,
+            case_name        TEXT NOT NULL,
+            event_date       TEXT NOT NULL,
+            title            TEXT NOT NULL DEFAULT '',
+            purpose          TEXT,
+            status           TEXT NOT NULL DEFAULT 'pending'
+                             CHECK(status IN ('pending','done','adjourned','cancelled')),
+            outcome          TEXT,
+            filed_on         TEXT,
+            related_event_id INTEGER REFERENCES case_events(id) ON DELETE SET NULL,
+            notes            TEXT,
+            created_by       INTEGER REFERENCES users(id) ON DELETE SET NULL,
+            created_at       TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at       TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            all_day          INTEGER NOT NULL DEFAULT 1 CHECK(all_day IN (0,1)),
+            start_time       TEXT,
+            end_time         TEXT,
+            recur_freq       TEXT CHECK(recur_freq IS NULL OR
+                               recur_freq IN ('hourly','daily','weekly','monthly','yearly')),
+            recur_interval   INTEGER NOT NULL DEFAULT 1 CHECK(recur_interval >= 1),
+            recur_until      TEXT,
+            continuing       INTEGER NOT NULL DEFAULT 0 CHECK(continuing IN (0,1)),
+            completed_at     TEXT
+        );
+        INSERT INTO case_events_new
+            (id, event_type, case_year, case_month, case_name, event_date,
+             title, purpose, status, outcome, filed_on, related_event_id,
+             notes, created_by, created_at, updated_at)
+        SELECT
+             id, event_type, case_year, case_month, case_name, event_date,
+             title, purpose, status, outcome, filed_on, related_event_id,
+             notes, created_by, created_at, updated_at
+        FROM case_events;
+        DROP TABLE case_events;
+        ALTER TABLE case_events_new RENAME TO case_events;
+        COMMIT;
+        PRAGMA foreign_keys=ON;
+        """
+    )
+
+    # Recreate the four original indexes + updated_at trigger (dropped with the
+    # old table), plus two partial indexes so the month/day queries can cheaply
+    # find the rows that need window-expansion (recurring / continuing).
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_case_events_date ON case_events(event_date)"
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_case_events_case "
+        "ON case_events(case_year, case_month, case_name, event_date)"
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_case_events_status ON case_events(status, event_date)"
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_case_events_filed_on "
+        "ON case_events(filed_on) WHERE filed_on IS NOT NULL"
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_case_events_recur "
+        "ON case_events(recur_freq) WHERE recur_freq IS NOT NULL"
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_case_events_continuing "
+        "ON case_events(continuing) WHERE continuing = 1"
+    )
+    conn.execute(
+        """
+        CREATE TRIGGER IF NOT EXISTS trg_case_events_updated_at
+        AFTER UPDATE ON case_events
+        BEGIN
+            UPDATE case_events SET updated_at = CURRENT_TIMESTAMP WHERE id = NEW.id;
+        END;
+        """
+    )
+
+    # Per-event reminders.  Recipients are the event's assignees (event_assignees),
+    # so no separate recipients table.  ON DELETE CASCADE ties reminders to the
+    # event.  next_fire_at drives the 60s scheduler pass.
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS event_reminders (
+            id             INTEGER PRIMARY KEY AUTOINCREMENT,
+            event_id       INTEGER NOT NULL REFERENCES case_events(id) ON DELETE CASCADE,
+            kind           TEXT NOT NULL CHECK(kind IN ('at_event','at_time','repeating')),
+            at_time        TEXT,
+            repeat_every   TEXT CHECK(repeat_every IS NULL OR
+                             repeat_every IN ('30min','hourly','daily')),
+            lead_minutes   INTEGER,
+            next_fire_at   TEXT,
+            active         INTEGER NOT NULL DEFAULT 1 CHECK(active IN (0,1)),
+            last_fired_at  TEXT,
+            created_by     INTEGER REFERENCES users(id) ON DELETE SET NULL,
+            created_at     TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at     TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        )
+        """
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_event_reminders_event ON event_reminders(event_id)"
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_event_reminders_due "
+        "ON event_reminders(next_fire_at) WHERE active = 1 AND next_fire_at IS NOT NULL"
+    )
+    conn.execute(
+        """
+        CREATE TRIGGER IF NOT EXISTS trg_event_reminders_updated_at
+        AFTER UPDATE ON event_reminders
+        BEGIN
+            UPDATE event_reminders SET updated_at = CURRENT_TIMESTAMP WHERE id = NEW.id;
+        END;
+        """
+    )
+
+    # Seed the reserved system account used as the sender of automated
+    # reminder inbox messages.  is_active=0 → can never authenticate (see
+    # authenticate_user, which routes inactive accounts through the dummy
+    # hash); excluded from count_users()/list_users() so it never trips the
+    # first-run setup guard or clutters the admin user table.
+    conn.execute(
+        "INSERT OR IGNORE INTO users(email, password_hash, role, is_active) "
+        "VALUES(?, 'x', 'admin', 0)",
+        (SYSTEM_USER_EMAIL,),
+    )
+
+    conn.execute(
+        "INSERT INTO app_meta(key, value) VALUES('schema_version', '10') "
         "ON CONFLICT(key) DO UPDATE SET value = excluded.value"
     )
 

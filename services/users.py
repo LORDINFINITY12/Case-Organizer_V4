@@ -8,7 +8,7 @@ import sqlite3
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
-from services.db import get_app_db
+from services.db import get_app_db, SYSTEM_USER_EMAIL
 from services.security import hash_password, verify_password
 from services.models import User, PasswordReset
 
@@ -87,7 +87,9 @@ def authenticate_user(email: str, password: str) -> Optional[User]:
 
 def count_users() -> int:
     conn = get_app_db()
-    row = conn.execute("SELECT COUNT(*) AS c FROM users").fetchone()
+    row = conn.execute(
+        "SELECT COUNT(*) AS c FROM users WHERE email != ?", (SYSTEM_USER_EMAIL,)
+    ).fetchone()
     return int(row["c"] if row else 0)
 
 
@@ -163,7 +165,9 @@ def consume_password_reset(reset_id: int) -> None:
 def list_users() -> list[User]:
     conn = get_app_db()
     rows = conn.execute(
-        "SELECT id, email, role, is_active, created_at, updated_at, last_login_at FROM users ORDER BY email COLLATE NOCASE"
+        "SELECT id, email, role, is_active, created_at, updated_at, last_login_at "
+        "FROM users WHERE email != ? ORDER BY email COLLATE NOCASE",
+        (SYSTEM_USER_EMAIL,),
     ).fetchall()
     return [User.from_row(r) for r in rows]
 

@@ -70,6 +70,7 @@ from services.users import (
 )
 from services.email import send_email_async, EmailConfigError, clear_email_cache
 from services import calendar_events as cal
+from services import reminders as rem
 from services.digest import send_daily_digest
 from services.rate_limit import is_rate_limited, record_success
 from services.messages import (
@@ -2580,6 +2581,59 @@ def _valid_iso_date(value: str) -> bool:
         return False
 
 
+def _valid_hhmm(value: str) -> bool:
+    try:
+        datetime.strptime(value or "", "%H:%M")
+        return True
+    except ValueError:
+        return False
+
+
+def _as_bool(value: Any, default: bool) -> bool:
+    if value is None:
+        return default
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, int):
+        return bool(value)
+    return str(value).strip().lower() in ("1", "true", "yes", "on")
+
+
+def _validate_reminders(raw):
+    """Return (list of clean reminder specs, error message or None)."""
+    if raw is None:
+        return [], None
+    if not isinstance(raw, list):
+        return [], "Invalid reminders"
+    out = []
+    for r in raw:
+        if not isinstance(r, dict):
+            return [], "Invalid reminder"
+        kind = r.get("kind")
+        if kind not in rem.VALID_REMINDER_KINDS:
+            return [], "Invalid reminder kind"
+        spec = {"kind": kind}
+        if kind == "at_time":
+            at = (r.get("at_time") or "").strip()
+            if not _valid_hhmm(at):
+                return [], "Reminder time must be HH:MM"
+            spec["at_time"] = at
+        elif kind == "repeating":
+            rep = r.get("repeat_every")
+            if rep not in rem.VALID_REPEAT_EVERY:
+                return [], "Invalid reminder repeat interval"
+            try:
+                lead = int(r.get("lead_minutes"))
+            except (TypeError, ValueError):
+                return [], "Invalid reminder lead time"
+            if lead < 0:
+                return [], "Invalid reminder lead time"
+            spec["repeat_every"] = rep
+            spec["lead_minutes"] = lead
+        out.append(spec)
+    return out, None
+
+
 def _validate_case_triple(year: str, month: str, case_name: str,
                           must_exist: bool = False) -> Optional[str]:
     """Return an error message, or None when the triple is acceptable."""
@@ -2692,11 +2746,31 @@ def _event_payload_error(data: dict, *, creating: bool) -> Optional[str]:
             return "Invalid event type"
     if "status" in data and data["status"] not in cal.VALID_STATUSES:
         return "Invalid status"
-    for key in ("event_date", "filed_on"):
+    for key in ("event_date", "filed_on", "recur_until"):
         if data.get(key) and not _valid_iso_date(data[key]):
             return f"Invalid {key}"
     if creating and not data.get("event_date"):
         return "Missing event_date"
+    # Timing: an explicitly timed event needs a valid start; end must be valid
+    # and not before start.
+    for key in ("start_time", "end_time"):
+        if data.get(key) and not _valid_hhmm(data[key]):
+            return f"Invalid {key}"
+    if "all_day" in data and not _as_bool(data.get("all_day"), True):
+        if not (data.get("start_time") and _valid_hhmm(data["start_time"])):
+            return "A timed event needs a start time"
+        if data.get("end_time") and data["end_time"] < data["start_time"]:
+            return "End time cannot be before start time"
+    # Recurrence
+    freq = data.get("recur_freq")
+    if freq not in (None, "") and freq not in cal.VALID_RECUR_FREQ:
+        return "Invalid recurrence"
+    if data.get("recur_interval") is not None:
+        try:
+            if int(data["recur_interval"]) < 1:
+                return "Invalid recurrence interval"
+        except (TypeError, ValueError):
+            return "Invalid recurrence interval"
     return None
 
 
@@ -2719,6 +2793,9 @@ def api_calendar_create_event():
     participants, err = _validate_participants(data.get("participants"))
     if err:
         return jsonify({"ok": False, "msg": err}), 400
+    reminders, err = _validate_reminders(data.get("reminders"))
+    if err:
+        return jsonify({"ok": False, "msg": err}), 400
 
     conn = get_app_db()
     try:
@@ -2736,9 +2813,18 @@ def api_calendar_create_event():
             filed_on=data.get("filed_on") or None,
             notes=(data.get("notes") or "").strip() or None,
             created_by=g.current_user["id"],
+            all_day=_as_bool(data.get("all_day"), True),
+            start_time=(data.get("start_time") or None),
+            end_time=(data.get("end_time") or None),
+            recur_freq=(data.get("recur_freq") or None),
+            recur_interval=int(data.get("recur_interval") or 1),
+            recur_until=(data.get("recur_until") or None),
+            continuing=_as_bool(data.get("continuing"), False),
             assignee_ids=assignee_ids,
             participants=participants,
         )
+        if reminders:
+            rem.replace_reminders(conn, event_id, reminders, created_by=g.current_user["id"])
         conn.commit()
     except ValueError as exc:
         return jsonify({"ok": False, "msg": str(exc)}), 400
@@ -2769,6 +2855,14 @@ def api_calendar_update_event(event_id: int):
             if err:
                 return jsonify({"ok": False, "msg": err}), 400
             cal.set_participants(conn, event_id, participants)
+        if "reminders" in data:
+            reminders, err = _validate_reminders(data.get("reminders"))
+            if err:
+                return jsonify({"ok": False, "msg": err}), 400
+            rem.replace_reminders(conn, event_id, reminders, created_by=g.current_user["id"])
+        else:
+            # timing/recurrence may have changed — keep any reminders in step
+            rem.recompute_event_reminders(conn, event_id)
         conn.commit()
     except ValueError as exc:
         return jsonify({"ok": False, "msg": str(exc)}), 400
@@ -2800,6 +2894,62 @@ def api_calendar_mark_filed(event_id: int):
         return jsonify({"ok": False, "msg": str(exc)}), 400
     conn.commit()
     return jsonify({"ok": True, "event": cal.get_event(conn, event_id)})
+
+
+@app.post("/api/calendar/events/<int:event_id>/mark-complete")
+@require_login_api
+def api_calendar_mark_complete(event_id: int):
+    data = request.get_json(silent=True) or {}
+    completed_at = (data.get("completed_at") or datetime.now().isoformat(timespec="minutes")).strip()
+    # accept an ISO date or an ISO datetime (validate the date part)
+    if not _valid_iso_date(completed_at[:10]):
+        return jsonify({"ok": False, "msg": "Invalid completed_at"}), 400
+    conn = get_app_db()
+    try:
+        if not cal.mark_complete(conn, event_id, completed_at):
+            return jsonify({"ok": False, "msg": "Event not found"}), 404
+    except ValueError as exc:
+        return jsonify({"ok": False, "msg": str(exc)}), 400
+    rem.recompute_event_reminders(conn, event_id)
+    conn.commit()
+    return jsonify({"ok": True, "event": cal.get_event(conn, event_id)})
+
+
+@app.get("/api/calendar/events/<int:event_id>/reminders")
+@require_login_api
+def api_calendar_list_reminders(event_id: int):
+    conn = get_app_db()
+    if cal.get_event(conn, event_id) is None:
+        return jsonify({"ok": False, "msg": "Event not found"}), 404
+    return jsonify({"ok": True, "reminders": rem.reminders_for_event(conn, event_id)})
+
+
+@app.post("/api/calendar/events/<int:event_id>/reminders")
+@require_login_api
+def api_calendar_create_reminder(event_id: int):
+    data = request.get_json(silent=True) or {}
+    specs, err = _validate_reminders([data])
+    if err:
+        return jsonify({"ok": False, "msg": err}), 400
+    conn = get_app_db()
+    if cal.get_event(conn, event_id) is None:
+        return jsonify({"ok": False, "msg": "Event not found"}), 404
+    try:
+        rem.create_reminder(conn, event_id=event_id, created_by=g.current_user["id"], **specs[0])
+    except ValueError as exc:
+        return jsonify({"ok": False, "msg": str(exc)}), 400
+    conn.commit()
+    return jsonify({"ok": True, "reminders": rem.reminders_for_event(conn, event_id)})
+
+
+@app.delete("/api/calendar/reminders/<int:reminder_id>")
+@require_login_api
+def api_calendar_delete_reminder(reminder_id: int):
+    conn = get_app_db()
+    if not rem.delete_reminder(conn, reminder_id):
+        return jsonify({"ok": False, "msg": "Reminder not found"}), 404
+    conn.commit()
+    return jsonify({"ok": True})
 
 
 @app.post("/api/calendar/record-appearance")
