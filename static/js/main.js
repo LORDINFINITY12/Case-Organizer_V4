@@ -2477,18 +2477,12 @@ function manageCaseForm(){
 
     <!-- Proceedings — light up once a case is selected -->
     <div class="mc-proceeding" id="mc-proceeding" hidden>
-      <div class="form-grid mc-branch-row">
+      <div class="mc-branch-row">
         <select id="domain">
           <option value="">File Category</option>
           <option>Criminal</option><option>Civil</option><option>Commercial</option><option>Case Law</option><option>Invoices</option><option>Legal Notices</option>
         </select>
-        <div class="mc-representing" id="mc-representing" hidden>
-          <span class="mc-rep-label">Representing</span>
-          <div class="op-tabs mc-rep-tabs">
-            <button type="button" class="op-tab active" data-rep="Petitioner">Petitioner</button>
-            <button type="button" class="op-tab" data-rep="Respondent">Respondent</button>
-          </div>
-        </div>
+        <span class="mc-rep-indicator" id="mc-rep-indicator"></span>
       </div>
 
       <div class="mc-tabs mc-proc-tabs" id="mc-proc-tabs" role="tablist" hidden>
@@ -2697,6 +2691,18 @@ function manageCaseForm(){
       }
 
       const noteState = await getNoteState(year, month, cname);
+
+      // Which side we represent is fixed at case creation (Note.json "Our
+      // Party") — read it and drive the Primary taxonomy from it; no toggle.
+      try {
+          const obj = JSON.parse(noteState.content || '{}');
+          representing = (obj['Our Party'] === 'Respondent') ? 'Respondent' : 'Petitioner';
+      } catch (_) { representing = 'Petitioner'; }
+      mountPrimarySubcat();
+      const repInd = $('#mc-rep-indicator');
+      if (repInd) repInd.textContent = branchOf() ? `Representing the ${representing}` : '';
+      if (branchOf()) refreshMiscDirs();
+
       if (!noteState.exists) {
           setVisibility(noteBtn, false);
           delete noteBtn.dataset.hasNote;
@@ -2848,7 +2854,8 @@ function manageCaseForm(){
   }
   function syncDomainUI() {
     const branch = branchOf();
-    setVisibility($('#mc-representing'), !!branch);
+    const ind = $('#mc-rep-indicator');
+    if (ind) ind.textContent = branch ? `Representing the ${representing}` : '';
     setVisibility($('#mc-proc-tabs'), !!branch);
     if (!branch) activateProcTab('primary');
     mountPrimarySubcat();
@@ -2881,17 +2888,6 @@ function manageCaseForm(){
   $('#domain')?.addEventListener('change', syncDomainUI);
   wrap.querySelectorAll('.mc-proc-tab').forEach((t) =>
     t.addEventListener('click', () => activateProcTab(t.dataset.ptab)));
-  wrap.querySelectorAll('#mc-representing .op-tab').forEach((b) => {
-    b.addEventListener('click', () => {
-      wrap.querySelectorAll('#mc-representing .op-tab').forEach((x) => {
-        x.classList.remove('active'); x.setAttribute('aria-selected', 'false');
-      });
-      b.classList.add('active'); b.setAttribute('aria-selected', 'true');
-      representing = b.dataset.rep;
-      mountPrimarySubcat();
-      refreshMiscDirs();
-    });
-  });
   $('#misc-subcat-dir')?.addEventListener('change', () => {
     const branch = branchOf();
     const has = $('#misc-subcat-dir').value;
