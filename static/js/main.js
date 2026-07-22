@@ -2471,10 +2471,6 @@ function manageCaseForm(){
       <select id="mc-month" disabled><option value="">Month</option></select>
       <select id="mc-case" disabled><option value="">Case (Petitioner v. Respondent)</option></select>
     </div>
-    <div class="mc-note-row">
-      <button id="create-note-btn" class="btn-secondary" type="button" hidden>View / Edit Note.json</button>
-    </div>
-
     <!-- Proceedings — light up once a case is selected -->
     <div class="mc-proceeding" id="mc-proceeding" hidden>
       <div class="mc-branch-row">
@@ -2483,6 +2479,7 @@ function manageCaseForm(){
           <option>Criminal</option><option>Civil</option><option>Commercial</option><option>Case Law</option><option>Invoices</option><option>Legal Notices</option>
         </select>
         <span class="mc-rep-indicator" id="mc-rep-indicator"></span>
+        <button id="create-note-btn" class="btn-secondary" type="button" hidden>View / Edit Note.json</button>
       </div>
 
       <div class="mc-tabs mc-proc-tabs" id="mc-proc-tabs" role="tablist" hidden>

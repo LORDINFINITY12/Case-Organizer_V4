@@ -1013,21 +1013,27 @@ input, select, textarea {
 /* v4.8 Manage Case: compact calendar-style picker + proceedings block.
    (calendar.css — which styles .case-picker/.cal-or — is not loaded on the
    home page, so the layout is defined here.) */
-.mc-picker { display: grid; grid-template-columns: 0.8fr 0.8fr 1.6fr; gap: 8px; margin-bottom: 8px; }
+/* Search row: input and button the same height (border-box + matched min-height). */
+.manage-case-card .mc-name-search { align-items: stretch; gap: 10px; }
+.manage-case-card .mc-name-search input,
+.manage-case-card .mc-name-search .btn-secondary { min-height: 44px; box-sizing: border-box; }
+.manage-case-card .mc-name-search .btn-secondary { white-space: nowrap; }
+/* Year / Month / Case in one compact row (Case widest). */
+.mc-picker { display: grid; grid-template-columns: 1fr 1fr 2fr; gap: 12px; margin: 0 0 12px; }
 .mc-picker > .ll-dropdown { min-width: 0; }
-.cal-or { margin: 8px 0 6px; color: var(--muted, #6b7280); font-size: 0.85rem; }
-.mc-proceeding { margin-top: 8px; }
-.mc-note-row { margin: 6px 0; }
-.mc-branch-row { display: flex; align-items: center; gap: 12px; margin-bottom: 8px; }
-.mc-branch-row > .ll-dropdown { flex: 1 1 200px; min-width: 0; }
+.cal-or { margin: 10px 0 8px; color: var(--muted, #6b7280); font-size: 0.85rem; }
+/* File Category (fixed width) + Representing indicator + View/Edit Note (right). */
+.mc-branch-row { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
+.mc-branch-row > .ll-dropdown { flex: 0 0 clamp(200px, 34%, 300px); min-width: 0; }
 .mc-rep-indicator { color: var(--muted, #6b7280); font-size: 0.85rem; white-space: nowrap; }
-.mc-proc-tabs { margin: 8px 0; }
+.mc-branch-row #create-note-btn { margin-left: auto; }
+.mc-proc-tabs { margin: 0 0 12px; }
 .mc-proc-tab {
-    padding: 9px 12px; font-size: 14px; font-weight: 600; border: none;
+    padding: 10px 12px; font-size: 14px; font-weight: 600; border: none;
     background: transparent; color: var(--muted, #6b7280); cursor: pointer;
 }
 .mc-proc-tab.active { background: var(--accent, #7aa6ff); color: #fff; }
-.manage-case-card .form-grid { gap: 8px; margin-bottom: 8px; }
+.manage-case-card .form-grid { gap: 12px; margin-bottom: 12px; }
 .mc-tab,
 .cls-mode-tab {
     border: none;
