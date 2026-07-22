@@ -465,6 +465,63 @@ const FILE_SUBCATS = {
   ],
 };
 
+/* ── v4.8 taxonomy: role-aware primary + miscellaneous proceedings ───────────
+ * FILE_SUBCATS above is the Petitioner/moving-party PRIMARY set.  Interim /
+ * interlocutory / miscellaneous items are stripped from it (MISC_STRIP) and
+ * offered instead in the Misc Proceedings tab (MISC_SUBCATS).  Representing the
+ * Respondent swaps in the responsive pleadings (RESP_SUBCATS).  All lists are
+ * starting points — edit freely.  The 9 standard sub-folders live in
+ * STANDARD_SUBDIRS (kept in sync with app.py). */
+const STANDARD_SUBDIRS = [
+  "Primary Documents","Case Law","Research","Annexures","Drafts",
+  "Notes","Court Copies","Pleadings","Judgments & Orders",
+];
+
+// Items removed from the Petitioner PRIMARY set (they move to Misc).
+const MISC_STRIP = new Set([
+  "Miscellaneous Civil Application","Civil Miscellaneous Petition","Interlocutory Application (IA)",
+  "Restoration Application","Amendment Application","Recall Application",
+  "Criminal Miscellaneous Petition","Interim Bail","Criminal Contempt",
+  "Interim Relief","Interim Measures",
+]);
+
+// Whole Civil groups that are entirely interim/interlocutory reliefs → Misc.
+const MISC_STRIP_GROUPS = new Set([
+  "CPC Reliefs - Injunctions", "CPC Reliefs - Interim Reliefs",
+]);
+
+// Branch → flat list of misc-proceeding categories (a proceeding folder under a
+// chosen subcategory dir).  "Written Submissions"/"Written Arguments" are added
+// to every branch (available for all proceedings, both sides).
+const MISC_SUBCATS = {
+  Civil: ["Interlocutory Application (IA)","Stay Application","Temporary/Ad-Interim Injunction (O.XXXIX)","Appointment of Receiver (O.XL)","Attachment Before Judgment (O.XXXVIII r.5)","Amendment Application (O.VI r.17)","Impleadment / Addition of Parties (O.I r.10)","Restoration / Recall Application","Condonation of Delay","Interim Maintenance","Local Commissioner (O.XXVI)","Discovery / Inspection / Production","Miscellaneous Civil Application","Written Submissions","Written Arguments","Other"],
+  Criminal: ["Interim Bail / Bail Application","Stay of Proceedings","Exemption from Personal Appearance (S.205)","Discharge Application","Recall of Witness / Further Investigation","Suspension of Sentence","Interim Custody / Superdari","Amendment Application","Condonation of Delay","Restoration / Recall","Criminal Contempt","Criminal Miscellaneous Application","Written Submissions","Written Arguments","Other"],
+  Commercial: ["Interim Relief (O.XXXIX / S.9 Arb.)","Interim Injunction","Appointment of Receiver","Attachment Before Judgment","Section 9 / Section 17 Interim Measures","Amendment Application","Impleadment","Condonation of Delay","Local Commissioner","Discovery / Inspection / Production","Restoration / Recall","Commercial Miscellaneous Application","Written Submissions","Written Arguments","Other"],
+};
+
+// Respondent-side PRIMARY (responsive pleadings), grouped like FILE_SUBCATS.
+const RESP_SUBCATS = {
+  Civil: [
+    { group: "Responsive Pleadings", items: ["Written Statement","Additional Written Statement","Counter-Claim","Set-off","Counter Affidavit","Reply / Response","Reply to Application","Objections","Caveat","Cross-Objections (in Appeal)","Reply to Appeal","Reply to Writ / SLP","Other"] },
+  ],
+  Criminal: [
+    { group: "Responsive Pleadings", items: ["Reply / Counter to Bail","Discharge Application","Reply to Quashing (Status Report / Counter)","Objections","Reply to Revision / Appeal","Reply to Petition u/s 482 CrPC / 528 BNSS","Reply to Application","Surety / Bond","Other"] },
+  ],
+  Commercial: [
+    { group: "Responsive Pleadings", items: ["Written Statement","Statement of Defence (Arbitration)","Counter-Claim","Counter Affidavit","Reply to Section 9 / interim","Reply / Response","Objections","Cross-Objections","Other"] },
+  ],
+};
+
+// Petitioner PRIMARY = FILE_SUBCATS minus the misc items/groups.
+function primarySubcats(branch, role) {
+  if (role === 'Respondent') return RESP_SUBCATS[branch] || [];
+  const groups = FILE_SUBCATS[branch] || [];
+  return groups
+    .filter((g) => !MISC_STRIP_GROUPS.has(g.group))
+    .map((g) => ({ group: g.group, items: g.items.filter((it) => !MISC_STRIP.has(it)) }))
+    .filter((g) => g.items.length);
+}
+
 /* ── Court / Forum constants ──────────────────────────────────────────────── */
 const COURT_TYPES = ["Supreme Court", "Federal Court", "Privy Council", "High Court"];
 
@@ -2401,34 +2458,60 @@ function manageCaseForm(){
   const wrap = el('div','form-card manage-case-card');
   wrap.innerHTML = `
     <h3 class="section-title">Manage Case</h3>
-    <div class="mc-tabs" role="tablist" aria-label="Manage case lookup">
-      <button type="button" class="mc-tab active" data-tab="date" role="tab" aria-selected="true">Year & Month</button>
-      <button type="button" class="mc-tab" data-tab="name" role="tab" aria-selected="false">Case Name</button>
+
+    <!-- Calendar-style case picker: search on top, browse by date below -->
+    <div class="mc-name-search">
+      <input type="text" id="mc-name-input" placeholder="Search case by party name…" />
+      <button type="button" id="mc-name-search" class="btn-secondary">Search</button>
     </div>
-    <div class="mc-panel" data-tab="date">
-      <div class="form-grid">
-        <select id="mc-year"><option value="">Year</option></select>
-        <select id="mc-month" disabled><option value="">Month</option></select>
-        <select id="mc-case" disabled><option value="">Case (Petitioner v. Respondent)</option></select>
+    <div id="mc-name-results" class="results mc-name-results" hidden></div>
+    <p class="cal-or">or browse by date</p>
+    <div class="case-picker mc-picker">
+      <select id="mc-year"><option value="">Year</option></select>
+      <select id="mc-month" disabled><option value="">Month</option></select>
+      <select id="mc-case" disabled><option value="">Case (Petitioner v. Respondent)</option></select>
+    </div>
+    <div class="mc-note-row">
+      <button id="create-note-btn" class="btn-secondary" type="button" hidden>View / Edit Note.json</button>
+    </div>
+
+    <!-- Proceedings — light up once a case is selected -->
+    <div class="mc-proceeding" id="mc-proceeding" hidden>
+      <div class="form-grid mc-branch-row">
         <select id="domain">
           <option value="">File Category</option>
           <option>Criminal</option><option>Civil</option><option>Commercial</option><option>Case Law</option><option>Invoices</option><option>Legal Notices</option>
         </select>
-        <div id="subcategory-host"></div>
-        <input type="text" id="main-type" placeholder="Main Type (e.g., Transfer Petition, Criminal Revision, Orders)" />
+        <div class="mc-representing" id="mc-representing" hidden>
+          <span class="mc-rep-label">Representing</span>
+          <div class="op-tabs mc-rep-tabs">
+            <button type="button" class="op-tab active" data-rep="Petitioner">Petitioner</button>
+            <button type="button" class="op-tab" data-rep="Respondent">Respondent</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="mc-tabs mc-proc-tabs" id="mc-proc-tabs" role="tablist" hidden>
+        <button type="button" class="mc-proc-tab active" data-ptab="primary" role="tab" aria-selected="true">Primary Proceedings</button>
+        <button type="button" class="mc-proc-tab" data-ptab="misc" role="tab" aria-selected="false">Misc Proceedings</button>
+      </div>
+
+      <div class="mc-ppanel" data-ptab="primary">
+        <div class="form-grid">
+          <div id="subcategory-host"></div>
+          <input type="text" id="main-type" placeholder="Main Type (e.g., Transfer Petition, Orders)" />
+        </div>
+      </div>
+      <div class="mc-ppanel" data-ptab="misc" hidden>
+        <div class="form-grid">
+          <select id="misc-subcat-dir"><option value="">Subcategory directory…</option></select>
+          <select id="misc-proceeding" disabled><option value="">Misc proceeding…</option></select>
+        </div>
+      </div>
+
+      <div class="form-grid mc-subfolder-row">
+        <select id="mc-subfolder"><option value="">(no sub-folder — subcategory root)</option></select>
         <input type="date" id="mc-date" />
-        <button id="create-note-btn" class="btn-secondary" type="button" hidden>
-          View / Edit Note.json
-        </button>
-      </div>
-    </div>
-    <div class="mc-panel" data-tab="name" hidden>
-      <div class="mc-name-search">
-        <input type="text" id="mc-name-input" placeholder="Search case name…" />
-        <button type="button" id="mc-name-search" class="btn-secondary">Search</button>
-      </div>
-      <div id="mc-name-results" class="results mc-name-results">
-        <div class="result-item">Search for a case to begin.</div>
       </div>
     </div>
 
@@ -2594,6 +2677,10 @@ function manageCaseForm(){
       const cname = caseSel.value || '';
       const hasSelection = Boolean(year && month && cname);
 
+      // v4.8: reveal the Primary/Misc proceedings block once a case is chosen.
+      setVisibility($('#mc-proceeding'), hasSelection);
+      if (hasSelection && branchOf()) refreshMiscDirs();
+
       if (invoiceBtn) {
           invoiceBtn.disabled = !hasSelection;
           invoiceBtn.setAttribute('aria-disabled', hasSelection ? 'false' : 'true');
@@ -2711,32 +2798,105 @@ function manageCaseForm(){
   // --- File Category -> File Subcategory (grouped searchable taxonomy) -------
   // Civil/Criminal/Commercial → searchable taxonomy dropdown. Case Law / Invoices
   // / Legal Notices keep NO subcategory (a disabled placeholder is shown).
-  function mountSubcat(dom) {
+  // ---- v4.8: role-aware primary taxonomy + Misc proceedings ----
+  let representing = 'Petitioner';
+  function branchOf() {
+    const d = $('#domain')?.value || '';
+    return (d === 'Civil' || d === 'Criminal' || d === 'Commercial') ? d : null;
+  }
+  function fillSelect(sel, placeholder, values, disabled) {
+    if (!sel) return;
+    sel.innerHTML = `<option value="">${placeholder}</option>`;
+    (values || []).forEach((v) => { const o = el('option'); o.value = v; o.textContent = v; sel.append(o); });
+    if (disabled != null) sel.disabled = disabled;
+  }
+  function mountPrimarySubcat() {
     const host = $('#subcategory-host');
     if (!host) return;
     host.innerHTML = '';
-    if (FILE_SUBCATS[dom]) {
-      buildGroupedSearchableDropdown(host, 'subcategory', 'Search file subcategory…', FILE_SUBCATS[dom]);
+    const branch = branchOf();
+    if (branch) {
+      buildGroupedSearchableDropdown(host, 'subcategory', 'Search file subcategory…',
+        primarySubcats(branch, representing));
     } else {
       const ph = document.createElement('input');
-      ph.type = 'text';
-      ph.disabled = true;
-      ph.className = 'mc-subcat-placeholder';
+      ph.type = 'text'; ph.disabled = true; ph.className = 'mc-subcat-placeholder';
+      const dom = $('#domain')?.value || '';
       ph.placeholder = dom ? `Subcategory (not used for ${dom})` : 'Subcategory';
       host.appendChild(ph);
     }
   }
-  mountSubcat('');
-
-  $('#domain')?.addEventListener('change', () => {
-    const dom = $('#domain').value || '';
+  async function refreshMiscDirs() {
+    const dirSel = $('#misc-subcat-dir');
+    if (!dirSel) return;
+    const branch = branchOf();
+    const year = yearSel.value, month = monthSel.value, cname = caseSel.value;
+    let existing = [];
+    if (year && month && cname) {
+      try {
+        const r = await fetch(`/api/dir-tree?path=${encodeURIComponent(`${year}/${month}/${cname}`)}`);
+        const d = await r.json().catch(() => ({ dirs: [] }));
+        existing = (d.dirs || []).filter((n) => !['Invoices', 'Case Laws', 'Legal Notices'].includes(n));
+      } catch (_) { /* ignore */ }
+    }
+    const taxNames = branch
+      ? primarySubcats(branch, representing).flatMap((g) => g.items).filter((n) => n !== 'Other')
+      : [];
+    const union = Array.from(new Set([...existing, ...taxNames])).sort((a, b) => a.localeCompare(b));
+    fillSelect(dirSel, 'Subcategory directory…', union);
+    fillSelect($('#misc-proceeding'), 'Misc proceeding…', [], true);
+  }
+  function syncDomainUI() {
+    const branch = branchOf();
+    setVisibility($('#mc-representing'), !!branch);
+    setVisibility($('#mc-proc-tabs'), !!branch);
+    if (!branch) activateProcTab('primary');
+    mountPrimarySubcat();
     const mt = $('#main-type');
-    mountSubcat(dom);
+    const dom = $('#domain')?.value || '';
     if (mt) {
       if (dom === 'Case Law') mt.placeholder = 'Case Law title / citation (used as filename)';
       else if (dom === 'Legal Notices') mt.placeholder = 'Notice title / reference (used as filename)';
-      else mt.placeholder = 'Main Type (e.g., Transfer Petition, Criminal Revision, Orders)';
+      else mt.placeholder = 'Main Type (e.g., Transfer Petition, Orders)';
     }
+    if (branch) refreshMiscDirs();
+  }
+  function activateProcTab(target) {
+    wrap.querySelectorAll('.mc-proc-tab').forEach((t) => {
+      const on = t.dataset.ptab === target;
+      t.classList.toggle('active', on); t.setAttribute('aria-selected', String(on));
+    });
+    wrap.querySelectorAll('.mc-ppanel').forEach((p) => { p.hidden = p.dataset.ptab !== target; });
+  }
+  // active proceeding tab (for the upload target)
+  function activePTab() {
+    const t = wrap.querySelector('.mc-proc-tab.active');
+    return t ? t.dataset.ptab : 'primary';
+  }
+
+  // static sub-folder options + initial mount
+  fillSelect($('#mc-subfolder'), '(no sub-folder — subcategory root)', STANDARD_SUBDIRS);
+  syncDomainUI();
+
+  $('#domain')?.addEventListener('change', syncDomainUI);
+  wrap.querySelectorAll('.mc-proc-tab').forEach((t) =>
+    t.addEventListener('click', () => activateProcTab(t.dataset.ptab)));
+  wrap.querySelectorAll('#mc-representing .op-tab').forEach((b) => {
+    b.addEventListener('click', () => {
+      wrap.querySelectorAll('#mc-representing .op-tab').forEach((x) => {
+        x.classList.remove('active'); x.setAttribute('aria-selected', 'false');
+      });
+      b.classList.add('active'); b.setAttribute('aria-selected', 'true');
+      representing = b.dataset.rep;
+      mountPrimarySubcat();
+      refreshMiscDirs();
+    });
+  });
+  $('#misc-subcat-dir')?.addEventListener('change', () => {
+    const branch = branchOf();
+    const has = $('#misc-subcat-dir').value;
+    fillSelect($('#misc-proceeding'), 'Misc proceeding…',
+      (has && branch) ? MISC_SUBCATS[branch] : [], !(has && branch));
   });
 
   // Convert all selects to Long-List Dropdowns
@@ -2787,12 +2947,27 @@ function manageCaseForm(){
     if (!year || !month || !cname){ alert('Select Year, Month, and Case.'); return; }
     if (!selectedFiles.length){ alert('Select at least one file'); return; }
 
+    // v4.8: the upload target depends on the active proceeding tab.
+    //  Primary → Case/<Subcategory>/[<Subfolder>]
+    //  Misc    → Case/<Subcategory dir>/<Misc proceeding>/[<Subfolder>]
+    let subcategory = '', proceeding = '';
+    if (branchOf() && activePTab() === 'misc') {
+      subcategory = $('#misc-subcat-dir')?.value || '';
+      proceeding  = $('#misc-proceeding')?.value || '';
+      if (!subcategory) { alert('Pick a subcategory directory.'); return; }
+      if (!proceeding)  { alert('Pick a misc proceeding.'); return; }
+    } else {
+      subcategory = $('#subcategory')?.value || '';
+    }
+
     const fd = new FormData();
     fd.set('Year', year);
     fd.set('Month', month);
     fd.set('Case Name', cname);
     fd.set('Domain', $('#domain')?.value || '');
-    fd.set('Subcategory', $('#subcategory')?.value || '');
+    fd.set('Subcategory', subcategory);
+    fd.set('Proceeding', proceeding);
+    fd.set('Subfolder', $('#mc-subfolder')?.value || '');
     fd.set('Main Type', ($('#main-type')?.value || '').trim());
     fd.set('Date', $('#mc-date')?.value || '');
     selectedFiles.forEach(f => fd.append('file', f));

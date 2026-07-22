@@ -122,6 +122,14 @@ CASE_LAW_CASE_TYPES = {
     ],
 }
 
+# Standard sub-folders offered under every subcategory / misc-proceeding dir
+# (v4.8).  Created on demand at upload.  "Judgments & Orders" avoids the slash
+# that the taxonomy flattener would otherwise turn into " - ".
+STANDARD_SUBDIRS = (
+    "Primary Documents", "Case Law", "Research", "Annexures", "Drafts",
+    "Notes", "Court Copies", "Pleadings", "Judgments & Orders",
+)
+
 # ── Court / Forum constants ──────────────────────────────────────────────────
 COURT_TYPES = ("Supreme Court", "Federal Court", "Privy Council", "High Court")
 
@@ -2219,12 +2227,30 @@ def manage_case_upload():
         return jsonify({"ok": True, "saved_as": saved_paths})
     # ---------- END Legal Notices handling ----------
 
-    # Regular categories (Criminal/Civil/Commercial)
-    target_dir = cdir / subcategory if subcategory else cdir
+    # Regular categories (Criminal/Civil/Commercial).  v4.8: an upload may target
+    #   Case / <Subcategory> / [<Misc proceeding>] / [<Standard sub-folder>]
+    # each component sanitized to a single OS-safe folder and created on demand.
+    def _folder_component(raw: str) -> str:
+        return sanitize_case_law_component(
+            normalize_ws((raw or "").replace("/", " - ").replace("\\", " - "))
+        )
+
+    proceeding = _folder_component(form.get("Proceeding"))   # optional misc-proceeding category
+    subfolder = _folder_component(form.get("Subfolder"))      # optional standard sub-folder
+    if subfolder and subfolder not in STANDARD_SUBDIRS:
+        return jsonify({"ok": False, "msg": "Invalid sub-folder."}), 400
+
+    target_dir = cdir
+    if subcategory:
+        target_dir = target_dir / subcategory
+    if proceeding:
+        target_dir = target_dir / proceeding
+    if subfolder:
+        target_dir = target_dir / subfolder
     try:
         target_dir = _safe_path(target_dir, FS_ROOT)
     except ValueError:
-        return jsonify({"ok": False, "msg": "Invalid subcategory."}), 400
+        return jsonify({"ok": False, "msg": "Invalid subcategory/proceeding."}), 400
     target_dir.mkdir(parents=True, exist_ok=True)
 
     for f in files:

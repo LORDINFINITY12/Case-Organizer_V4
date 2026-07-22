@@ -174,3 +174,39 @@ class TestManageUploadSubcategory:
         assert not (tmp_path / "etc").exists()
         for stray in ("etc",):
             assert not (fsroot.parent / stray).exists()
+
+    def test_misc_proceeding_nests_under_subcategory(self, auth_client, tmp_path, monkeypatch):
+        import app as app_module
+        fsroot = tmp_path / "fs"
+        monkeypatch.setattr(app_module, "FS_ROOT", fsroot)
+        self._case_dir(fsroot)
+        data = {
+            "Year": "2026", "Month": "Jun", "Case Name": "Alpha v. Beta",
+            "Domain": "Civil", "Subcategory": "Writ Petition",
+            "Proceeding": "Interim Injunction", "Subfolder": "Pleadings",
+            "Main Type": "", "Date": "2026-06-15",
+            "file": (self._pdf(), "draft.pdf"),
+        }
+        resp = auth_client.post("/manage-case/upload", data=data, headers=self.CSRF,
+                                content_type="multipart/form-data")
+        assert resp.status_code == 200, resp.get_data(as_text=True)
+        target = (fsroot / "2026" / "Jun" / "Alpha v. Beta"
+                  / "Writ Petition" / "Interim Injunction" / "Pleadings")
+        assert target.is_dir()
+        assert list(target.glob("*.pdf")), "file not stored in the nested proceeding folder"
+
+    def test_invalid_standard_subfolder_rejected(self, auth_client, tmp_path, monkeypatch):
+        import app as app_module
+        fsroot = tmp_path / "fs"
+        monkeypatch.setattr(app_module, "FS_ROOT", fsroot)
+        self._case_dir(fsroot)
+        data = {
+            "Year": "2026", "Month": "Jun", "Case Name": "Alpha v. Beta",
+            "Domain": "Civil", "Subcategory": "Writ Petition",
+            "Subfolder": "Not A Standard Folder",
+            "Main Type": "", "Date": "2026-06-15",
+            "file": (self._pdf(), "x.pdf"),
+        }
+        resp = auth_client.post("/manage-case/upload", data=data, headers=self.CSRF,
+                                content_type="multipart/form-data")
+        assert resp.status_code == 400

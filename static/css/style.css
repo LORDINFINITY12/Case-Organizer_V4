@@ -1010,6 +1010,19 @@ input, select, textarea {
     overflow: hidden;
     background: rgba(122, 166, 255, 0.06);
 }
+/* v4.8 Manage Case: proceedings block, representing toggle, proc tabs */
+.mc-proceeding { margin-top: 10px; }
+.mc-note-row { margin: 8px 0; }
+.mc-branch-row { align-items: center; }
+.mc-representing { display: flex; align-items: center; gap: 10px; }
+.mc-rep-label { color: var(--muted, #6b7280); font-size: 0.85rem; white-space: nowrap; }
+.mc-rep-tabs { flex: 1; }
+.mc-proc-tabs { margin: 10px 0; }
+.mc-proc-tab {
+    padding: 9px 12px; font-size: 14px; font-weight: 600; border: none;
+    background: transparent; color: var(--muted, #6b7280); cursor: pointer;
+}
+.mc-proc-tab.active { background: var(--accent, #7aa6ff); color: #fff; }
 .mc-tab,
 .cls-mode-tab {
     border: none;
