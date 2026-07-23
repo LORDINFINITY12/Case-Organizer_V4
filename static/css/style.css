@@ -998,7 +998,7 @@ input, select, textarea {
 /* Manage Case */
 .manage-case-card {
     display: grid;
-    gap: 14px;
+    gap: 12px;
 }
 .mc-tabs,
 .cls-mode-tabs {
@@ -1010,30 +1010,44 @@ input, select, textarea {
     overflow: hidden;
     background: rgba(122, 166, 255, 0.06);
 }
-/* v4.8 Manage Case: compact calendar-style picker + proceedings block.
-   (calendar.css — which styles .case-picker/.cal-or — is not loaded on the
-   home page, so the layout is defined here.) */
-/* Search row: input and button the same height (border-box + matched min-height). */
-.manage-case-card .mc-name-search { align-items: stretch; gap: 10px; }
-.manage-case-card .mc-name-search input,
-.manage-case-card .mc-name-search .btn-secondary { min-height: 44px; box-sizing: border-box; }
+/* v4.8 Manage Case — mirrors the calendar's event-modal picker. calendar.css
+   (which styles .case-picker) is NOT loaded on the home page, so it lives here.
+   Spacing is a single uniform 12px everywhere (card gap + grids + rows). */
+
+/* Search bar: input and button EXACTLY the same height. Left UNSCOPED so the
+   calendar's event-modal search (same .mc-name-search markup) is fixed too. */
+.mc-name-search { align-items: stretch; }
+.mc-name-search input,
+.mc-name-search .btn-secondary { height: 42px; box-sizing: border-box; }
 .manage-case-card .mc-name-search .btn-secondary { white-space: nowrap; }
-/* Year / Month / Case in one compact row (Case widest). */
-.mc-picker { display: grid; grid-template-columns: 1fr 1fr 2fr; gap: 12px; margin: 0 0 12px; }
-.mc-picker > .ll-dropdown { min-width: 0; }
-.cal-or { margin: 10px 0 8px; color: var(--muted, #6b7280); font-size: 0.85rem; }
-/* File Category (fixed width) + Representing indicator + View/Edit Note (right). */
-.mc-branch-row { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
-.mc-branch-row > .ll-dropdown { flex: 0 0 clamp(200px, 34%, 300px); min-width: 0; }
-.mc-rep-indicator { color: var(--muted, #6b7280); font-size: 0.85rem; white-space: nowrap; }
-.mc-branch-row #create-note-btn { margin-left: auto; }
-.mc-proc-tabs { margin: 0 0 12px; }
+
+/* Year / Month / Case on one line — same column template as the calendar. */
+.manage-case-card .case-picker {
+    display: grid;
+    grid-template-columns: minmax(96px, 130px) minmax(96px, 130px) minmax(0, 1fr);
+    gap: 12px;
+}
+.manage-case-card .case-picker > .ll-dropdown { min-width: 0; }
+
+/* Proceedings block — ALWAYS shown; faded + read-only until a case is picked. */
+.mc-proceeding { display: grid; gap: 12px; }
+.mc-proceeding.mc-locked { opacity: 0.5; pointer-events: none; }
+
+/* Primary / Misc segmented tabs (container reuses .mc-tabs). */
 .mc-proc-tab {
     padding: 10px 12px; font-size: 14px; font-weight: 600; border: none;
     background: transparent; color: var(--muted, #6b7280); cursor: pointer;
 }
 .mc-proc-tab.active { background: var(--accent, #7aa6ff); color: #fff; }
-.manage-case-card .form-grid { gap: 12px; margin-bottom: 12px; }
+.mc-proc-tab.is-disabled { opacity: 0.5; cursor: not-allowed; }
+
+.manage-case-card .form-grid { gap: 12px; }
+
+/* Bottom actions: Upload on the left; Generate-Invoice icon button + View/Edit
+   Note grouped on the bottom-right (invoice icon to the left of the note btn). */
+.manage-case-card .form-actions { display: flex; align-items: center; gap: 12px; }
+.manage-case-card .mc-actions-right { margin-left: auto; display: flex; align-items: center; gap: 12px; }
+.mc-icon-btn { width: 42px; height: 42px; padding: 0; font-size: 16px; }
 .mc-tab,
 .cls-mode-tab {
     border: none;
@@ -1058,12 +1072,11 @@ input, select, textarea {
 }
 .mc-name-search {
     display: flex;
-    flex-wrap: wrap;
-    gap: 10px;
+    gap: 12px;
 }
 .mc-name-search input {
     flex: 1;
-    min-width: 220px;
+    min-width: 0;
     padding: 10px 12px;
     border-radius: 12px;
     border: 1px solid #e6e8ef;

@@ -32,17 +32,25 @@ case-organizer (4.8) stable; urgency=medium
     applications are split out of the main subcategory list into the Misc
     tab: pick an existing (or new) subcategory directory, then the interim
     relief being filed, and the upload is filed as
-    Case/<Subcategory>/<Misc proceeding>/. A "Representing: Petitioner /
-    Respondent" toggle swaps the subcategory list for the responsive
-    pleadings (Written Statement, Counter Affidavit, Reply, Cross-Objections
-    …) when acting for the respondent.
+    Case/<Subcategory>/<Misc proceeding>/. When the case's Our Party is the
+    respondent (read from Note.json — fixed at case creation, no toggle), the
+    subcategory list is automatically swapped for the responsive pleadings
+    (Written Statement, Counter Affidavit, Reply, Cross-Objections …). The
+    whole proceedings area is always on screen, staying faded and read-only
+    until a case is selected; Main Type sits just before the date, and the
+    Generate Invoice / View Note actions are grouped bottom-right.
   * Standard sub-folders. Every subcategory / proceeding directory can now
     receive uploads into a fixed set of sub-folders — Primary Documents,
     Case Law, Research, Annexures, Drafts, Notes, Court Copies, Pleadings,
     Judgments & Orders — created on demand.
+  * Daily digest PDF. The morning digest email now attaches a one-page PDF
+    with a proper table of the day's listings, filings / deadlines due,
+    overdue items and tomorrow's schedule — including event times and each
+    item's assignees. The plain-text body is kept as a fallback.
   * Tests: added coverage for timed/recurring events, continuing-overdue
-    rollover and back-dated completion, reminder firing (email + inbox), and
-    nested misc-proceeding uploads with the standard sub-folders.
+    rollover and back-dated completion, reminder firing (email + inbox),
+    nested misc-proceeding uploads with the standard sub-folders, and the
+    daily-digest PDF rendering.
 
  -- Izumi <swarajswarupaggarwal@gmail.com>  Sun, 12 Jul 2026 20:00:00 +0530
 

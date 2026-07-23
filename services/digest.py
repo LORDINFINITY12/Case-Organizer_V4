@@ -168,6 +168,138 @@ def build_digest_body(
     return "\n".join(lines)
 
 
+# ---------------------------------------------------------------------------
+# PDF rendering — a proper tabular version of the same digest data.
+# ---------------------------------------------------------------------------
+def _pdf_when(ev: Dict[str, Any], today: date) -> str:
+    """The 'Due / Date' cell: due-date + overdue for work items, else the
+    event date plus a time when the event is not all-day."""
+    if ev["event_type"] in ("filing", "deadline", "task"):
+        due = ev["event_date"]
+        try:
+            days_over = (today - date.fromisoformat(due)).days
+        except ValueError:
+            days_over = 0
+        return f"{due} (+{days_over}d overdue)" if days_over > 0 else due
+    out = ev["event_date"]
+    if not ev.get("all_day", 1) and ev.get("start_time"):
+        span = ev["start_time"] + (f"–{ev['end_time']}" if ev.get("end_time") else "")
+        out = f"{out} {span}"
+    return out
+
+
+def _ordered_sections(
+    data: Dict[str, Any], today: date, for_user_id: Optional[int]
+) -> List[tuple[str, List[Dict[str, Any]]]]:
+    sections: List[tuple[str, List[Dict[str, Any]]]] = []
+    if for_user_id is not None and data["assigned"].get(for_user_id):
+        own_ids = set(data["assigned"][for_user_id])
+        seen: set = set()
+        own: List[Dict[str, Any]] = []
+        for bucket in ("today_hearings", "due_today", "overdue", "tomorrow"):
+            for ev in data[bucket]:
+                if ev["id"] in own_ids and ev["id"] not in seen:
+                    seen.add(ev["id"])
+                    own.append(ev)
+        sections.append(("Assigned to you", own))
+    sections += [
+        ("Today's Listings", data["today_hearings"]),
+        ("Filings / Deadlines Due Today", data["due_today"]),
+        ("Overdue / Unfiled", data["overdue"]),
+        ("Tomorrow", data["tomorrow"]),
+    ]
+    return sections
+
+
+def build_digest_pdf(
+    data: Dict[str, Any], today: date, *, for_user_id: Optional[int] = None
+) -> bytes:
+    """Render the digest as a one-page A4 PDF with a real table."""
+    from io import BytesIO
+    from xml.sax.saxutils import escape
+
+    from reportlab.lib import colors
+    from reportlab.lib.pagesizes import A4
+    from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
+    from reportlab.lib.units import mm
+    from reportlab.platypus import (
+        Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle,
+    )
+
+    base = getSampleStyleSheet()["Normal"]
+    cell = ParagraphStyle("cell", parent=base, fontSize=8, leading=10)
+    head = ParagraphStyle("head", parent=base, fontSize=8, leading=10,
+                          fontName="Helvetica-Bold", textColor=colors.white)
+    sect = ParagraphStyle("sect", parent=base, fontSize=9, leading=11,
+                          fontName="Helvetica-Bold")
+    muted = ParagraphStyle("muted", parent=cell, textColor=colors.grey)
+    title = ParagraphStyle("title", parent=base, fontSize=15, leading=18,
+                           fontName="Helvetica-Bold")
+    subtitle = ParagraphStyle("subtitle", parent=base, fontSize=9,
+                              textColor=colors.grey, spaceAfter=8)
+
+    accent = colors.HexColor("#2f6f57")
+    section_bg = colors.HexColor("#eef4f1")
+    grid = colors.HexColor("#c9d6cf")
+
+    def P(text: str, style: ParagraphStyle = cell) -> Paragraph:
+        return Paragraph(escape(str(text or "")), style)
+
+    header = [P(t, head) for t in ("Type", "Case (Yr/Mo)", "Detail", "Due / Date", "Assigned")]
+    rows: List[list] = [header]
+    style_cmds = [
+        ("BACKGROUND", (0, 0), (-1, 0), accent),
+        ("GRID", (0, 0), (-1, -1), 0.4, grid),
+        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+        ("TOPPADDING", (0, 0), (-1, -1), 3),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
+        ("LEFTPADDING", (0, 0), (-1, -1), 4),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 4),
+    ]
+
+    r = 1
+    for name, events in _ordered_sections(data, today, for_user_id):
+        rows.append([P(f"{name} ({len(events)})", sect), "", "", "", ""])
+        style_cmds += [("SPAN", (0, r), (-1, r)),
+                       ("BACKGROUND", (0, r), (-1, r), section_bg)]
+        r += 1
+        if not events:
+            rows.append([P("Nothing scheduled.", muted), "", "", "", ""])
+            style_cmds.append(("SPAN", (0, r), (-1, r)))
+            r += 1
+            continue
+        for ev in events:
+            detail = ev.get("purpose") if ev["event_type"] == "hearing" else ev.get("title")
+            rows.append([
+                P(ev["event_type"].upper()),
+                P(_case_ref(ev)),
+                P(detail or ""),
+                P(_pdf_when(ev, today)),
+                P(", ".join(ev.get("assignee_emails") or [])),
+            ])
+            r += 1
+
+    buf = BytesIO()
+    doc = SimpleDocTemplate(
+        buf, pagesize=A4,
+        leftMargin=15 * mm, rightMargin=15 * mm,
+        topMargin=15 * mm, bottomMargin=15 * mm,
+        title=f"Daily Digest {today.isoformat()}",
+    )
+    table = Table(rows, colWidths=[18 * mm, 44 * mm, 56 * mm, 30 * mm, 32 * mm],
+                  repeatRows=1)
+    table.setStyle(TableStyle(style_cmds))
+    story = [
+        Paragraph("Case Organizer — Daily Digest", title),
+        Paragraph(today.strftime("%A, %d %B %Y"), subtitle),
+        table,
+        Spacer(1, 8),
+        Paragraph("Automated daily digest — Case Organizer", subtitle),
+    ]
+    doc.build(story)
+    return buf.getvalue()
+
+
 def send_daily_digest(today: Optional[date] = None, *, force: bool = False) -> Dict[str, Any]:
     """Build and send the digest.  Idempotent per calendar day unless forced.
 
@@ -200,16 +332,30 @@ def send_daily_digest(today: Optional[date] = None, *, force: bool = False) -> D
         recipients = get_digest_recipients(conn)
         subject = f"Daily Digest — {today.strftime('%d %b %Y')}"
         shared_body = build_digest_body(data, today)
+        pdf_name = f"daily-digest-{today_iso}.pdf"
+
+        def _digest_pdf(uid: Optional[int]) -> Optional[bytes]:
+            """Best-effort PDF table — a render error must never block the email."""
+            try:
+                return build_digest_pdf(data, today, for_user_id=uid)
+            except Exception as exc:  # pragma: no cover - defensive
+                log.warning("Digest PDF render failed: %s", exc)
+                return None
+
+        shared_pdf = _digest_pdf(None)
 
         sent = failed = 0
         for user in recipients:
+            personalized = bool(data["assigned"].get(user["id"]))
             body = (
                 build_digest_body(data, today, for_user_id=user["id"])
-                if data["assigned"].get(user["id"])
+                if personalized
                 else shared_body
             )
+            pdf = _digest_pdf(user["id"]) if personalized else shared_pdf
+            attachments = [(pdf_name, pdf)] if pdf else None
             try:
-                send_email(user["email"], subject, body)
+                send_email(user["email"], subject, body, attachments=attachments)
                 sent += 1
             except EmailConfigError:
                 raise  # config problem affects everyone — bail out entirely

@@ -2459,50 +2459,42 @@ function manageCaseForm(){
   wrap.innerHTML = `
     <h3 class="section-title">Manage Case</h3>
 
-    <!-- Calendar-style case picker: search on top, browse by date below -->
+    <!-- Case picker — identical structure to the calendar's event-modal picker:
+         a search row, then Year / Month / Case on one line. -->
     <div class="mc-name-search">
       <input type="text" id="mc-name-input" placeholder="Search case by party name…" />
       <button type="button" id="mc-name-search" class="btn-secondary">Search</button>
     </div>
     <div id="mc-name-results" class="results mc-name-results" hidden></div>
-    <p class="cal-or">or browse by date</p>
-    <div class="case-picker mc-picker">
+    <div class="case-picker">
       <select id="mc-year"><option value="">Year</option></select>
       <select id="mc-month" disabled><option value="">Month</option></select>
       <select id="mc-case" disabled><option value="">Case (Petitioner v. Respondent)</option></select>
     </div>
-    <!-- Proceedings — light up once a case is selected -->
-    <div class="mc-proceeding" id="mc-proceeding" hidden>
-      <div class="mc-branch-row">
-        <select id="domain">
-          <option value="">File Category</option>
-          <option>Criminal</option><option>Civil</option><option>Commercial</option><option>Case Law</option><option>Invoices</option><option>Legal Notices</option>
-        </select>
-        <span class="mc-rep-indicator" id="mc-rep-indicator"></span>
-        <button id="create-note-btn" class="btn-secondary" type="button" hidden>View / Edit Note.json</button>
-      </div>
 
-      <div class="mc-tabs mc-proc-tabs" id="mc-proc-tabs" role="tablist" hidden>
+    <!-- Proceedings — ALWAYS present; faded + read-only until a case is picked. -->
+    <div class="mc-proceeding mc-locked" id="mc-proceeding" aria-disabled="true">
+      <div class="mc-tabs mc-proc-tabs" id="mc-proc-tabs" role="tablist">
         <button type="button" class="mc-proc-tab active" data-ptab="primary" role="tab" aria-selected="true">Primary Proceedings</button>
         <button type="button" class="mc-proc-tab" data-ptab="misc" role="tab" aria-selected="false">Misc Proceedings</button>
       </div>
 
-      <div class="mc-ppanel" data-ptab="primary">
-        <div class="form-grid">
-          <div id="subcategory-host"></div>
-          <input type="text" id="main-type" placeholder="Main Type (e.g., Transfer Petition, Orders)" />
-        </div>
-      </div>
-      <div class="mc-ppanel" data-ptab="misc" hidden>
-        <div class="form-grid">
-          <select id="misc-subcat-dir"><option value="">Subcategory directory…</option></select>
-          <select id="misc-proceeding" disabled><option value="">Misc proceeding…</option></select>
-        </div>
-      </div>
+      <div class="form-grid mc-fields">
+        <select id="domain">
+          <option value="">File Category</option>
+          <option>Criminal</option><option>Civil</option><option>Commercial</option><option>Case Law</option><option>Invoices</option><option>Legal Notices</option>
+        </select>
 
-      <div class="form-grid mc-subfolder-row">
+        <!-- Primary: role-aware subcategory taxonomy (from Note.json "Our Party") -->
+        <div id="subcategory-host" class="mc-only-primary"></div>
+
+        <!-- Misc: existing subcategory dir + branch-specific misc proceeding -->
+        <select id="misc-subcat-dir" class="mc-only-misc"><option value="">Subcategory directory…</option></select>
+        <select id="misc-proceeding" class="mc-only-misc" disabled><option value="">Misc proceeding…</option></select>
+
         <select id="mc-subfolder"><option value="">(no sub-folder — subcategory root)</option></select>
-        <input type="date" id="mc-date" />
+        <input type="text" id="main-type" placeholder="Main Type (e.g., Transfer Petition, Orders)" />
+        <input type="date" id="mc-date" class="full-span" />
       </div>
     </div>
 
@@ -2512,7 +2504,10 @@ function manageCaseForm(){
 
     <div class="form-actions">
       <button id="mc-go" class="btn-primary" type="button">Upload & Categorize File(s)</button>
-      <button id="mc-invoice" class="btn-secondary" type="button" disabled>Generate Invoice</button>
+      <div class="mc-actions-right">
+        <button id="mc-invoice" class="btn-secondary mc-icon-btn" type="button" title="Generate Invoice" aria-label="Generate Invoice" disabled><i class="fa-solid fa-file-invoice-dollar" aria-hidden="true"></i></button>
+        <button id="create-note-btn" class="btn-secondary" type="button" disabled>View / Edit Note.json</button>
+      </div>
     </div>
   `;
   host.append(wrap);
@@ -2541,10 +2536,12 @@ function manageCaseForm(){
     }
   };
 
-  setVisibility(noteBtn, false);
+  // v4.8: the note button is always visible; it starts disabled (faded,
+  // read-only) and lights up once a case is selected.
   if (noteBtn) {
-    noteBtn.dataset.hasNote && delete noteBtn.dataset.hasNote;
-    noteBtn.dataset.intent && delete noteBtn.dataset.intent;
+    noteBtn.disabled = true;
+    delete noteBtn.dataset.hasNote;
+    delete noteBtn.dataset.intent;
     noteBtn.onclick = null;
   }
 
@@ -2625,7 +2622,6 @@ function manageCaseForm(){
   caseSel.addEventListener('change', updateCaseActions);
 
   if (invoiceBtn) {
-    invoiceBtn.style.marginLeft = 'auto';
     invoiceBtn.disabled = true;
     invoiceBtn.setAttribute('aria-disabled', 'true');
     invoiceBtn.addEventListener('click', () => {
@@ -2668,47 +2664,54 @@ function manageCaseForm(){
       const cname = caseSel.value || '';
       const hasSelection = Boolean(year && month && cname);
 
-      // v4.8: reveal the Primary/Misc proceedings block once a case is chosen.
-      setVisibility($('#mc-proceeding'), hasSelection);
-      if (hasSelection && branchOf()) refreshMiscDirs();
+      // v4.8: the proceedings block is ALWAYS visible — it just stays faded +
+      // non-interactive (read-only) until a case is picked, exactly like the
+      // View/Edit Note button.
+      const proc = $('#mc-proceeding');
+      if (proc) {
+          proc.classList.toggle('mc-locked', !hasSelection);
+          proc.setAttribute('aria-disabled', hasSelection ? 'false' : 'true');
+      }
 
       if (invoiceBtn) {
           invoiceBtn.disabled = !hasSelection;
           invoiceBtn.setAttribute('aria-disabled', hasSelection ? 'false' : 'true');
       }
-
-      if (!noteBtn) return;
+      if (noteBtn) noteBtn.disabled = !hasSelection;
 
       if (!hasSelection) {
-          setVisibility(noteBtn, false);
-          delete noteBtn.dataset.hasNote;
-          delete noteBtn.dataset.intent;
-          noteBtn.onclick = null;
+          if (noteBtn) {
+              delete noteBtn.dataset.hasNote;
+              delete noteBtn.dataset.intent;
+              noteBtn.onclick = null;
+          }
           return;
       }
 
       const noteState = await getNoteState(year, month, cname);
 
       // Which side we represent is fixed at case creation (Note.json "Our
-      // Party") — read it and drive the Primary taxonomy from it; no toggle.
+      // Party") — read it and drive the Primary taxonomy from it; no toggle,
+      // no on-screen label.
       try {
           const obj = JSON.parse(noteState.content || '{}');
           representing = (obj['Our Party'] === 'Respondent') ? 'Respondent' : 'Petitioner';
       } catch (_) { representing = 'Petitioner'; }
       mountPrimarySubcat();
-      const repInd = $('#mc-rep-indicator');
-      if (repInd) repInd.textContent = branchOf() ? `Representing the ${representing}` : '';
       if (branchOf()) refreshMiscDirs();
 
+      if (!noteBtn) return;
+
       if (!noteState.exists) {
-          setVisibility(noteBtn, false);
+          // A selected case with no Note.json is unusual (cases get one at
+          // creation) — keep the button enabled but report it clearly.
           delete noteBtn.dataset.hasNote;
-          delete noteBtn.dataset.intent;
-          noteBtn.onclick = null;
+          noteBtn.dataset.intent = 'update';
+          noteBtn.textContent = 'View / Edit Note.json';
+          noteBtn.onclick = () => { alert('Note.json not found for this case.'); };
           return;
       }
 
-      setVisibility(noteBtn, true);
       noteBtn.dataset.hasNote = '1';
       noteBtn.dataset.intent = 'update';
       noteBtn.textContent = 'View / Edit Note.json';
@@ -2851,10 +2854,15 @@ function manageCaseForm(){
   }
   function syncDomainUI() {
     const branch = branchOf();
-    const ind = $('#mc-rep-indicator');
-    if (ind) ind.textContent = branch ? `Representing the ${representing}` : '';
-    setVisibility($('#mc-proc-tabs'), !!branch);
-    if (!branch) activateProcTab('primary');
+    // Misc proceedings only apply to Civil/Criminal/Commercial. Keep the tab
+    // visible but disabled (faded) for other categories, and fall back to
+    // Primary if it was active.
+    const miscTab = wrap.querySelector('.mc-proc-tab[data-ptab="misc"]');
+    if (miscTab) {
+      miscTab.classList.toggle('is-disabled', !branch);
+      miscTab.disabled = !branch;
+    }
+    if (!branch && activePTab() === 'misc') activateProcTab('primary');
     mountPrimarySubcat();
     const mt = $('#main-type');
     const dom = $('#domain')?.value || '';
@@ -2865,12 +2873,22 @@ function manageCaseForm(){
     }
     if (branch) refreshMiscDirs();
   }
+  // A converted <select> lives inside a .ll-dropdown wrapper that takes its
+  // grid slot — toggle the wrapper (not the select) to show/hide a field.
+  const lldWrap = (id) => document.getElementById(id)?.closest('.ll-dropdown') || document.getElementById(id);
   function activateProcTab(target) {
+    const primary = target !== 'misc';
     wrap.querySelectorAll('.mc-proc-tab').forEach((t) => {
       const on = t.dataset.ptab === target;
       t.classList.toggle('active', on); t.setAttribute('aria-selected', String(on));
     });
-    wrap.querySelectorAll('.mc-ppanel').forEach((p) => { p.hidden = p.dataset.ptab !== target; });
+    const host = $('#subcategory-host');
+    if (host) host.hidden = !primary;
+    [lldWrap('misc-subcat-dir'), lldWrap('misc-proceeding')].forEach((w) => { if (w) w.hidden = primary; });
+    // Keep Main Type + Date as the final full-width rows in BOTH modes so the
+    // grid stays perfectly paired (no orphaned half-cells).
+    const mt = $('#main-type');
+    if (mt) mt.classList.toggle('full-span', !primary);
   }
   // active proceeding tab (for the upload target)
   function activePTab() {
@@ -2894,6 +2912,9 @@ function manageCaseForm(){
 
   // Convert all selects to Long-List Dropdowns
   convertAllSelectsToLLD(wrap);
+  // Now that the .ll-dropdown wrappers exist, set the initial Primary/Misc
+  // field visibility (hides the Misc dropdowns until that tab is chosen).
+  activateProcTab('primary');
 
   // --- File selection / upload -----------------------------------------
   const dz = $('#drop');

@@ -132,11 +132,28 @@ def _as_list(recipient: Union[str, Iterable[str]]) -> list[str]:
     return list(recipient)
 
 
+# An attachment is (filename, data) or (filename, data, maintype, subtype).
+Attachment = Union[tuple[str, bytes], tuple[str, bytes, str, str]]
+
+
+def _add_attachments(msg: EmailMessage, attachments: Optional[Iterable[Attachment]]) -> None:
+    for att in attachments or ():
+        filename, data = att[0], att[1]
+        if len(att) >= 4:
+            maintype, subtype = att[2], att[3]  # type: ignore[misc]
+        elif filename.lower().endswith(".pdf"):
+            maintype, subtype = "application", "pdf"
+        else:
+            maintype, subtype = "application", "octet-stream"
+        msg.add_attachment(data, maintype=maintype, subtype=subtype, filename=filename)
+
+
 def send_email(
     recipient: Union[str, Iterable[str]],
     subject: str,
     body: str,
     _config: Optional[_SMTPConfig] = None,
+    attachments: Optional[Iterable[Attachment]] = None,
 ) -> None:
     logger = logging.getLogger("caseorg.email")
     timing_enabled = bool(settings_manager.get("email_debug_timing", False))
@@ -169,6 +186,7 @@ def send_email(
     msg["From"] = config.from_email
     msg["To"] = ", ".join(recipients)
     msg.set_content(body)
+    _add_attachments(msg, attachments)
 
     try:
         with smtplib.SMTP(config.host, config.port, timeout=config.timeout_seconds) as smtp:
@@ -212,6 +230,7 @@ def send_email_async(
     recipient: Union[str, Iterable[str]],
     subject: str,
     body: str,
+    attachments: Optional[Iterable[Attachment]] = None,
 ) -> Future:
     recipients = _as_list(recipient)
     if not recipients:
@@ -220,7 +239,7 @@ def send_email_async(
     config = _load_smtp_config()
 
     def _task() -> None:
-        send_email(recipient, subject, body, _config=config)
+        send_email(recipient, subject, body, _config=config, attachments=attachments)
 
     future = _EMAIL_EXECUTOR.submit(_task)
     future.add_done_callback(_log_async_result)

@@ -401,6 +401,23 @@ class TestDigest:
         assert "== ASSIGNED TO YOU ==" in personal
         assert "Arguments" in personal
 
+    def test_build_digest_pdf(self, db, test_user):
+        from services.digest import build_digest_pdf, collect_digest_data
+
+        self._seed(db, test_user)
+        data = collect_digest_data(db, TODAY)
+
+        shared = build_digest_pdf(data, TODAY)
+        assert shared[:5] == b"%PDF-" and len(shared) > 800
+
+        personal = build_digest_pdf(data, TODAY, for_user_id=test_user.id)
+        assert personal[:5] == b"%PDF-"
+
+        # An all-empty digest (every section "Nothing scheduled.") still renders.
+        empty = {"today_hearings": [], "due_today": [], "overdue": [],
+                 "tomorrow": [], "assigned": {}}
+        assert build_digest_pdf(empty, TODAY)[:5] == b"%PDF-"
+
     def test_send_daily_digest_recipients_and_idempotency(
         self, app, db, test_user, test_admin, test_intern, monkeypatch
     ):
@@ -414,16 +431,21 @@ class TestDigest:
 
         sent = []
         monkeypatch.setattr(digest_mod, "send_email",
-                            lambda to, subject, body: sent.append((to, body)))
+                            lambda to, subject, body, attachments=None: sent.append((to, body, attachments)))
 
         result = digest_mod.send_daily_digest(TODAY)
         assert result == {"sent": 2, "failed": 0, "skipped": False, "empty": False}
-        recipients = {to for to, _ in sent}
+        recipients = {to for to, _, _ in sent}
         assert recipients == {test_user.email, test_admin.email}
 
-        bodies = {to: body for to, body in sent}
+        bodies = {to: body for to, body, _ in sent}
         assert "ASSIGNED TO YOU" in bodies[test_user.email]
         assert "ASSIGNED TO YOU" not in bodies[test_admin.email]
+
+        # Every digest carries the tabular PDF as a real, non-empty attachment.
+        for _to, _body, atts in sent:
+            assert atts and atts[0][0].endswith(".pdf")
+            assert atts[0][1][:5] == b"%PDF-"
 
         # Same day again -> claimed, skipped.
         assert digest_mod.send_daily_digest(TODAY)["skipped"] is True
