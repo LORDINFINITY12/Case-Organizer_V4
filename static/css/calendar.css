@@ -436,7 +436,25 @@ body.cal-resizing {
     margin-bottom: 8px;
 }
 .participant-row .pr-name[hidden] { display: none; }
-.participant-row .pr-remove { padding: 8px 10px; }
+/* When a team member is picked the name box is hidden — collapse to two
+   columns so the remove button stays compact instead of filling the gap. */
+.participant-row.pr-has-user { grid-template-columns: minmax(140px, 1fr) auto; }
+.participant-row .pr-remove {
+    width: 42px;
+    height: 42px;
+    padding: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    /* !important so the red survives the dark-theme .btn-ghost override. */
+    color: #ef4444 !important;
+    border-color: #fca5a5 !important;
+}
+.participant-row .pr-remove:hover {
+    background: rgba(239, 68, 68, 0.12) !important;
+    border-color: #ef4444 !important;
+    color: #dc2626 !important;
+}
 
 /* ---- narrow screens: stack, natural heights ---- */
 @media (max-width: 980px) {

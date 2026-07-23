@@ -1019,6 +1019,8 @@ input, select, textarea {
 .mc-name-search { align-items: stretch; }
 .mc-name-search input,
 .mc-name-search .btn-secondary { height: 42px; box-sizing: border-box; }
+/* Flat like the input — the drop shadow made the button read as taller. */
+.mc-name-search .btn-secondary { box-shadow: none; }
 .manage-case-card .mc-name-search .btn-secondary { white-space: nowrap; }
 
 /* Year / Month / Case on one line — same column template as the calendar. */
@@ -1047,7 +1049,8 @@ input, select, textarea {
    Note grouped on the bottom-right (invoice icon to the left of the note btn). */
 .manage-case-card .form-actions { display: flex; align-items: center; gap: 12px; }
 .manage-case-card .mc-actions-right { margin-left: auto; display: flex; align-items: center; gap: 12px; }
-.mc-icon-btn { width: 42px; height: 42px; padding: 0; font-size: 16px; }
+/* Same height as the adjacent View/Edit Note button (35px), not the 42px search row. */
+.mc-icon-btn { width: 35px; height: 35px; padding: 0; font-size: 15px; }
 .mc-tab,
 .cls-mode-tab {
     border: none;

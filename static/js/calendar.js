@@ -730,10 +730,13 @@
     sel.addEventListener('change', () => {
       name.hidden = !!sel.value;
       if (sel.value) name.value = '';
+      row.classList.toggle('pr-has-user', !!sel.value);
     });
     row.querySelector('.pr-remove').addEventListener('click', () => row.remove());
-    if (preset && preset.user_id) { sel.value = String(preset.user_id); name.hidden = true; }
-    else if (preset) name.value = preset.display_name || '';
+    if (preset && preset.user_id) {
+      sel.value = String(preset.user_id); name.hidden = true;
+      row.classList.add('pr-has-user');
+    } else if (preset) name.value = preset.display_name || '';
     return row;
   }
 
