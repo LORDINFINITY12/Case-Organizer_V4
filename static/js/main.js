@@ -2365,6 +2365,7 @@ function createCaseForm(){
         <select id="current-status">
           <option>Same as Original</option>
           <option>Transferred</option>
+          <option>To be transferred</option>
           <option>In Appeal</option>
         </select>
       </div>
@@ -2423,28 +2424,28 @@ function createCaseForm(){
     const host = $('#current-extra');
     if (!host) return;
     host.innerHTML = '';
-    if (status === 'Transferred') {
-      host.innerHTML = `
-        <div class="form-grid">
-          <input type="text" id="cs" placeholder="Current State" />
-          <input type="text" id="cd" placeholder="Current District" />
-          <div id="cf-host" class="full-span"></div>
-        </div>`;
-      const dd = buildSearchableDropdown(
-        'cf-input', 'cf', 'Current Court / Forum',
-        { includeSupremeCourt: true, allowFreeText: true }
-      );
-      $('#cf-host')?.appendChild(dd.wrapper);
-    } else if (status === 'In Appeal') {
-      host.innerHTML = `<div class="form-grid"><div id="appeal-host" class="full-span"></div></div>`;
-      const dd = buildSearchableDropdown(
-        'appeal-input', 'appeal-forum',
-        'In Appeal — search Supreme Court / High Courts',
-        { includeSupremeCourt: true, allowFreeText: true }
-      );
-      $('#appeal-host')?.appendChild(dd.wrapper);
-    }
-    // "Same as Original" → no extra fields.
+    // "Same as Original" needs nothing. Transferred / To be transferred / In
+    // Appeal all take State + District + a FREE-TEXT Court/Forum — an appeal
+    // often goes from a Magistrate to a District/Sessions Court, not a High
+    // Court, so the forum must be typeable (like the Original Court/Forum).
+    if (status === 'Same as Original') return;
+    const proposed = (status === 'To be transferred');
+    const forumPh = {
+      'Transferred': 'Current Court / Forum — search or type any court',
+      'To be transferred': 'Proposed transferee Court / Forum (if known) — type any court',
+      'In Appeal': 'Appellate Court / Forum — High Court, District/Sessions Court, or type any court',
+    }[status] || 'Current Court / Forum';
+    host.innerHTML = `
+      <div class="form-grid">
+        <input type="text" id="cs" placeholder="${proposed ? 'Proposed State (if known)' : 'Current State'}" />
+        <input type="text" id="cd" placeholder="${proposed ? 'Proposed District (if known)' : 'Current District'}" />
+        <div id="cf-host" class="full-span"></div>
+      </div>`;
+    const dd = buildSearchableDropdown(
+      'cf-input', 'cf', forumPh,
+      { includeSupremeCourt: true, allowFreeText: true }
+    );
+    $('#cf-host')?.appendChild(dd.wrapper);
   }
   $('#current-status')?.addEventListener('change', () => renderCurrentExtra($('#current-status').value || 'Same as Original'));
 
@@ -2469,18 +2470,15 @@ function createCaseForm(){
     fd.set('Origin Court/Forum', ($('#of')?.value || '').trim());
     const status = $('#current-status')?.value || 'Same as Original';
     fd.set('Current Status', status);
-    if (status === 'Transferred') {
-      fd.set('Current State', ($('#cs')?.value || '').trim());
-      fd.set('Current District', ($('#cd')?.value || '').trim());
-      fd.set('Current Court/Forum', ($('#cf')?.value || '').trim());
-    } else if (status === 'In Appeal') {
-      fd.set('Current State', '');
-      fd.set('Current District', '');
-      fd.set('Current Court/Forum', ($('#appeal-forum')?.value || '').trim());
-    } else {
+    if (status === 'Same as Original') {
       fd.set('Current State', '');
       fd.set('Current District', '');
       fd.set('Current Court/Forum', '');
+    } else {
+      // Transferred / To be transferred / In Appeal all use State/District/Forum.
+      fd.set('Current State', ($('#cs')?.value || '').trim());
+      fd.set('Current District', ($('#cd')?.value || '').trim());
+      fd.set('Current Court/Forum', ($('#cf')?.value || '').trim());
     }
     fd.set('Additional Notes', ($('#an')?.value || '').trim());
 
@@ -3092,8 +3090,8 @@ function caseLawUploadForm(){
       <div id="clu-year-wrap"></div>
       <div id="clu-case-name-display" class="case-name-display" title="Auto-generated case name"></div>
 
-      <select id="clu-primary"><option value="">Primary Type</option></select>
-      <select id="clu-case-type" disabled><option value="">Case Type</option></select>
+      <select id="clu-primary"><option value="">Category (Civil / Criminal / Commercial)</option></select>
+      <div id="clu-case-type-host"></div>
 
       <label class="file-field full-span" for="clu-file">
         <input type="file" id="clu-file" class="file-input" accept=".pdf,.docx,.txt,.png,.jpg,.jpeg,.json" />
@@ -3142,7 +3140,6 @@ function caseLawUploadForm(){
   createCitationRow(citList, null, () => courtCtrl.getCourtAbbrev());
 
   const primarySel = $('#clu-primary');
-  const caseTypeSel = $('#clu-case-type');
 
   // Year — long-list dropdown (scrollable, max ~10 visible, no text cursor)
   const yearWrap = document.getElementById('clu-year-wrap');
@@ -3186,23 +3183,28 @@ function caseLawUploadForm(){
   });
 
   if (primarySel) {
-    populateOptions(primarySel, Object.keys(CASE_TYPES), 'Primary Type');
+    // Category list from the same taxonomy the rest of the app uses.
+    populateOptions(primarySel, Object.keys(FILE_SUBCATS), 'Category (Civil / Criminal / Commercial)');
   }
 
-  if (caseTypeSel) {
-    caseTypeSel.innerHTML = '<option value="">Case Type</option>';
-    caseTypeSel.disabled = true;
-  }
-
-  primarySel?.addEventListener('change', () => {
-    const val = primarySel.value || '';
-    if (val && CASE_TYPES[val]) {
-      populateOptions(caseTypeSel, CASE_TYPES[val], 'Case Type');
-    } else if (caseTypeSel) {
-      caseTypeSel.innerHTML = '<option value="">Case Type</option>';
-      caseTypeSel.disabled = true;
+  // Case Law subcategory now uses the full grouped taxonomy (FILE_SUBCATS),
+  // searchable — the same system as Manage Case, not the old flat CASE_TYPES.
+  const cluCaseTypeHost = $('#clu-case-type-host');
+  function mountCluCaseType(branch) {
+    if (!cluCaseTypeHost) return;
+    cluCaseTypeHost.innerHTML = '';
+    if (branch && FILE_SUBCATS[branch]) {
+      buildGroupedSearchableDropdown(cluCaseTypeHost, 'clu-case-type',
+        'Search subcategory…', FILE_SUBCATS[branch]);
+    } else {
+      const ph = document.createElement('input');
+      ph.type = 'text'; ph.disabled = true; ph.className = 'mc-subcat-placeholder';
+      ph.placeholder = 'Subcategory — choose a category first';
+      cluCaseTypeHost.appendChild(ph);
     }
-  });
+  }
+  mountCluCaseType('');
+  primarySel?.addEventListener('change', () => mountCluCaseType(primarySel.value || ''));
 
   // Convert all selects to Long-List Dropdowns
   convertAllSelectsToLLD(wrap);
@@ -3306,10 +3308,7 @@ function caseLawUploadForm(){
       });
       updateCaseName();
       if (primarySel) primarySel.selectedIndex = 0;
-      if (caseTypeSel) {
-        caseTypeSel.innerHTML = '<option value="">Case Type</option>';
-        caseTypeSel.disabled = true;
-      }
+      mountCluCaseType('');
       yearDD.reset();
       if (courtTypeSel) courtTypeSel.selectedIndex = 0;
       courtCtrl.setValues('', '');
@@ -3375,8 +3374,8 @@ function caseLawSearchForm(){
       </div>
       <div class="cls-mode-panel full-span" data-mode="type" hidden>
         <div class="cls-type-row">
-          <select id="cls-primary"><option value="">Primary Type</option></select>
-          <select id="cls-case-type" disabled><option value="">Case Type</option></select>
+          <select id="cls-primary"><option value="">Category (Civil / Criminal / Commercial)</option></select>
+          <div id="cls-case-type-host"></div>
         </div>
       </div>
       <div class="cls-mode-panel full-span" data-mode="advanced" hidden>
@@ -3406,8 +3405,23 @@ function caseLawSearchForm(){
   if (citeVolumeInp) integerOnly(citeVolumeInp);
   if (citePageInp) integerOnly(citePageInp);
   const primarySel = $('#cls-primary');
-  const caseTypeSel = $('#cls-case-type');
   const textInput = $('#cls-text');
+  // Case Law search subcategory uses the full grouped taxonomy (FILE_SUBCATS),
+  // searchable — same as Manage Case, not the old flat CASE_TYPES.
+  const clsCaseTypeHost = $('#cls-case-type-host');
+  function mountClsCaseType(branch) {
+    if (!clsCaseTypeHost) return;
+    clsCaseTypeHost.innerHTML = '';
+    if (branch && FILE_SUBCATS[branch]) {
+      buildGroupedSearchableDropdown(clsCaseTypeHost, 'cls-case-type',
+        'Search subcategory…', FILE_SUBCATS[branch]);
+    } else {
+      const ph = document.createElement('input');
+      ph.type = 'text'; ph.disabled = true; ph.className = 'mc-subcat-placeholder';
+      ph.placeholder = 'Subcategory — choose a category first';
+      clsCaseTypeHost.appendChild(ph);
+    }
+  }
   const nameTextInputs = nameModeRadios.map(radio => {
     const targetId = radio.dataset.target;
     return targetId ? document.getElementById(targetId) : null;
@@ -3430,11 +3444,8 @@ function caseLawSearchForm(){
     });
   }
 
-  if (primarySel) populateOptions(primarySel, Object.keys(CASE_TYPES), 'Primary Type');
-  if (caseTypeSel) {
-    caseTypeSel.innerHTML = '<option value="">Case Type</option>';
-    caseTypeSel.disabled = true;
-  }
+  if (primarySel) populateOptions(primarySel, Object.keys(FILE_SUBCATS), 'Category (Civil / Criminal / Commercial)');
+  mountClsCaseType('');
 
   // Convert all selects to Long-List Dropdowns
   convertAllSelectsToLLD(wrap);
@@ -3493,10 +3504,8 @@ function caseLawSearchForm(){
     }
     if (mode === 'type') {
       if (primarySel && primarySel.childElementCount === 0) {
-        populateOptions(primarySel, Object.keys(CASE_TYPES), 'Primary Type');
+        populateOptions(primarySel, Object.keys(FILE_SUBCATS), 'Category (Civil / Criminal / Commercial)');
       }
-    } else if (caseTypeSel) {
-      caseTypeSel.disabled = true;
     }
     if (mode !== 'name') {
       nameModeRadios.forEach(r => {
@@ -3522,15 +3531,7 @@ function caseLawSearchForm(){
 
   activateMode('name');
 
-  primarySel?.addEventListener('change', () => {
-    const val = primarySel.value || '';
-    if (val && CASE_TYPES[val]) {
-      populateOptions(caseTypeSel, CASE_TYPES[val], 'Case Type');
-    } else if (caseTypeSel) {
-      caseTypeSel.innerHTML = '<option value="">Case Type</option>';
-      caseTypeSel.disabled = true;
-    }
-  });
+  primarySel?.addEventListener('change', () => mountClsCaseType(primarySel.value || ''));
 
   function applyFilters(filters){
     // No year dropdown to populate anymore; filters kept for future use
@@ -3684,8 +3685,8 @@ function caseLawSearchForm(){
       if (page) params.set('cite_page', page);
     } else if (mode === 'type') {
       const primary = primarySel?.value.trim();
-      const caseType = caseTypeSel?.value.trim();
-      if (!primary) { alert('Choose a primary type.'); return; }
+      const caseType = ($('#cls-case-type')?.value || '').trim();
+      if (!primary) { alert('Choose a category.'); return; }
       params.set('primary_type', primary);
       if (caseType) params.set('case_type', caseType);
     } else if (mode === 'advanced') {
@@ -3734,10 +3735,7 @@ function caseLawSearchForm(){
     if (citePageInp) citePageInp.value = '';
     if (textInput) textInput.value = '';
     if (primarySel) primarySel.selectedIndex = 0;
-    if (caseTypeSel) {
-      caseTypeSel.innerHTML = '<option value="">Case Type</option>';
-      caseTypeSel.disabled = true;
-    }
+    mountClsCaseType('');
     if (resultsHost) {
       resultsHost.innerHTML = '<div class="result-item">Use the search tools above to view results.</div>';
     }
@@ -3932,24 +3930,24 @@ function bindGlobalNotesModalHandlers(){
     const host = document.getElementById('note-case-current-extra');
     if (!host) return;
     host.innerHTML = '';
-    if (status === 'Transferred') {
-      host.innerHTML = `
-        <div class="note-grid">
-          <label class="note-field"><span>State</span><input id="note-case-current-state" type="text" autocomplete="off"></label>
-          <label class="note-field"><span>District</span><input id="note-case-current-district" type="text" autocomplete="off"></label>
-          <label class="note-field note-field-wide"><span>Court / Forum</span><div id="note-case-current-forum-host"></div></label>
-        </div>`;
-      setVal('note-case-current-state', data ? data.currentState : '');
-      setVal('note-case-current-district', data ? data.currentDistrict : '');
-      mountNoteCourtDD('note-case-current-forum-host', 'note-case-current-forum', 'Current Court / Forum', data ? data.currentForum : '');
-    } else if (status === 'In Appeal') {
-      host.innerHTML = `
-        <div class="note-grid">
-          <label class="note-field note-field-wide"><span>Court / Forum</span><div id="note-case-current-forum-host"></div></label>
-        </div>`;
-      mountNoteCourtDD('note-case-current-forum-host', 'note-case-current-forum', 'In Appeal — Supreme Court / High Courts', data ? data.currentForum : '');
-    }
-    // "Same as Original" → no extra fields.
+    // "Same as Original" → no extra fields. Transferred / To be transferred /
+    // In Appeal all take State + District + a free-text Court/Forum (an appeal
+    // may go to a District/Sessions Court, not just a High Court).
+    if (status === 'Same as Original') return;
+    const forumPh = {
+      'Transferred': 'Current Court / Forum — search or type any court',
+      'To be transferred': 'Proposed transferee Court / Forum (if known) — type any court',
+      'In Appeal': 'Appellate Court / Forum — High Court, District/Sessions Court, or type any court',
+    }[status] || 'Current Court / Forum';
+    host.innerHTML = `
+      <div class="note-grid">
+        <label class="note-field"><span>State</span><input id="note-case-current-state" type="text" autocomplete="off"></label>
+        <label class="note-field"><span>District</span><input id="note-case-current-district" type="text" autocomplete="off"></label>
+        <label class="note-field note-field-wide"><span>Court / Forum</span><div id="note-case-current-forum-host"></div></label>
+      </div>`;
+    setVal('note-case-current-state', data ? data.currentState : '');
+    setVal('note-case-current-district', data ? data.currentDistrict : '');
+    mountNoteCourtDD('note-case-current-forum-host', 'note-case-current-forum', forumPh, data ? data.currentForum : '');
   }
 
   function setCaseLawPrimaryOptions(selected){
@@ -4298,16 +4296,15 @@ function bindGlobalNotesModalHandlers(){
       };
       const cStatus = document.getElementById('note-case-current-status')?.value || 'Same as Original';
       payload['Current Status'] = cStatus;
-      if (cStatus === 'Transferred') {
+      if (cStatus === 'Same as Original') {
+        payload['Current Court/Forum'] = { 'State': '', 'District': '', 'Court/Forum': '' };
+      } else {
+        // Transferred / To be transferred / In Appeal all carry State/District/Forum.
         payload['Current Court/Forum'] = {
           'State': getVal('note-case-current-state'),
           'District': getVal('note-case-current-district'),
           'Court/Forum': getVal('note-case-current-forum'),
         };
-      } else if (cStatus === 'In Appeal') {
-        payload['Current Court/Forum'] = { 'State': '', 'District': '', 'Court/Forum': getVal('note-case-current-forum') };
-      } else {
-        payload['Current Court/Forum'] = { 'State': '', 'District': '', 'Court/Forum': '' };
       }
       payload['Additional Notes'] = document.getElementById('note-case-additional')?.value || '';
       return JSON.stringify(payload, null, 2);
@@ -4891,6 +4888,15 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!el || typeof handler !== 'function') return;
         const others = cardElements.filter(other => other !== el);
         const activate = () => {
+          // Clicking the already-active card again toggles it off: deselect
+          // and clear the form area.
+          if (el.classList.contains('active')) {
+            el.classList.remove('active');
+            el.setAttribute('aria-pressed', 'false');
+            const host = document.getElementById('form-host');
+            if (host) host.innerHTML = '';
+            return;
+          }
           setActive(el, others);
           handler();
         };

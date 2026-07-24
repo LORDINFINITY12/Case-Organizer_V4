@@ -1,3 +1,29 @@
+case-organizer (4.8.2) stable; urgency=high
+
+  * URGENT login fix. The session cookie was Secure-by-default in production,
+    so on a plain-HTTP LAN deployment (reached by IP, not a secure context)
+    the browser silently dropped it and login looped back to a blank login
+    page. Secure is now OPT-IN via CASEORG_COOKIE_SECURE=1 (for HTTPS/TLS
+    deployments); HSTS is only advertised over actual HTTPS requests.
+  * Event modal redesigned for symmetry. The floating, centred "All day",
+    "Repeat" and "Continuing" controls are gone. All-day is a plain
+    left-aligned toggle; timing/recurrence read like every other field.
+  * Task/deadline recurrence is now automatic: an all-day task or deadline
+    repeats every day until marked complete; a fixed-time one is a one-off.
+    No manual "Continuing" checkbox — the modal shows the behaviour as a note.
+    Explicit recurrence (daily/weekly/monthly/yearly) remains for meetings.
+  * The home action cards (Create / Manage Case, Upload / Search Case Law)
+    now toggle: clicking the active card again closes it and clears the form.
+  * Create Case — appellate & to-be-transferred forums. "In Appeal" now takes
+    a State + District + FREE-TEXT Court/Forum (appeals often go from a
+    Magistrate to a District/Sessions Court, not only a High Court), matching
+    the Original Court/Forum. New "To be transferred" status for a pending
+    transfer. Mirrored in the View/Edit Note editor.
+  * Case Law Upload and Search now use the same grouped, searchable subcategory
+    taxonomy (FILE_SUBCATS) as Manage Case, not the old flat Case Type list.
+
+ -- Izumi <swarajswarupaggarwal@gmail.com>  Fri, 24 Jul 2026 22:45:00 +0530
+
 case-organizer (4.8.1) stable; urgency=high
 
   * Manage Case subcategory taxonomy — completeness fix. Independent

@@ -294,11 +294,18 @@ body.cal-resizing {
 .cal-time { font-variant-numeric: tabular-nums; font-weight: 600; }
 .cal-done { color: #10b981; font-weight: 600; }
 /* Event modal — timing / recurrence / reminders */
-.cal-allday-field { flex-direction: row; align-items: center; gap: 8px; }
-.cal-time-fields { display: flex; gap: 12px; align-items: center; }
-.cal-recur-field { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
-.cal-recur-extra input[type="number"] { width: 4em; }
+/* Timing + recurrence — left-aligned, full width, no floating controls. */
+.cal-timing { align-items: flex-start; gap: 10px; }
+.cal-check { flex-direction: row; align-items: center; gap: 8px; cursor: pointer; width: auto; }
+.cal-check input { width: auto; }
+.cal-time-fields { display: flex; flex-direction: row; gap: 12px; align-items: center; }
+.cal-time-fields label { flex-direction: row; align-items: center; gap: 6px; }
+.cal-time-fields input[type="time"] { width: auto; }
+.cal-recur-extra { flex-direction: row; align-items: center; gap: 14px; flex-wrap: wrap; }
+.cal-recur-extra label { flex-direction: row; align-items: center; gap: 6px; }
+.cal-recur-extra input[type="number"] { width: 5em; }
 .cal-recur-extra input[type="text"] { width: 12em; }
+.cal-auto-note { margin: 0; color: var(--muted); font-size: 0.82rem; }
 .cal-reminder-row { display: flex; gap: 8px; align-items: center; margin-bottom: 6px; flex-wrap: wrap; }
 .cal-reminder-row .rem-lead { width: 5em; }
 .agenda-item--task       { border-left-color: #10b981; }

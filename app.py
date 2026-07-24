@@ -253,14 +253,12 @@ app.config["MAX_CONTENT_LENGTH"] = None           # no server-side upload cap (p
 app.config["SESSION_COOKIE_HTTPONLY"] = True        # prevent JS access to session cookie
 app.config["SESSION_COOKIE_SAMESITE"] = "Lax"      # CSRF baseline protection
 _debug_mode = os.environ.get("FLASK_DEBUG", "0") == "1"
-# Secure cookies by default in production (HTTPS-only). Plain-HTTP LAN
-# deployments without TLS must set CASEORG_COOKIE_SECURE=0, otherwise
-# browsers will not send the session cookie and login cannot work.
-_cookie_secure_env = os.environ.get("CASEORG_COOKIE_SECURE")
-if _cookie_secure_env is not None:
-    app.config["SESSION_COOKIE_SECURE"] = _cookie_secure_env == "1"
-else:
-    app.config["SESSION_COOKIE_SECURE"] = not _debug_mode
+# Session cookie Secure flag is OPT-IN. This is a self-hosted app that is
+# normally reached over plain HTTP on a LAN IP, where a Secure cookie would be
+# silently dropped by the browser and login would loop back to the login page.
+# Deployments that terminate TLS (reverse proxy / HTTPS) should set
+# CASEORG_COOKIE_SECURE=1 to require HTTPS for the session cookie.
+app.config["SESSION_COOKIE_SECURE"] = os.environ.get("CASEORG_COOKIE_SECURE") == "1"
 
 _SESSION_CLEANUP_INTERVAL = 3600.0   # purge expired DB sessions at most once per hour
 _SESSION_CLEANUP_LAST_RUN = 0.0
@@ -622,7 +620,9 @@ def _set_security_headers(response):
     # abused in old browsers. CSP is the actual XSS mitigation.
     response.headers["X-XSS-Protection"] = "0"
     response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
-    if not _debug_mode:
+    # Only advertise HSTS over an actual HTTPS request — never force TLS on a
+    # plain-HTTP LAN deployment.
+    if request.is_secure:
         response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
     if request.path.startswith("/bento"):
         response.headers["Content-Security-Policy"] = _CSP_BENTO

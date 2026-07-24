@@ -67,14 +67,16 @@ class TestSecurityHeaders:
         if cookie_header:
             assert "HttpOnly" in cookie_header
             assert "SameSite=Lax" in cookie_header
-            # Secure by default outside FLASK_DEBUG (CASEORG_COOKIE_SECURE
-            # is unset in the test environment)
-            assert "Secure" in cookie_header
+            # Secure is OPT-IN (CASEORG_COOKIE_SECURE=1). Unset in tests / on a
+            # plain-HTTP LAN deployment it must be absent, else the browser
+            # drops the cookie and login loops.
+            assert "Secure" not in cookie_header
 
-    def test_hsts_present_in_production_mode(self, client):
-        # FLASK_DEBUG is unset in tests, so the production header must be set.
+    def test_hsts_absent_over_plain_http(self, client):
+        # HSTS is only advertised over HTTPS (request.is_secure). The test
+        # client — like a LAN HTTP deployment — must NOT receive it.
         resp = client.get("/login")
-        assert resp.headers.get("Strict-Transport-Security") == "max-age=31536000; includeSubDomains"
+        assert "Strict-Transport-Security" not in resp.headers
 
     def test_bento_csp_profile(self, client):
         # The bento CSP is applied by path, even on redirects.

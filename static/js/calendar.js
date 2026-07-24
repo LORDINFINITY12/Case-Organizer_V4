@@ -540,21 +540,40 @@
 
   let eventPicker = null;
 
+  // Tasks & deadlines: recurrence is automatic — an all-day one repeats daily
+  // until marked complete; a fixed-time one is a one-off. Show a note instead
+  // of a control. (Meetings keep an explicit recurrence selector.)
+  function updateContinuingHint() {
+    const t = $id('ev-type').value;
+    const hint = $id('ev-continuing-hint');
+    if (!hint) return;
+    const taskish = (t === 'task' || t === 'deadline');
+    hint.hidden = !taskish;
+    if (taskish) {
+      hint.textContent = $id('ev-all-day').checked
+        ? '↻ Repeats every day until marked complete.'
+        : 'One-time — fixed at the time above.';
+    }
+  }
   function syncEventTypeFields() {
     const t = $id('ev-type').value;
     $id('ev-purpose-field').hidden = t !== 'hearing';
     $id('ev-title-field').hidden = t === 'hearing';
-    $id('ev-recur-field').hidden = !(t === 'task' || t === 'deadline' || t === 'meeting');
-    $id('ev-continuing-field').hidden = !(t === 'task' || t === 'deadline');
+    // Explicit recurrence selector is for meetings only.
+    const isMeeting = (t === 'meeting');
+    $id('ev-recur-field').hidden = !isMeeting;
+    if (!isMeeting) $id('ev-recur-extra').hidden = true;
     $id('ev-reminders-field').hidden = (t === 'appearance');
+    updateContinuingHint();
   }
   $id('ev-type')?.addEventListener('change', syncEventTypeFields);
 
-  // All-day toggle reveals the start/end time inputs.
+  // All-day toggle reveals the start/end time inputs (and updates the note).
   $id('ev-all-day')?.addEventListener('change', () => {
     $id('ev-time-fields').hidden = $id('ev-all-day').checked;
+    updateContinuingHint();
   });
-  // Recurrence frequency reveals interval/until.
+  // Recurrence frequency reveals interval/until (meetings).
   $id('ev-recur-freq')?.addEventListener('change', () => {
     $id('ev-recur-extra').hidden = !$id('ev-recur-freq').value;
   });
@@ -672,7 +691,13 @@
     const eventDate = dateFields.ev.get();
     if (!eventDate) { alert('Enter the date as dd/mm/yyyy.'); return; }
     const allDay = $id('ev-all-day').checked;
-    const freq = $id('ev-recur-freq').value;
+    const evType = $id('ev-type').value;
+    const taskish = (evType === 'task' || evType === 'deadline');
+    // Tasks/deadlines auto-continue: all-day ones roll forward daily until
+    // marked complete; fixed-time ones are one-off. Explicit recurrence is
+    // meetings-only.
+    const continuing = taskish && allDay;
+    const freq = (evType === 'meeting') ? $id('ev-recur-freq').value : '';
     const payload = {
       event_date: eventDate,
       title: $id('ev-title').value,
@@ -682,11 +707,10 @@
       all_day: allDay,
       start_time: allDay ? null : ($id('ev-start-time').value || null),
       end_time: allDay ? null : ($id('ev-end-time').value || null),
-      continuing: $id('ev-continuing').checked && !$id('ev-continuing-field').hidden,
-      recur_freq: (!$id('ev-recur-field').hidden && freq) ? freq : null,
-      recur_interval: Number($id('ev-recur-interval').value) || 1,
-      recur_until: (!$id('ev-recur-field').hidden && freq)
-        ? (inToIso($id('ev-recur-until').value) || null) : null,
+      continuing: continuing,
+      recur_freq: freq || null,
+      recur_interval: freq ? (Number($id('ev-recur-interval').value) || 1) : 1,
+      recur_until: freq ? (inToIso($id('ev-recur-until').value) || null) : null,
       reminders: $id('ev-reminders-field').hidden ? [] : collectReminders(),
     };
     let data;

@@ -44,8 +44,9 @@ class TestEnvOverrides:
         assert "BENTO_HAS_CDN=False" in out
 
     def test_production_defaults(self):
-        """Without overrides (and without FLASK_DEBUG) cookies are Secure and
-        the Bento CDN origin is allowed."""
+        """Without CASEORG_COOKIE_SECURE the session cookie is NOT Secure, so a
+        plain-HTTP LAN deployment can log in (Secure is opt-in for HTTPS). The
+        Bento CDN origin is allowed by default."""
         env = {k: v for k, v in os.environ.items()
                if k not in ("CASEORG_COOKIE_SECURE", "CASEORG_BENTO_CDN", "FLASK_DEBUG")}
         result = subprocess.run(
@@ -53,5 +54,5 @@ class TestEnvOverrides:
             cwd=_ROOT, env=env, capture_output=True, text=True, timeout=60,
         )
         assert result.returncode == 0, result.stderr
-        assert "COOKIE_SECURE=True" in result.stdout
+        assert "COOKIE_SECURE=False" in result.stdout
         assert "BENTO_HAS_CDN=True" in result.stdout
