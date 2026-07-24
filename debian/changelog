@@ -1,3 +1,32 @@
+case-organizer (4.8.1) stable; urgency=high
+
+  * Manage Case subcategory taxonomy — completeness fix. Independent
+    interlocutory applications that stand apart from the main suit (and carry
+    their own appealable order) are now first-class subcategories rather than
+    "misc": Rejection of Plaint (Order VII Rule 11), Return of Plaint (Order
+    VII Rule 10), Setting Aside Ex Parte Decree (Order IX Rule 13), Restoration
+    / Setting Aside Dismissal (Order IX Rule 9), Setting Aside Ex Parte Order
+    (Order IX Rule 7), Judgment on Admissions (Order XII Rule 6), Preliminary
+    Issue (Order XIV Rule 2), Substitution / Abatement (Order XXII), Withdrawal
+    / Compromise (Order XXIII), Review (Order XLVII), Transfer (Section 24),
+    Reference (Order XLVI) and more.
+  * Trial-stage filing groups added across all branches — Civil (plaint →
+    written statement → issues → evidence (Order XVIII Rule 4) → arguments →
+    judgment), Criminal (CrPC / BNSS stages, discharge, and the Section 311 /
+    319 / 451 / 457 / 91 applications) and Commercial (Commercial Courts Act:
+    Section 12A pre-institution mediation, Order XV-A case management, Order
+    XIII-A summary judgment, Order XI disclosure). These are available to both
+    sides: the respondent (who files Order VII Rule 11 and the discharge /
+    defence applications) sees the responsive pleadings PLUS every common
+    interlocutory and trial-stage group — not just the responsive pleadings.
+  * The Misc application / interim relief dropdown is now searchable and
+    grouped (Interim Reliefs, Applications in the Suit, Procedural, Common),
+    holding the ancillary interim remedies filed within a subcategory.
+  * "Written Submissions" and "Written Arguments" are now a single item
+    ("Written Submissions / Arguments").
+
+ -- Izumi <swarajswarupaggarwal@gmail.com>  Fri, 24 Jul 2026 08:30:00 +0530
+
 case-organizer (4.8) stable; urgency=medium
 
   * Calendar / event manager — timed scheduling & recurrence. Every event

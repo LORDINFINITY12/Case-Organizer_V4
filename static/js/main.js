@@ -411,7 +411,10 @@ const CASE_TYPES = {
  * Source: firm's Law_Firm_Server_Taxonomy.md (researched additions included). */
 const FILE_SUBCATS = {
   Civil: [
-    { group: "General Civil Proceedings", items: ["Original Suit","Miscellaneous Civil Application","Civil Miscellaneous Petition","Interlocutory Application (IA)","Caveat","Review Petition","Curative Petition","Reference","Execution Petition","Restoration Application","Amendment Application","Recall Application","Transfer Petition (Civil)","Contempt Petition (Civil)","Other"] },
+    { group: "Original Suits & Proceedings", items: ["Suit for Recovery of Money","Suit for Specific Performance","Suit for Declaration","Suit for Permanent Injunction","Suit for Mandatory Injunction","Suit for Possession","Partition Suit","Suit for Damages / Compensation","Suit for Cancellation of Instrument","Suit for Rescission of Contract","Suit for Rendition of Accounts","Dissolution of Partnership","Redemption of Mortgage","Foreclosure","Malicious Prosecution","Defamation Suit","Summary Suit (Order XXXVII CPC)","Suit under Section 92 CPC (Public Trust)","Original Suit","Other"] },
+    { group: "Trial-Stage Filings", items: ["Plaint","Written Statement (Order VIII)","Set-off / Counter-Claim (Order VIII)","Replication / Rejoinder","Framing of Issues (Order XIV)","List of Witnesses (Order XVI)","Evidence Affidavit / Examination-in-Chief (Order XVIII Rule 4)","Cross-Examination","Re-Examination","Documentary Evidence / Exhibits (Order XIII)","Written Arguments / Submissions","Final Arguments","Judgment & Decree (Order XX)","Other"] },
+    { group: "Interlocutory Applications (Independent — CPC)", items: ["Rejection of Plaint (Order VII Rule 11)","Return of Plaint (Order VII Rule 10)","Setting Aside Ex Parte Decree (Order IX Rule 13)","Restoration of Suit / Setting Aside Dismissal (Order IX Rule 9)","Setting Aside Ex Parte Order (Order IX Rule 7)","Judgment on Admissions (Order XII Rule 6)","Preliminary Issue (Order XIV Rule 2)","Substitution / Legal Representatives (Order XXII)","Setting Aside Abatement (Order XXII Rule 9)","Withdrawal of Suit (Order XXIII Rule 1)","Compromise / Settlement of Suit (Order XXIII Rule 3)","Review (Order XLVII / Section 114 CPC)","Restoration of Application / Appeal","Recall / Modification of Order","Transfer of Suit (Section 24 CPC)","Stay of Suit — Res Sub Judice (Section 10 CPC)","Consolidation of Suits","Reference (Order XLVI CPC)","Other"] },
+    { group: "Contempt & Caveat", items: ["Civil Contempt","Caveat (Section 148A CPC)","Curative Petition","Other"] },
     { group: "CPC Reliefs - Declaratory Reliefs", items: ["Declaration","Cancellation of Instrument","Rectification of Instrument","Rescission of Contract","Other"] },
     { group: "CPC Reliefs - Injunctions", items: ["Temporary Injunction (Order XXXIX Rules 1-2 CPC)","Permanent Injunction","Mandatory Injunction","Ex Parte Injunction","Other"] },
     { group: "CPC Reliefs - Interim Reliefs", items: ["Appointment of Receiver (Order XL CPC)","Attachment Before Judgment (Order XXXVIII Rule 5 CPC)","Security for Costs (Order XXV CPC)","Arrest Before Judgment (Order XXXVIII CPC)","Commission (Order XXVI CPC)","Local Commissioner (Order XXVI CPC)","Other"] },
@@ -434,6 +437,9 @@ const FILE_SUBCATS = {
   ],
   Criminal: [
     { group: "Investigation", items: ["FIR","Complaint Case","Protest Petition","Closure Report Objections","Charge Sheet","Supplementary Charge Sheet","Final Report","Other"] },
+    { group: "Pre-Trial & Cognizance", items: ["Application u/s 156(3) CrPC (Direction to Register FIR)","Complaint u/s 200 CrPC","Cognizance / Summoning Order","Discharge (Section 227 / 239 / 245 CrPC)","Framing of Charge (Section 228 / 240 CrPC)","Committal (Section 209 CrPC)","Other"] },
+    { group: "Trial Stages (CrPC / BNSS)", items: ["Prosecution Evidence (Section 242 / 254 CrPC)","Statement of Accused (Section 313 CrPC)","Defence Evidence (Section 233 / 243 CrPC)","Final Arguments","Written Arguments / Submissions","Judgment","Order on Sentence","Other"] },
+    { group: "Interlocutory / Misc Applications (Criminal)", items: ["Exemption from Personal Appearance (Section 205 / 317 CrPC)","Recall / Re-summon Witness (Section 311 CrPC)","Further Investigation (Section 173(8) CrPC)","Summoning Additional Accused (Section 319 CrPC)","Production of Documents (Section 91 CrPC)","Section 65B Certificate","Interim Custody / Superdari of Property (Section 451 / 457 CrPC)","Return of Property","Compounding of Offence (Section 320 CrPC)","Withdrawal from Prosecution (Section 321 CrPC)","Condonation of Delay","Restoration / Recall of Order","Transfer of Case (Section 407 / 408 CrPC)","Other"] },
     { group: "Bail", items: ["Anticipatory Bail","Regular Bail","Interim Bail","Default Bail","Bail Cancellation","Suspension of Sentence","Other"] },
     { group: "Trial Proceedings", items: ["Sessions Trial","Warrant Trial","Summons Trial","Complaint Trial","Plea Bargaining","Discharge Application","Framing of Charge","Other"] },
     { group: "Appeals & Revisions", items: ["Criminal Appeal","Criminal Revision","Criminal Miscellaneous Petition","Transfer Petition (Criminal)","Review","Reference","Other"] },
@@ -444,7 +450,8 @@ const FILE_SUBCATS = {
     { group: "Maintenance & Miscellaneous", items: ["Maintenance (Section 125 CrPC / Section 144 BNSS)","Criminal Contempt","Victim Compensation","Other"] },
   ],
   Commercial: [
-    { group: "Commercial Suits", items: ["Commercial Suit","Commercial Appeal","Commercial Revision","Commercial Execution","Summary Judgment","Interim Relief","Other"] },
+    { group: "Commercial Suits", items: ["Commercial Suit","Commercial Appeal","Commercial Revision","Commercial Execution","Other"] },
+    { group: "Commercial Courts Act — Stages & Applications", items: ["Pre-Institution Mediation (Section 12A)","Case Management Hearing (Order XV-A)","Summary Judgment (Order XIII-A)","Disclosure / Discovery / Inspection (Order XI, Commercial)","Statement of Truth","Written Statement (Order VIII, Commercial)","Replication","Admission & Denial of Documents","Written Arguments / Submissions","Judgment & Decree","Other"] },
     { group: "Banking & Finance", items: ["Loan Recovery","Mortgage","Guarantee","SARFAESI","DRT","DRAT","Cheque Recovery","Bank Fraud","Other"] },
     { group: "Insolvency", items: ["CIRP","Liquidation","Operational Creditor","Financial Creditor","Personal Insolvency","Other"] },
     { group: "Company Law", items: ["Shareholder Disputes","Oppression & Mismanagement","Merger","Demerger","Reduction of Capital","Winding Up","Director Disputes","Other"] },
@@ -491,13 +498,32 @@ const MISC_STRIP_GROUPS = new Set([
   "CPC Reliefs - Injunctions", "CPC Reliefs - Interim Reliefs",
 ]);
 
-// Branch → flat list of misc-proceeding categories (a proceeding folder under a
-// chosen subcategory dir).  "Written Submissions"/"Written Arguments" are added
-// to every branch (available for all proceedings, both sides).
+// Branch → GROUPED misc-application taxonomy (ancillary interim applications
+// filed WITHIN a chosen subcategory). Grouped like FILE_SUBCATS so the Misc
+// dropdown is searchable. Independent, suit-disposing applications (Order VII
+// Rule 11, Order IX Rule 13, review, restoration, withdrawal …) are NOT here —
+// they are first-class subcategories in FILE_SUBCATS. Written Submissions and
+// Written Arguments are one item ("Written Submissions / Arguments").
 const MISC_SUBCATS = {
-  Civil: ["Interlocutory Application (IA)","Stay Application","Temporary/Ad-Interim Injunction (O.XXXIX)","Appointment of Receiver (O.XL)","Attachment Before Judgment (O.XXXVIII r.5)","Amendment Application (O.VI r.17)","Impleadment / Addition of Parties (O.I r.10)","Restoration / Recall Application","Condonation of Delay","Interim Maintenance","Local Commissioner (O.XXVI)","Discovery / Inspection / Production","Miscellaneous Civil Application","Written Submissions","Written Arguments","Other"],
-  Criminal: ["Interim Bail / Bail Application","Stay of Proceedings","Exemption from Personal Appearance (S.205)","Discharge Application","Recall of Witness / Further Investigation","Suspension of Sentence","Interim Custody / Superdari","Amendment Application","Condonation of Delay","Restoration / Recall","Criminal Contempt","Criminal Miscellaneous Application","Written Submissions","Written Arguments","Other"],
-  Commercial: ["Interim Relief (O.XXXIX / S.9 Arb.)","Interim Injunction","Appointment of Receiver","Attachment Before Judgment","Section 9 / Section 17 Interim Measures","Amendment Application","Impleadment","Condonation of Delay","Local Commissioner","Discovery / Inspection / Production","Restoration / Recall","Commercial Miscellaneous Application","Written Submissions","Written Arguments","Other"],
+  Civil: [
+    { group: "Interim Reliefs (CPC)", items: ["Temporary Injunction (Order XXXIX Rules 1-2)","Ad-Interim / Ex-Parte Injunction","Mandatory Injunction","Stay Application","Appointment of Receiver (Order XL)","Attachment Before Judgment (Order XXXVIII Rule 5)","Arrest Before Judgment (Order XXXVIII Rule 1)","Security for Costs (Order XXV)","Interim Maintenance","Other"] },
+    { group: "Applications in the Suit (CPC)", items: ["Amendment of Pleadings (Order VI Rule 17)","Striking Out Pleadings (Order VI Rule 16)","Impleadment / Addition of Parties (Order I Rule 10)","Deletion of Parties (Order I Rule 10)","Additional Documents (Order VII Rule 14 / Order VIII Rule 1A)","Discovery / Interrogatories (Order XI)","Inspection / Production of Documents (Order XI)","Admission & Denial of Documents (Order XII)","Commission / Local Commissioner (Order XXVI)","Recall of Witness (Order XVIII Rule 17)","Reopening of Evidence","Other"] },
+    { group: "Procedural Applications", items: ["Condonation of Delay (Section 5, Limitation Act)","Extension of Time (Section 148 CPC)","Deficit Court Fee (Section 149 CPC)","Inherent Powers (Section 151 CPC)","Exemption from Personal Appearance","Early Hearing / Preponement","Short Date / Urgent Listing","Adjournment","Other"] },
+    { group: "Common", items: ["Interlocutory Application (IA)","Written Submissions / Arguments","Miscellaneous Application","Other"] },
+  ],
+  Criminal: [
+    { group: "Bail & Custody", items: ["Regular Bail","Anticipatory Bail","Interim Bail","Default / Statutory Bail (Section 167(2) CrPC)","Cancellation of Bail","Modification of Bail Conditions","Interim Custody / Superdari (Section 451 / 457 CrPC)","Other"] },
+    { group: "Trial Applications", items: ["Discharge (Section 227 / 239 / 245 CrPC)","Exemption from Personal Appearance (Section 205 / 317 CrPC)","Recall / Re-summon Witness (Section 311 CrPC)","Further Investigation (Section 173(8) CrPC)","Summoning Additional Accused (Section 319 CrPC)","Production of Documents (Section 91 CrPC)","Section 65B Certificate","Defence Evidence (Section 243 CrPC)","Other"] },
+    { group: "Post-Conviction / Sentence", items: ["Suspension of Sentence (Section 389 CrPC)","Probation (Section 360 CrPC)","Compounding of Offence (Section 320 CrPC)","Plea Bargaining (Chapter XXI-A)","Other"] },
+    { group: "Procedural Applications", items: ["Condonation of Delay","Stay of Proceedings","Transfer of Case (Section 407 / 408 CrPC)","Restoration / Recall of Order","Exemption / Adjournment","Other"] },
+    { group: "Common", items: ["Criminal Miscellaneous Application","Written Submissions / Arguments","Miscellaneous Application","Other"] },
+  ],
+  Commercial: [
+    { group: "Interim Reliefs", items: ["Interim Injunction (Order XXXIX / Section 9 Arbitration)","Stay Application","Appointment of Receiver (Order XL)","Attachment Before Judgment (Order XXXVIII Rule 5)","Section 9 Interim Measures (Arbitration)","Section 17 Interim Measures (Arbitral Tribunal)","Other"] },
+    { group: "Case Management (Commercial Courts Act)", items: ["Case Management Hearing (Order XV-A)","Summary Judgment (Order XIII-A)","Disclosure / Discovery (Order XI, Commercial)","Pre-Institution Mediation (Section 12A)","Other"] },
+    { group: "Applications in the Suit", items: ["Amendment of Pleadings (Order VI Rule 17)","Impleadment (Order I Rule 10)","Condonation of Delay","Local Commissioner (Order XXVI)","Inspection / Production of Documents","Restoration / Recall","Other"] },
+    { group: "Common", items: ["Commercial Miscellaneous Application","Written Submissions / Arguments","Miscellaneous Application","Other"] },
+  ],
 };
 
 // Respondent-side PRIMARY (responsive pleadings), grouped like FILE_SUBCATS.
@@ -513,14 +539,28 @@ const RESP_SUBCATS = {
   ],
 };
 
+// Groups that are the moving party's own initiating pleadings — these are the
+// only ones swapped out for the respondent (who files responsive pleadings
+// instead). Everything else — interlocutory applications (incl. Order VII
+// Rule 11, which the DEFENDANT files), trial stages, execution, appeals — is
+// common to both sides.
+const PETITIONER_ONLY_GROUPS = new Set([
+  "Original Suits & Proceedings", "Commercial Suits",
+]);
+
 // Petitioner PRIMARY = FILE_SUBCATS minus the misc items/groups.
 function primarySubcats(branch, role) {
-  if (role === 'Respondent') return RESP_SUBCATS[branch] || [];
   const groups = FILE_SUBCATS[branch] || [];
-  return groups
+  const base = groups
     .filter((g) => !MISC_STRIP_GROUPS.has(g.group))
     .map((g) => ({ group: g.group, items: g.items.filter((it) => !MISC_STRIP.has(it)) }))
     .filter((g) => g.items.length);
+  if (role !== 'Respondent') return base;
+  // Respondent: responsive pleadings first, then every common group (drop only
+  // the moving party's initiating-pleading groups).
+  const resp = RESP_SUBCATS[branch] || [];
+  const common = base.filter((g) => !PETITIONER_ONLY_GROUPS.has(g.group));
+  return [...resp, ...common];
 }
 
 /* ── Court / Forum constants ──────────────────────────────────────────────── */
@@ -2497,9 +2537,9 @@ function manageCaseForm(){
 
         <div class="form-grid mc-fields">
           <!-- Misc only: the interlocutory application filed WITHIN the chosen
-               subcategory (a fixed set of CPC / CrPC / Commercial Courts Act
-               interim remedies — not a fresh subcategory). -->
-          <select id="misc-proceeding" class="mc-only-misc"><option value="">Misc application / interim relief…</option></select>
+               subcategory (a grouped, searchable set of CPC / CrPC / Commercial
+               Courts Act interim remedies — not a fresh subcategory). -->
+          <div id="misc-proceeding-host" class="mc-only-misc"></div>
 
           <select id="mc-subfolder"><option value="">(no sub-folder — subcategory root)</option></select>
           <input type="text" id="main-type" placeholder="Main Type (e.g., Writ Petition, Rejoinder)" />
@@ -2842,6 +2882,21 @@ function manageCaseForm(){
       host.appendChild(ph);
     }
   }
+  function mountMiscProceeding() {
+    const host = $('#misc-proceeding-host');
+    if (!host) return;
+    host.innerHTML = '';
+    const branch = branchOf();
+    if (branch) {
+      buildGroupedSearchableDropdown(host, 'misc-proceeding',
+        'Search misc application / interim relief…', MISC_SUBCATS[branch] || []);
+    } else {
+      const ph = document.createElement('input');
+      ph.type = 'text'; ph.disabled = true; ph.className = 'mc-subcat-placeholder';
+      ph.placeholder = 'Misc application (Civil / Criminal / Commercial only)';
+      host.appendChild(ph);
+    }
+  }
   function syncDomainUI() {
     const branch = branchOf();
     // Misc proceedings only apply to Civil/Criminal/Commercial. Keep the tab
@@ -2854,11 +2909,10 @@ function manageCaseForm(){
     }
     if (!branch && activePTab() === 'misc') activateProcTab('primary');
     mountPrimarySubcat();
-    // Misc = the FIXED interlocutory remedies for this branch (CPC / CrPC /
-    // Commercial Courts Act), filed WITHIN the chosen subcategory. There is no
-    // separate subcategory list any more (the old #misc-subcat-dir is gone).
-    fillSelect($('#misc-proceeding'), 'Misc application / interim relief…',
-               branch ? (MISC_SUBCATS[branch] || []) : [], !branch);
+    // Misc = the interlocutory applications for this branch (CPC / CrPC /
+    // Commercial Courts Act interim remedies), grouped + searchable, filed
+    // WITHIN the chosen subcategory.
+    mountMiscProceeding();
     const mt = $('#main-type');
     const dom = $('#domain')?.value || '';
     if (mt) {
@@ -2889,9 +2943,9 @@ function manageCaseForm(){
       t.classList.toggle('active', on); t.setAttribute('aria-selected', String(on));
     });
     // The subcategory now lives ABOVE the tabs, so only the Misc application
-    // dropdown is tab-specific.
-    const w = lldWrap('misc-proceeding');
-    if (w) w.hidden = primary;
+    // dropdown is tab-specific (a searchable host div, not an LLD select).
+    const mw = $('#misc-proceeding-host');
+    if (mw) mw.hidden = primary;
     // Keep Main Type + Date as the final full-width rows in BOTH modes so the
     // grid stays perfectly paired (no orphaned half-cells).
     const mt = $('#main-type');
