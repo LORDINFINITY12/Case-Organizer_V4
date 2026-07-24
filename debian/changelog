@@ -27,18 +27,27 @@ case-organizer (4.8) stable; urgency=medium
     events are unchanged (all-day, non-recurring, non-continuing).
   * Manage Case overhaul. The case picker now matches the calendar — a
     party-name search on top with a year/month/case browser below (no more
-    lookup tabs). Once a case is picked, Primary Proceedings and Misc
-    Proceedings tabs light up. Interim / interlocutory / miscellaneous
-    applications are split out of the main subcategory list into the Misc
-    tab: pick an existing (or new) subcategory directory, then the interim
-    relief being filed, and the upload is filed as
-    Case/<Subcategory>/<Misc proceeding>/. When the case's Our Party is the
-    respondent (read from Note.json — fixed at case creation, no toggle), the
-    subcategory list is automatically swapped for the responsive pleadings
-    (Written Statement, Counter Affidavit, Reply, Cross-Objections …). The
-    whole proceedings area is always on screen, staying faded and read-only
-    until a case is selected; Main Type sits just before the date, and the
-    Generate Invoice / View Note actions are grouped bottom-right.
+    lookup tabs). Once a case is picked you choose a File Category and then a
+    Subcategory (the main proceeding / cause of action); both sit ABOVE the
+    Primary vs Misc tabs, which stay faded until they are set. Primary files
+    the main pleadings directly under the subcategory. Misc files one of a
+    FIXED set of interlocutory applications — the interim remedies the CPC /
+    CrPC / Commercial Courts Act provide (stay, injunction, receiver,
+    attachment, amendment, condonation, discharge, exemption from appearance,
+    …) — within that same subcategory, as Case/<Subcategory>/<Misc
+    application>/; a misc application is not a fresh subcategory. When the
+    case's Our Party is the respondent (read from Note.json — fixed at case
+    creation, no toggle) the subcategory list is swapped for the responsive
+    pleadings (Written Statement, Counter Affidavit, Reply, Cross-Objections
+    …). The proceedings area is always on screen, faded until a case is
+    selected; Main Type sits just before the date; and Generate Invoice /
+    View Note are grouped bottom-right.
+  * Subcategory taxonomy is grouped by forum / statute instead of one flat
+    list — Commercial, for example, keeps Commercial Suits, Banking & Finance
+    (DRT / SARFAESI), each IP right, Insolvency, Company Law, Competition,
+    Securities, Arbitration, Direct Tax (ITAT) and Indirect Tax (CESTAT / GST)
+    as separate groups. Tax prosecutions stay under Criminal (Economic
+    Offences), not Commercial.
   * Standard sub-folders. Every subcategory / proceeding directory can now
     receive uploads into a fixed set of sub-folders — Primary Documents,
     Case Law, Research, Annexures, Drafts, Notes, Court Copies, Pleadings,

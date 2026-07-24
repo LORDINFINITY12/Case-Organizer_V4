@@ -456,7 +456,8 @@ const FILE_SUBCATS = {
     { group: "IP - Trade Secrets", items: ["Confidential Information","Breach of NDA","Other"] },
     { group: "Competition Law", items: ["Anti-competitive Agreements","Abuse of Dominance","Combination Approval","CCI Appeal","Other"] },
     { group: "Securities", items: ["SEBI Proceedings","Insider Trading","Takeover","Listing Compliance","Other"] },
-    { group: "Taxation", items: ["Income Tax","GST","Customs","Excise","Service Tax","VAT","Other"] },
+    { group: "Direct Tax — ITAT", items: ["Income Tax Appeal (ITAT)","Appeal before CIT (Appeals)","Tax Reference / Appeal (High Court)","Stay / Rectification Application","Transfer Pricing","Other"] },
+    { group: "Indirect Tax — CESTAT / GST", items: ["Customs / Excise / Service Tax Appeal (CESTAT)","GST Appeal (Appellate Authority / GSTAT)","Advance Ruling","VAT / Sales Tax Appeal","Other"] },
     { group: "Arbitration", items: ["Domestic Arbitration","International Commercial Arbitration","Section 9","Section 11","Section 34","Section 36","Enforcement of Foreign Award","Other"] },
     { group: "Technology & Digital Commerce", items: ["IT Act","Data Protection","Software Licensing","SaaS Agreements","E-Commerce","Cyber Contracts","Domain Name Disputes","Other"] },
     { group: "High Court (Commercial)", items: ["Writ Petition (Article 226)","Supervisory Petition (Article 227)","Other"] },
@@ -780,6 +781,7 @@ function buildGroupedSearchableDropdown(container, hiddenId, placeholder, groups
     inp.value = val;
     hidden.value = val;
     panel.classList.remove('open');
+    hidden.dispatchEvent(new Event('change', { bubbles: true }));
   }
 
   function render(filter) {
@@ -2474,27 +2476,35 @@ function manageCaseForm(){
 
     <!-- Proceedings — ALWAYS present; faded + read-only until a case is picked. -->
     <div class="mc-proceeding mc-locked" id="mc-proceeding" aria-disabled="true">
-      <div class="mc-tabs mc-proc-tabs" id="mc-proc-tabs" role="tablist">
-        <button type="button" class="mc-proc-tab active" data-ptab="primary" role="tab" aria-selected="true">Primary Proceedings</button>
-        <button type="button" class="mc-proc-tab" data-ptab="misc" role="tab" aria-selected="false">Misc Proceedings</button>
-      </div>
 
-      <div class="form-grid mc-fields">
+      <!-- File Category then Subcategory. The subcategory IS the main proceeding
+           (the cause of action); Primary/Misc are only what gets filed within
+           it, so both are chosen here — before the tabs unlock. -->
+      <div class="form-grid mc-classify">
         <select id="domain">
           <option value="">File Category</option>
           <option>Criminal</option><option>Civil</option><option>Commercial</option><option>Case Law</option><option>Invoices</option><option>Legal Notices</option>
         </select>
+        <div id="subcategory-host"></div>
+      </div>
 
-        <!-- Primary: role-aware subcategory taxonomy (from Note.json "Our Party") -->
-        <div id="subcategory-host" class="mc-only-primary"></div>
+      <!-- Primary vs Misc — unlocked only once a category + subcategory are set. -->
+      <div class="mc-proc-body is-locked" id="mc-proc-body">
+        <div class="mc-tabs mc-proc-tabs" id="mc-proc-tabs" role="tablist">
+          <button type="button" class="mc-proc-tab active" data-ptab="primary" role="tab" aria-selected="true">Primary Proceedings</button>
+          <button type="button" class="mc-proc-tab" data-ptab="misc" role="tab" aria-selected="false">Misc Proceedings</button>
+        </div>
 
-        <!-- Misc: existing subcategory dir + branch-specific misc proceeding -->
-        <select id="misc-subcat-dir" class="mc-only-misc"><option value="">Subcategory directory…</option></select>
-        <select id="misc-proceeding" class="mc-only-misc" disabled><option value="">Misc proceeding…</option></select>
+        <div class="form-grid mc-fields">
+          <!-- Misc only: the interlocutory application filed WITHIN the chosen
+               subcategory (a fixed set of CPC / CrPC / Commercial Courts Act
+               interim remedies — not a fresh subcategory). -->
+          <select id="misc-proceeding" class="mc-only-misc"><option value="">Misc application / interim relief…</option></select>
 
-        <select id="mc-subfolder"><option value="">(no sub-folder — subcategory root)</option></select>
-        <input type="text" id="main-type" placeholder="Main Type (e.g., Transfer Petition, Orders)" />
-        <input type="date" id="mc-date" class="full-span" />
+          <select id="mc-subfolder"><option value="">(no sub-folder — subcategory root)</option></select>
+          <input type="text" id="main-type" placeholder="Main Type (e.g., Writ Petition, Rejoinder)" />
+          <input type="date" id="mc-date" class="full-span" />
+        </div>
       </div>
     </div>
 
@@ -2698,7 +2708,7 @@ function manageCaseForm(){
           representing = (obj['Our Party'] === 'Respondent') ? 'Respondent' : 'Petitioner';
       } catch (_) { representing = 'Petitioner'; }
       mountPrimarySubcat();
-      if (branchOf()) refreshMiscDirs();
+      updateProcLock();
 
       if (!noteBtn) return;
 
@@ -2832,26 +2842,6 @@ function manageCaseForm(){
       host.appendChild(ph);
     }
   }
-  async function refreshMiscDirs() {
-    const dirSel = $('#misc-subcat-dir');
-    if (!dirSel) return;
-    const branch = branchOf();
-    const year = yearSel.value, month = monthSel.value, cname = caseSel.value;
-    let existing = [];
-    if (year && month && cname) {
-      try {
-        const r = await fetch(`/api/dir-tree?path=${encodeURIComponent(`${year}/${month}/${cname}`)}`);
-        const d = await r.json().catch(() => ({ dirs: [] }));
-        existing = (d.dirs || []).filter((n) => !['Invoices', 'Case Laws', 'Legal Notices'].includes(n));
-      } catch (_) { /* ignore */ }
-    }
-    const taxNames = branch
-      ? primarySubcats(branch, representing).flatMap((g) => g.items).filter((n) => n !== 'Other')
-      : [];
-    const union = Array.from(new Set([...existing, ...taxNames])).sort((a, b) => a.localeCompare(b));
-    fillSelect(dirSel, 'Subcategory directory…', union);
-    fillSelect($('#misc-proceeding'), 'Misc proceeding…', [], true);
-  }
   function syncDomainUI() {
     const branch = branchOf();
     // Misc proceedings only apply to Civil/Criminal/Commercial. Keep the tab
@@ -2864,14 +2854,30 @@ function manageCaseForm(){
     }
     if (!branch && activePTab() === 'misc') activateProcTab('primary');
     mountPrimarySubcat();
+    // Misc = the FIXED interlocutory remedies for this branch (CPC / CrPC /
+    // Commercial Courts Act), filed WITHIN the chosen subcategory. There is no
+    // separate subcategory list any more (the old #misc-subcat-dir is gone).
+    fillSelect($('#misc-proceeding'), 'Misc application / interim relief…',
+               branch ? (MISC_SUBCATS[branch] || []) : [], !branch);
     const mt = $('#main-type');
     const dom = $('#domain')?.value || '';
     if (mt) {
       if (dom === 'Case Law') mt.placeholder = 'Case Law title / citation (used as filename)';
       else if (dom === 'Legal Notices') mt.placeholder = 'Notice title / reference (used as filename)';
-      else mt.placeholder = 'Main Type (e.g., Transfer Petition, Orders)';
+      else mt.placeholder = 'Main Type (e.g., Writ Petition, Rejoinder)';
     }
-    if (branch) refreshMiscDirs();
+    updateProcLock();
+  }
+  // The Primary/Misc tabs + fields stay locked until a category and (for a
+  // branch) a subcategory are chosen — every proceeding is filed within a
+  // subcategory.
+  function updateProcLock() {
+    const dom = $('#domain')?.value || '';
+    const branch = branchOf();
+    const subcat = $('#subcategory')?.value || '';
+    const ready = !!dom && (branch ? !!subcat : true);
+    const body = $('#mc-proc-body');
+    if (body) body.classList.toggle('is-locked', !ready);
   }
   // A converted <select> lives inside a .ll-dropdown wrapper that takes its
   // grid slot — toggle the wrapper (not the select) to show/hide a field.
@@ -2882,9 +2888,10 @@ function manageCaseForm(){
       const on = t.dataset.ptab === target;
       t.classList.toggle('active', on); t.setAttribute('aria-selected', String(on));
     });
-    const host = $('#subcategory-host');
-    if (host) host.hidden = !primary;
-    [lldWrap('misc-subcat-dir'), lldWrap('misc-proceeding')].forEach((w) => { if (w) w.hidden = primary; });
+    // The subcategory now lives ABOVE the tabs, so only the Misc application
+    // dropdown is tab-specific.
+    const w = lldWrap('misc-proceeding');
+    if (w) w.hidden = primary;
     // Keep Main Type + Date as the final full-width rows in BOTH modes so the
     // grid stays perfectly paired (no orphaned half-cells).
     const mt = $('#main-type');
@@ -2903,12 +2910,10 @@ function manageCaseForm(){
   $('#domain')?.addEventListener('change', syncDomainUI);
   wrap.querySelectorAll('.mc-proc-tab').forEach((t) =>
     t.addEventListener('click', () => activateProcTab(t.dataset.ptab)));
-  $('#misc-subcat-dir')?.addEventListener('change', () => {
-    const branch = branchOf();
-    const has = $('#misc-subcat-dir').value;
-    fillSelect($('#misc-proceeding'), 'Misc proceeding…',
-      (has && branch) ? MISC_SUBCATS[branch] : [], !(has && branch));
-  });
+  // Subcategory picked (grouped search dropdown, above the tabs) → unlock the
+  // Primary/Misc tabs. The change event bubbles from the hidden #subcategory
+  // input up to its stable host element.
+  $('#subcategory-host')?.addEventListener('change', updateProcLock);
 
   // Convert all selects to Long-List Dropdowns
   convertAllSelectsToLLD(wrap);
@@ -2961,17 +2966,18 @@ function manageCaseForm(){
     if (!year || !month || !cname){ alert('Select Year, Month, and Case.'); return; }
     if (!selectedFiles.length){ alert('Select at least one file'); return; }
 
-    // v4.8: the upload target depends on the active proceeding tab.
+    // v4.8: the subcategory (chosen above the tabs) IS the main proceeding.
+    // Primary files directly under it; Misc files under an interim-application
+    // folder within it.
     //  Primary → Case/<Subcategory>/[<Subfolder>]
-    //  Misc    → Case/<Subcategory dir>/<Misc proceeding>/[<Subfolder>]
-    let subcategory = '', proceeding = '';
-    if (branchOf() && activePTab() === 'misc') {
-      subcategory = $('#misc-subcat-dir')?.value || '';
-      proceeding  = $('#misc-proceeding')?.value || '';
-      if (!subcategory) { alert('Pick a subcategory directory.'); return; }
-      if (!proceeding)  { alert('Pick a misc proceeding.'); return; }
-    } else {
-      subcategory = $('#subcategory')?.value || '';
+    //  Misc    → Case/<Subcategory>/<Misc application>/[<Subfolder>]
+    const branch = branchOf();
+    const subcategory = branch ? ($('#subcategory')?.value || '') : '';
+    let proceeding = '';
+    if (branch && !subcategory) { alert('Choose a subcategory (Step 2) first.'); return; }
+    if (branch && activePTab() === 'misc') {
+      proceeding = $('#misc-proceeding')?.value || '';
+      if (!proceeding) { alert('Choose a misc application / interim relief.'); return; }
     }
 
     const fd = new FormData();

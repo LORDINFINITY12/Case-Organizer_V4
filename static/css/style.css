@@ -1035,6 +1035,12 @@ input, select, textarea {
 .mc-proceeding { display: grid; gap: 12px; }
 .mc-proceeding.mc-locked { opacity: 0.5; pointer-events: none; }
 
+/* File Category + Subcategory sit above the tabs as two plain, equal fields
+   (they reuse .form-grid). Tabs + fields below stay faded + inert until a
+   category (and, for a branch, a subcategory) are chosen. */
+.mc-proc-body { display: grid; gap: 12px; }
+.mc-proc-body.is-locked { opacity: 0.5; pointer-events: none; }
+
 /* Primary / Misc segmented tabs (container reuses .mc-tabs). */
 .mc-proc-tab {
     padding: 10px 12px; font-size: 14px; font-weight: 600; border: none;
