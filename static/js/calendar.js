@@ -571,12 +571,20 @@
   // All-day toggle: the start/end box stays on screen (right of All day) but
   // is faded + read-only when all-day is on, and becomes writable when it's off.
   function syncAllDay() {
-    const allDay = $id('ev-all-day').checked;
+    const el = $id('ev-all-day');
+    const allDay = el.checked;
+    el.dataset.on = allDay ? '1' : '0';
     $id('ev-time-fields').classList.toggle('is-disabled', allDay);
     $id('ev-start-time').disabled = allDay;
     $id('ev-end-time').disabled = allDay;
   }
-  $id('ev-all-day')?.addEventListener('change', () => { syncAllDay(); updateContinuingHint(); });
+  // A lone radio can't untick itself on re-click, so drive All day as a toggle.
+  $id('ev-all-day')?.addEventListener('click', () => {
+    const el = $id('ev-all-day');
+    el.checked = el.dataset.on !== '1';
+    syncAllDay();
+    updateContinuingHint();
+  });
   // Recurrence frequency reveals interval/until (meetings).
   $id('ev-recur-freq')?.addEventListener('change', () => {
     $id('ev-recur-extra').hidden = !$id('ev-recur-freq').value;

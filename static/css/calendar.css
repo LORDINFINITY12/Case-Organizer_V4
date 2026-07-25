@@ -297,11 +297,30 @@ body.cal-resizing {
 /* Timing — a symmetric split: [All day toggle] | [start/end box]. The start/end
    box stays on screen; it fades + goes read-only when All day is on, and becomes
    writable when All day is unticked. Both cells are the same height. */
-/* All day = a plain checkbox (no box), left-aligned, at input height so it
-   lines up with the start/end box beside it. */
-.cal-allday-toggle { display: flex; align-items: center; min-height: 42px; }
-.cal-allday-field input[type="checkbox"] { width: auto; margin: 0; flex: none; }
-.cal-time-fields { display: flex; align-items: center; gap: 8px; width: 100%; min-height: 42px; }
+/* All day = a full-width pill (like the case-law name option): a radio button
+   padded at the left edge, with a label to its right. No text input. */
+.cal-allday-toggle {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    width: 100%;
+    min-height: 44px;
+    padding: 10px 14px;
+    border: 1px solid var(--input-border, #e0e3ec);
+    border-radius: 12px;
+    background: var(--input-bg, var(--card));
+    box-sizing: border-box;
+    cursor: pointer;
+}
+.cal-allday-field input[type="radio"] {
+    width: auto;
+    height: auto;
+    margin: 0;
+    flex: 0 0 auto;
+    accent-color: var(--accent, #7aa6ff);
+    cursor: pointer;
+}
+.cal-time-fields { display: flex; align-items: center; gap: 8px; width: 100%; min-height: 44px; }
 .cal-time-fields input[type="time"] { flex: 1; min-width: 0; }
 .cal-time-sep { color: var(--muted); }
 .cal-time-field.is-disabled { opacity: 0.5; }
