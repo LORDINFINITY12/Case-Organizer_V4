@@ -591,6 +591,17 @@
   });
 
   /* ----- reminder rows ----- */
+  // Which "every" cadences are offered for each "from … before" lead time
+  // (value = lead in minutes → list of [repeat_every, label]). The lead is
+  // chosen first; only then does the every option appear, with reasonable splits.
+  const EVERY_BY_LEAD = {
+    '30':    [['10min','10 min'], ['15min','15 min']],
+    '60':    [['10min','10 min'], ['15min','15 min'], ['30min','30 min']],
+    '720':   [['30min','30 min'], ['hourly','hour'], ['3hourly','3 hours'], ['6hourly','6 hours']],
+    '1440':  [['hourly','hour'], ['3hourly','3 hours'], ['6hourly','6 hours'], ['12hourly','12 hours']],
+    '10080': [['hourly','hour'], ['12hourly','12 hours'], ['daily','day']],
+    '43200': [['weekly','week'], ['daily','day']],
+  };
   function reminderRow(spec) {
     spec = spec || {};
     const row = document.createElement('div');
@@ -607,33 +618,60 @@
        </div>
        <label class="rem-extra rem-attime-wrap" hidden>At <input type="time" class="rem-attime" /></label>
        <div class="rem-extra rem-repeat" hidden>
-         <label>Every
-           <select class="rem-every">
-             <option value="30min">30 min</option>
-             <option value="hourly">hour</option>
-             <option value="daily">day</option>
-           </select></label>
-         <label>From <input type="number" class="rem-lead" min="0" value="60" /> min before</label>
+         <label class="rem-lead-field">From
+           <select class="rem-lead-sel">
+             <option value="">choose…</option>
+             <option value="30">30 min</option>
+             <option value="60">1 hour</option>
+             <option value="720">12 hours</option>
+             <option value="1440">1 day</option>
+             <option value="10080">1 week</option>
+             <option value="43200">1 month</option>
+           </select> before</label>
+         <label class="rem-every-wrap" hidden>every
+           <select class="rem-every"></select></label>
        </div>`;
     const kind = row.querySelector('.rem-kind');
     const attime = row.querySelector('.rem-attime');
     const repeat = row.querySelector('.rem-repeat');
+    const leadSel = row.querySelector('.rem-lead-sel');
+    const everyWrap = row.querySelector('.rem-every-wrap');
+    const everySel = row.querySelector('.rem-every');
     const sync = () => {
       row.querySelector('.rem-attime-wrap').hidden = kind.value !== 'at_time';
       repeat.hidden = kind.value !== 'repeating';
     };
+    function populateEvery(keep) {
+      const opts = EVERY_BY_LEAD[leadSel.value] || [];
+      everySel.innerHTML = opts.map(([v, l]) => `<option value="${v}">${l}</option>`).join('');
+      everyWrap.hidden = !opts.length;
+      if (opts.length) {
+        everySel.value = (keep && opts.some(([v]) => v === keep)) ? keep : opts[0][0];
+      }
+    }
     kind.addEventListener('change', sync);
+    leadSel.addEventListener('change', () => populateEvery());
     row.querySelector('.rem-del').addEventListener('click', () => row.remove());
     if (spec.kind) kind.value = spec.kind;
     if (spec.at_time) attime.value = spec.at_time;
-    if (spec.repeat_every) row.querySelector('.rem-every').value = spec.repeat_every;
-    if (spec.lead_minutes != null) row.querySelector('.rem-lead').value = spec.lead_minutes;
+    if (spec.lead_minutes != null) leadSel.value = String(spec.lead_minutes);
+    populateEvery(spec.repeat_every);
     sync();
+    // Match the home-page dropdowns: use the shared Long-List Dropdown.
+    if (typeof convertAllSelectsToLLD === 'function') convertAllSelectsToLLD(row);
     return row;
   }
   $id('ev-add-reminder')?.addEventListener('click', () => {
     $id('ev-reminders-list').appendChild(reminderRow());
   });
+  // Convert the modals' static <select>s to the same dropdown component the rest
+  // of the app uses, so calendar dropdowns are identical to the home page.
+  if (typeof convertAllSelectsToLLD === 'function') {
+    ['event-modal', 'appearance-modal'].forEach((id) => {
+      const m = document.getElementById(id);
+      if (m) convertAllSelectsToLLD(m);
+    });
+  }
   function collectReminders() {
     return [...document.querySelectorAll('#ev-reminders-list .cal-reminder-row')].map((r) => {
       const kind = r.querySelector('.rem-kind').value;
@@ -642,8 +680,10 @@
         return at ? { kind, at_time: at } : null;
       }
       if (kind === 'repeating') {
-        return { kind, repeat_every: r.querySelector('.rem-every').value,
-                 lead_minutes: Number(r.querySelector('.rem-lead').value) || 0 };
+        const lead = Number(r.querySelector('.rem-lead-sel').value) || 0;
+        const every = r.querySelector('.rem-every').value;
+        if (!lead || !every) return null;   // needs a "from … before" and an "every"
+        return { kind, repeat_every: every, lead_minutes: lead };
       }
       return { kind: 'at_event' };
     }).filter(Boolean);

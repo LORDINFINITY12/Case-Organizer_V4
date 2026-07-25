@@ -21,6 +21,16 @@ case-organizer (4.8.2) stable; urgency=high
     transfer. Mirrored in the View/Edit Note editor.
   * Case Law Upload and Search now use the same grouped, searchable subcategory
     taxonomy (FILE_SUBCATS) as Manage Case, not the old flat Case Type list.
+  * Reminders — "Repeating before" redesigned. You pick the lead first ("from
+    30 min / 1 hour / 12 hours / 1 day / 1 week / 1 month before"); only then
+    does the "every" cadence appear, offering context-appropriate frequencies
+    (an hour before → every 10/15/30 min; a week before → hourly / 12-hourly /
+    daily; a month before → weekly / daily). Both read inline on one row.
+  * Calendar dropdowns now use the exact same Long-List Dropdown as the home
+    page, and the modal dropdown-positioning bug is fixed — panels are portalled
+    to <body> so a transformed modal ancestor no longer throws the options list
+    across the screen. The Case Law and case-note edit dropdowns get the same
+    fix and now reflect the FILE_SUBCATS taxonomy.
 
  -- Izumi <swarajswarupaggarwal@gmail.com>  Fri, 24 Jul 2026 22:45:00 +0530
 

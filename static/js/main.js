@@ -1043,12 +1043,19 @@ function convertSelectToLLD(sel) {
     buildOptions();
     panel.classList.remove('flip-up');
 
+    // Portal the panel to <body> before positioning. A modal ancestor with a
+    // CSS transform becomes the containing block for position:fixed, which threw
+    // the panel to the wrong place ("different universe"). As a direct child of
+    // <body> the fixed coords are relative to the viewport, as intended.
+    if (panel.parentNode !== document.body) document.body.appendChild(panel);
+
     // Use fixed positioning to escape all ancestor overflow clipping
     const rect = trigger.getBoundingClientRect();
     panel.style.position = 'fixed';
     panel.style.left = rect.left + 'px';
     panel.style.width = rect.width + 'px';
     panel.style.right = 'auto';
+    panel.style.zIndex = '100001';   // above modals (z-index up to 10000)
 
     panel.classList.add('open');
 
@@ -1086,6 +1093,9 @@ function convertSelectToLLD(sel) {
     panel.style.right = '';
     panel.style.top = '';
     panel.style.bottom = '';
+    panel.style.zIndex = '';
+    // Return the panel to its wrapper so its state stays with the control.
+    if (panel.parentNode === document.body) wrapper.appendChild(panel);
     if (_scrollCloseFn) {
       window.removeEventListener('scroll', _scrollCloseFn, { capture: true });
       _scrollCloseFn = null;
@@ -3958,14 +3968,14 @@ function bindGlobalNotesModalHandlers(){
 
   function setCaseLawTypeOptions(primary, selected){
     if (!caseLawTypeSel) return;
-    if (primary && CASE_TYPES[primary]) {
-      populateOptions(caseLawTypeSel, CASE_TYPES[primary], 'Case Type');
+    const groups = FILE_SUBCATS[primary];
+    if (primary && groups) {
+      // Flatten the grouped filing taxonomy into a de-duplicated type list so
+      // the case-law note dropdowns reflect the same subcategories as filing.
+      const items = Array.from(new Set(groups.flatMap((g) => g.items).filter((x) => x && x !== 'Other')));
+      populateOptions(caseLawTypeSel, items, 'Case Type');
       caseLawTypeSel.disabled = false;
-      if (selected && CASE_TYPES[primary].includes(selected)) {
-        caseLawTypeSel.value = selected;
-      } else {
-        caseLawTypeSel.value = '';
-      }
+      caseLawTypeSel.value = items.includes(selected) ? selected : '';
     } else {
       caseLawTypeSel.innerHTML = '<option value=\"\">Case Type</option>';
       caseLawTypeSel.disabled = true;

@@ -32,8 +32,12 @@ from services.email import EmailConfigError, send_email
 log = logging.getLogger(__name__)
 
 VALID_REMINDER_KINDS = {"at_event", "at_time", "repeating"}
-VALID_REPEAT_EVERY = {"30min", "hourly", "daily"}
-_STEP_MINUTES = {"30min": 30, "hourly": 60, "daily": 1440}
+_STEP_MINUTES = {
+    "10min": 10, "15min": 15, "30min": 30,
+    "hourly": 60, "3hourly": 180, "6hourly": 360, "12hourly": 720,
+    "daily": 1440, "weekly": 10080,
+}
+VALID_REPEAT_EVERY = set(_STEP_MINUTES)
 
 # How far ahead to look for the next occurrence of a recurring event when
 # scheduling a reminder (2 years — well beyond any realistic lead time).

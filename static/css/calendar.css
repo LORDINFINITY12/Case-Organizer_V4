@@ -349,10 +349,13 @@ body.cal-resizing {
     border-color: #fca5a5 !important;
 }
 .rem-del:hover { background: rgba(239, 68, 68, 0.12) !important; border-color: #ef4444 !important; }
-.rem-extra { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
-.rem-extra label { flex-direction: row; align-items: center; gap: 6px; }
-.rem-every { width: auto; }
-.rem-lead { width: 5em; }
+.rem-extra { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.rem-extra label { display: flex; flex-direction: row; align-items: center; gap: 6px; margin: 0; white-space: nowrap; }
+/* Repeating-before: "From <lead> before   every <freq>" on one row. The lead is
+   chosen first; the "every" dropdown only appears once a lead is picked. Both are
+   Long-List Dropdowns sized to content so they read inline and match the home page. */
+.rem-repeat { flex-wrap: nowrap; }
+.rem-repeat .ll-dropdown { flex: none; width: auto; min-width: 7.5em; }
 .agenda-item--task       { border-left-color: #10b981; }
 /* Empty row keyed like a real agenda item, so section headers and their
    content read differently at a glance even on an empty day. */

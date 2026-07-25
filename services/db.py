@@ -14,7 +14,7 @@ from services.settings import settings_manager
 
 
 # Global schema version for the application database.
-_SCHEMA_VERSION = 10
+_SCHEMA_VERSION = 11
 
 # Reserved internal account used as the sender of automated notifications
 # (e.g. calendar reminder inbox messages posted from the scheduler thread).
@@ -90,6 +90,10 @@ def _ensure_schema(conn: sqlite3.Connection) -> None:
     if current_version < 10:
         _migrate_to_v10(conn)
         current_version = 10
+
+    if current_version < 11:
+        _migrate_to_v11(conn)
+        current_version = 11
 
     if current_version != _SCHEMA_VERSION:
         # Placeholder for future migrations.
@@ -759,6 +763,66 @@ def _migrate_to_v10(conn: sqlite3.Connection) -> None:
 
     conn.execute(
         "INSERT INTO app_meta(key, value) VALUES('schema_version', '10') "
+        "ON CONFLICT(key) DO UPDATE SET value = excluded.value"
+    )
+
+
+def _migrate_to_v11(conn: sqlite3.Connection) -> None:
+    """Widen event_reminders.repeat_every for the redesigned "repeating"
+    reminders, which offer context-aware frequencies (10/15 min, 3/6/12-hourly,
+    weekly) chosen from the lead time. SQLite can't ALTER a CHECK in place, so
+    rebuild the table and recreate its indexes + updated_at trigger. Existing
+    rows copy across unchanged."""
+    conn.execute("PRAGMA foreign_keys=OFF")
+    conn.executescript(
+        """
+        BEGIN;
+        CREATE TABLE event_reminders_new (
+            id             INTEGER PRIMARY KEY AUTOINCREMENT,
+            event_id       INTEGER NOT NULL REFERENCES case_events(id) ON DELETE CASCADE,
+            kind           TEXT NOT NULL CHECK(kind IN ('at_event','at_time','repeating')),
+            at_time        TEXT,
+            repeat_every   TEXT CHECK(repeat_every IS NULL OR repeat_every IN
+                             ('10min','15min','30min','hourly','3hourly','6hourly',
+                              '12hourly','daily','weekly')),
+            lead_minutes   INTEGER,
+            next_fire_at   TEXT,
+            active         INTEGER NOT NULL DEFAULT 1 CHECK(active IN (0,1)),
+            last_fired_at  TEXT,
+            created_by     INTEGER REFERENCES users(id) ON DELETE SET NULL,
+            created_at     TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at     TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        );
+        INSERT INTO event_reminders_new
+            (id, event_id, kind, at_time, repeat_every, lead_minutes, next_fire_at,
+             active, last_fired_at, created_by, created_at, updated_at)
+            SELECT id, event_id, kind, at_time, repeat_every, lead_minutes, next_fire_at,
+                   active, last_fired_at, created_by, created_at, updated_at
+            FROM event_reminders;
+        DROP TABLE event_reminders;
+        ALTER TABLE event_reminders_new RENAME TO event_reminders;
+        COMMIT;
+        """
+    )
+    conn.execute("PRAGMA foreign_keys=ON")
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_event_reminders_event ON event_reminders(event_id)"
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_event_reminders_due "
+        "ON event_reminders(next_fire_at) WHERE active = 1 AND next_fire_at IS NOT NULL"
+    )
+    conn.execute(
+        """
+        CREATE TRIGGER IF NOT EXISTS trg_event_reminders_updated_at
+        AFTER UPDATE ON event_reminders
+        BEGIN
+            UPDATE event_reminders SET updated_at = CURRENT_TIMESTAMP WHERE id = NEW.id;
+        END;
+        """
+    )
+    conn.execute(
+        "INSERT INTO app_meta(key, value) VALUES('schema_version', '11') "
         "ON CONFLICT(key) DO UPDATE SET value = excluded.value"
     )
 
