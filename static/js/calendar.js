@@ -568,11 +568,15 @@
   }
   $id('ev-type')?.addEventListener('change', syncEventTypeFields);
 
-  // All-day toggle reveals the start/end time inputs (and updates the note).
-  $id('ev-all-day')?.addEventListener('change', () => {
-    $id('ev-time-fields').hidden = $id('ev-all-day').checked;
-    updateContinuingHint();
-  });
+  // All-day toggle: the start/end box stays on screen (right of All day) but
+  // is faded + read-only when all-day is on, and becomes writable when it's off.
+  function syncAllDay() {
+    const allDay = $id('ev-all-day').checked;
+    $id('ev-time-fields').classList.toggle('is-disabled', allDay);
+    $id('ev-start-time').disabled = allDay;
+    $id('ev-end-time').disabled = allDay;
+  }
+  $id('ev-all-day')?.addEventListener('change', () => { syncAllDay(); updateContinuingHint(); });
   // Recurrence frequency reveals interval/until (meetings).
   $id('ev-recur-freq')?.addEventListener('change', () => {
     $id('ev-recur-extra').hidden = !$id('ev-recur-freq').value;
@@ -584,26 +588,30 @@
     const row = document.createElement('div');
     row.className = 'cal-reminder-row';
     row.innerHTML =
-      `<select class="rem-kind">
-         <option value="at_event">At the event time</option>
-         <option value="at_time">At a set time that day</option>
-         <option value="repeating">Repeating before</option>
-       </select>
-       <input type="time" class="rem-attime" hidden />
-       <span class="rem-repeat" hidden>every
-         <select class="rem-every">
-           <option value="30min">30 min</option>
-           <option value="hourly">hour</option>
-           <option value="daily">day</option>
+      `<div class="rem-main">
+         <select class="rem-kind">
+           <option value="at_event">At the event time</option>
+           <option value="at_time">At a set time that day</option>
+           <option value="repeating">Repeating before</option>
          </select>
-         from <input type="number" class="rem-lead" min="0" value="60" /> min before</span>
-       <button type="button" class="btn-ghost rem-del" title="Remove reminder">
-         <i class="fa-solid fa-xmark"></i></button>`;
+         <button type="button" class="btn-ghost rem-del" title="Remove reminder" aria-label="Remove reminder">
+           <i class="fa-solid fa-xmark"></i></button>
+       </div>
+       <label class="rem-extra rem-attime-wrap" hidden>At <input type="time" class="rem-attime" /></label>
+       <div class="rem-extra rem-repeat" hidden>
+         <label>Every
+           <select class="rem-every">
+             <option value="30min">30 min</option>
+             <option value="hourly">hour</option>
+             <option value="daily">day</option>
+           </select></label>
+         <label>From <input type="number" class="rem-lead" min="0" value="60" /> min before</label>
+       </div>`;
     const kind = row.querySelector('.rem-kind');
     const attime = row.querySelector('.rem-attime');
     const repeat = row.querySelector('.rem-repeat');
     const sync = () => {
-      attime.hidden = kind.value !== 'at_time';
+      row.querySelector('.rem-attime-wrap').hidden = kind.value !== 'at_time';
       repeat.hidden = kind.value !== 'repeating';
     };
     kind.addEventListener('change', sync);
@@ -650,9 +658,9 @@
     // Timing / recurrence / continuing
     const allDay = existing ? !!existing.all_day : true;
     $id('ev-all-day').checked = allDay;
-    $id('ev-time-fields').hidden = allDay;
     $id('ev-start-time').value = existing ? (existing.start_time || '') : '';
     $id('ev-end-time').value = existing ? (existing.end_time || '') : '';
+    syncAllDay();
     $id('ev-recur-freq').value = existing ? (existing.recur_freq || '') : '';
     $id('ev-recur-interval').value = existing ? (existing.recur_interval || 1) : 1;
     $id('ev-recur-until').value = (existing && existing.recur_until) ? isoToIn(existing.recur_until) : '';

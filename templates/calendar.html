@@ -184,13 +184,16 @@
             <input type="date" class="cal-date-native" tabindex="-1" aria-hidden="true" />
           </span>
         </label>
-        <div class="cal-field full-span cal-timing">
-          <label class="cal-check"><input type="checkbox" id="ev-all-day" checked /> <span>All day</span></label>
-          <div class="cal-time-fields" id="ev-time-fields" hidden>
-            <label>Start <input type="time" id="ev-start-time" /></label>
-            <label>End <input type="time" id="ev-end-time" /></label>
-          </div>
-        </div>
+        <label class="cal-field cal-allday-field">All day
+          <span class="cal-allday-toggle"><input type="checkbox" id="ev-all-day" checked /></span>
+        </label>
+        <label class="cal-field cal-time-field is-disabled" id="ev-time-fields">Start &amp; end time
+          <span class="cal-time-fields">
+            <input type="time" id="ev-start-time" disabled aria-label="Start time" />
+            <span class="cal-time-sep">–</span>
+            <input type="time" id="ev-end-time" disabled aria-label="End time" />
+          </span>
+        </label>
         <div class="cal-case-block full-span" id="ev-case-block">
           <div class="mc-name-search">
             <input id="ev-case-q" type="text" placeholder="Search case by party name…" aria-label="Search case by name" />

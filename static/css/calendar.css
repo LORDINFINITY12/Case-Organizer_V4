@@ -294,20 +294,46 @@ body.cal-resizing {
 .cal-time { font-variant-numeric: tabular-nums; font-weight: 600; }
 .cal-done { color: #10b981; font-weight: 600; }
 /* Event modal — timing / recurrence / reminders */
-/* Timing + recurrence — left-aligned, full width, no floating controls. */
-.cal-timing { align-items: flex-start; gap: 10px; }
-.cal-check { flex-direction: row; align-items: center; gap: 8px; cursor: pointer; width: auto; }
-.cal-check input { width: auto; }
-.cal-time-fields { display: flex; flex-direction: row; gap: 12px; align-items: center; }
-.cal-time-fields label { flex-direction: row; align-items: center; gap: 6px; }
-.cal-time-fields input[type="time"] { width: auto; }
+/* Timing — a symmetric split: [All day toggle] | [start/end box]. The start/end
+   box stays on screen; it fades + goes read-only when All day is on, and becomes
+   writable when All day is unticked. Both cells are the same height. */
+/* All day = a plain checkbox (no box), left-aligned, at input height so it
+   lines up with the start/end box beside it. */
+.cal-allday-toggle { display: flex; align-items: center; min-height: 42px; }
+.cal-allday-field input[type="checkbox"] { width: auto; margin: 0; flex: none; }
+.cal-time-fields { display: flex; align-items: center; gap: 8px; width: 100%; min-height: 42px; }
+.cal-time-fields input[type="time"] { flex: 1; min-width: 0; }
+.cal-time-sep { color: var(--muted); }
+.cal-time-field.is-disabled { opacity: 0.5; }
+.cal-time-field.is-disabled .cal-time-fields { pointer-events: none; }
+
+/* Recurrence interval/until row (meetings). */
 .cal-recur-extra { flex-direction: row; align-items: center; gap: 14px; flex-wrap: wrap; }
 .cal-recur-extra label { flex-direction: row; align-items: center; gap: 6px; }
 .cal-recur-extra input[type="number"] { width: 5em; }
 .cal-recur-extra input[type="text"] { width: 12em; }
 .cal-auto-note { margin: 0; color: var(--muted); font-size: 0.82rem; }
-.cal-reminder-row { display: flex; gap: 8px; align-items: center; margin-bottom: 6px; flex-wrap: wrap; }
-.cal-reminder-row .rem-lead { width: 5em; }
+
+/* Reminder rows — kind dropdown + delete on ONE full-width row; extra fields
+   (at-time / repeating) on a clean sub-row below. */
+.cal-reminder-row { display: flex; flex-direction: column; gap: 8px; margin-bottom: 12px; }
+.rem-main { display: flex; gap: 8px; align-items: stretch; }
+.rem-main .rem-kind { flex: 1; min-width: 0; }
+.rem-del {
+    flex: none;
+    width: 42px;
+    padding: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: #ef4444 !important;
+    border-color: #fca5a5 !important;
+}
+.rem-del:hover { background: rgba(239, 68, 68, 0.12) !important; border-color: #ef4444 !important; }
+.rem-extra { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+.rem-extra label { flex-direction: row; align-items: center; gap: 6px; }
+.rem-every { width: auto; }
+.rem-lead { width: 5em; }
 .agenda-item--task       { border-left-color: #10b981; }
 /* Empty row keyed like a real agenda item, so section headers and their
    content read differently at a glance even on an empty day. */
