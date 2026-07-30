@@ -661,7 +661,11 @@ input, select, textarea {
 }
 .cl-name-option span {
     font-weight: 600;
-    flex: 0 0 auto;
+    /* Fixed label column, sized to the longest label ("Either Party"), so the
+       text input starts at the same x on all three rows instead of being pushed
+       around by how long each label happens to be. */
+    flex: 0 0 7.5em;
+    white-space: nowrap;
 }
 .cl-name-option input[type="text"] {
     width: 100%;

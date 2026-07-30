@@ -628,7 +628,7 @@
              <option value="10080">1 week</option>
              <option value="43200">1 month</option>
            </select></label>
-         <span class="rem-before-word">before</span>
+         <span class="rem-before-word" hidden>before</span>
          <label class="rem-every-wrap" hidden>every
            <select class="rem-every"></select></label>
        </div>`;
@@ -638,6 +638,7 @@
     const leadSel = row.querySelector('.rem-lead-sel');
     const everyWrap = row.querySelector('.rem-every-wrap');
     const everySel = row.querySelector('.rem-every');
+    const beforeWord = row.querySelector('.rem-before-word');
     const sync = () => {
       row.querySelector('.rem-attime-wrap').hidden = kind.value !== 'at_time';
       repeat.hidden = kind.value !== 'repeating';
@@ -645,7 +646,10 @@
     function populateEvery(keep) {
       const opts = EVERY_BY_LEAD[leadSel.value] || [];
       everySel.innerHTML = opts.map(([v, l]) => `<option value="${v}">${l}</option>`).join('');
+      // "before" belongs to the cadence phrase, so it only appears once a lead
+      // has been picked — otherwise it dangles on its own at the row's centre.
       everyWrap.hidden = !opts.length;
+      beforeWord.hidden = !opts.length;
       if (opts.length) {
         everySel.value = (keep && opts.some(([v]) => v === keep)) ? keep : opts[0][0];
       }

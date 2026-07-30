@@ -26,6 +26,16 @@ case-organizer (4.8.3) stable; urgency=high
   * The daily brief PDF no longer repeats your matters in a separate "Assigned
     to you" table — each matter appears once, and the rows assigned to the
     recipient are tinted instead.
+  * Case Law name search — the Petitioner / Respondent / Either Party rows now
+    share a fixed label column, so all three inputs start at the same x instead
+    of being shifted around by how long each label is.
+  * The searchable subcategory / case-type dropdown now behaves like every other
+    dropdown: its panel is portalled to <body> and opens UPWARDS when there is
+    not enough room below, with its height capped to the space available, so a
+    long grouped list can no longer leak off the bottom of the window.
+  * "Repeating before" only shows the word "before" and the cadence once a lead
+    time has been chosen; the three columns hold their positions so the lead
+    dropdown no longer stretches and then snaps back.
 
  -- Izumi <swarajswarupaggarwal@gmail.com>  Thu, 30 Jul 2026 17:40:00 +0530
 

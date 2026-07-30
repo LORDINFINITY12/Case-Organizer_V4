@@ -877,11 +877,88 @@ function buildGroupedSearchableDropdown(container, hiddenId, placeholder, groups
 
   wrapper.append(inp, hidden, panel);
   let activeIdx = -1;
+  let _sdScrollClose = null;
+
+  /**
+   * Position the open panel the same way the Long-List Dropdown does: portalled
+   * to <body> with fixed coords (so no ancestor's overflow or transform can clip
+   * it), dropping DOWN when there is room and flipping UP when there is not,
+   * with the height capped to the space actually available so a long grouped
+   * list can never leak off-screen.
+   */
+  function positionPanel() {
+    // Hosts get rebuilt when the category above them changes; never leave a
+    // portalled panel floating in <body> after its input is gone.
+    if (!inp.isConnected) { panel.remove(); return; }
+    if (panel.parentNode !== document.body) document.body.appendChild(panel);
+    const rect = inp.getBoundingClientRect();
+    panel.classList.remove('flip-up');
+    panel.style.position = 'fixed';
+    panel.style.left = rect.left + 'px';
+    panel.style.width = rect.width + 'px';
+    panel.style.right = 'auto';
+    panel.style.marginTop = '0';
+    panel.style.zIndex = '100001';
+
+    const GAP = 4;
+    const EDGE = 8;                       // keep clear of the viewport edge
+    const CAP = 240;                      // the panel's design max-height
+    const spaceBelow = window.innerHeight - rect.bottom - GAP - EDGE;
+    const spaceAbove = rect.top - GAP - EDGE;
+
+    // Decide on the height the panel actually WANTS to be — its content height
+    // clamped to the design cap. Comparing the raw content height would flip a
+    // long grouped list upwards even when the capped, scrollable panel fits
+    // below perfectly well.
+    panel.style.maxHeight = 'none';
+    const desired = Math.min(panel.scrollHeight, CAP);
+
+    const dropUp = desired > spaceBelow && (desired <= spaceAbove || spaceAbove > spaceBelow);
+    if (dropUp) {
+      panel.classList.add('flip-up');
+      panel.style.top = 'auto';
+      panel.style.bottom = (window.innerHeight - rect.top + GAP) + 'px';
+      panel.style.maxHeight = Math.max(120, Math.min(desired, spaceAbove)) + 'px';
+    } else {
+      panel.style.top = (rect.bottom + GAP) + 'px';
+      panel.style.bottom = 'auto';
+      panel.style.maxHeight = Math.max(120, Math.min(desired, spaceBelow)) + 'px';
+    }
+  }
+
+  function openPanel(filter) {
+    render(filter);
+    panel.classList.add('open');
+    positionPanel();
+    if (!_sdScrollClose) {
+      // Close on scrolling the page behind the fixed panel, but not on
+      // scrolling within the panel itself.
+      _sdScrollClose = (evt) => {
+        if (!inp.isConnected) { closePanel(); return; }
+        if (evt.target === panel || panel.contains(evt.target)) return;
+        closePanel();
+      };
+      window.addEventListener('scroll', _sdScrollClose, { capture: true, passive: true });
+      window.addEventListener('resize', _sdScrollClose, { passive: true });
+    }
+  }
+
+  function closePanel() {
+    panel.classList.remove('open', 'flip-up');
+    ['position', 'left', 'right', 'top', 'bottom', 'width', 'maxHeight', 'marginTop', 'zIndex']
+      .forEach((prop) => { panel.style[prop] = ''; });
+    if (panel.parentNode === document.body) wrapper.appendChild(panel);
+    if (_sdScrollClose) {
+      window.removeEventListener('scroll', _sdScrollClose, { capture: true });
+      window.removeEventListener('resize', _sdScrollClose);
+      _sdScrollClose = null;
+    }
+  }
 
   function pick(val) {
     inp.value = val;
     hidden.value = val;
-    panel.classList.remove('open');
+    closePanel();
     hidden.dispatchEvent(new Event('change', { bubbles: true }));
   }
 
@@ -911,18 +988,20 @@ function buildGroupedSearchableDropdown(container, hiddenId, placeholder, groups
     activeIdx = -1;
   }
 
-  inp.addEventListener('focus', () => { render(inp.value); panel.classList.add('open'); });
-  inp.addEventListener('input', () => { render(inp.value); panel.classList.add('open'); });
+  inp.addEventListener('focus', () => openPanel(inp.value));
+  // Re-position on every keystroke: filtering changes the list's height, which
+  // changes whether it still fits below.
+  inp.addEventListener('input', () => openPanel(inp.value));
   inp.addEventListener('blur', () => {
     // Revert any typed-but-unselected text — subcategory must be a listed value.
-    setTimeout(() => { panel.classList.remove('open'); inp.value = hidden.value; }, 150);
+    setTimeout(() => { closePanel(); inp.value = hidden.value; }, 150);
   });
   inp.addEventListener('keydown', (e) => {
     const opts = panel.querySelectorAll('.sd-option');
     if (e.key === 'ArrowDown') { e.preventDefault(); activeIdx = Math.min(activeIdx + 1, opts.length - 1); opts.forEach((o,i)=>o.classList.toggle('active', i===activeIdx)); opts[activeIdx]?.scrollIntoView({block:'nearest'}); }
     else if (e.key === 'ArrowUp') { e.preventDefault(); activeIdx = Math.max(activeIdx - 1, 0); opts.forEach((o,i)=>o.classList.toggle('active', i===activeIdx)); opts[activeIdx]?.scrollIntoView({block:'nearest'}); }
     else if (e.key === 'Enter') { e.preventDefault(); if (activeIdx >= 0 && opts[activeIdx]) pick(opts[activeIdx].dataset.value); }
-    else if (e.key === 'Escape') { panel.classList.remove('open'); inp.blur(); }
+    else if (e.key === 'Escape') { closePanel(); inp.blur(); }
   });
 
   container.appendChild(wrapper);
@@ -4077,14 +4156,15 @@ function bindGlobalNotesModalHandlers(){
     if (!caseLawTypeSel) return;
     const groups = FILE_SUBCATS[primary];
     if (primary && groups) {
-      // Flatten the grouped filing taxonomy into a de-duplicated type list so
-      // the case-law note dropdowns reflect the same subcategories as filing.
-      const items = Array.from(new Set(groups.flatMap((g) => g.items).filter((x) => x && x !== 'Other')));
+      // Use the same grouped taxonomy as the rest of the app (flattened for the
+      // native/LLD select), not the retired flat CASE_TYPES list.
+      const items = Array.from(new Set(
+        groups.flatMap((g) => g.items).filter((x) => x && x !== 'Other')));
       populateOptions(caseLawTypeSel, items, 'Case Type');
       caseLawTypeSel.disabled = false;
-      caseLawTypeSel.value = items.includes(selected) ? selected : '';
+      caseLawTypeSel.value = (selected && items.includes(selected)) ? selected : '';
     } else {
-      caseLawTypeSel.innerHTML = '<option value=\"\">Case Type</option>';
+      caseLawTypeSel.innerHTML = '<option value="">Case Type</option>';
       caseLawTypeSel.disabled = true;
     }
   }

@@ -362,8 +362,12 @@ body.cal-resizing {
 .rem-extra label { display: flex; flex-direction: row; align-items: center; gap: 6px; margin: 0; white-space: nowrap; }
 /* Repeating-before reads "From <lead>   before   every <freq>" across the full
    row: equal thirds so the lead sits left, "before" is dead centre and the
-   cadence sits right.  The lead is chosen first; "every" appears after it. */
-.rem-repeat { flex-wrap: nowrap; gap: 10px; }
+   cadence sits right.  The lead is chosen first, and "before"/"every" only
+   appear once it has been.  Three explicit grid tracks (rather than flexing the
+   children) keep those tracks in place while the last two are still hidden, so
+   the lead dropdown stays a third wide instead of stretching to the full row and
+   then snapping back the moment a lead is picked. */
+.rem-repeat { display: grid; grid-template-columns: repeat(3, 1fr); align-items: center; gap: 10px; }
 .rem-repeat .rem-lead-field { flex: 1; justify-content: flex-start; min-width: 0; }
 .rem-repeat .rem-before-word { flex: 1; text-align: center; }
 .rem-repeat .rem-every-wrap { flex: 1; justify-content: flex-end; min-width: 0; }
