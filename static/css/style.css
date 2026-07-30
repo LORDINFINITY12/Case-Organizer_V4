@@ -1663,9 +1663,26 @@ input[type="number"].year-input {
     grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
     gap: 10px;
 }
+/* The note editor mirrors the Create Case form 1:1 — it edits the very fields
+   Create Case populates.  A fixed two-column grid (like .form-grid) keeps
+   petitioner details on the left and respondent details on the right instead of
+   reflowing into a variable number of columns, and the control metrics below
+   match .form-grid's padding/radius. */
 .notes-form .note-grid {
-    grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
-    gap: 8px;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px;
+}
+.notes-form .note-field input,
+.notes-form .note-field select,
+.notes-form .note-wide {
+    border-radius: 12px;
+    padding: 10px 12px;
+}
+.notes-form .note-field .ll-dropdown-trigger,
+.notes-form .note-field .search-dropdown-input {
+    border-radius: 12px;
+    padding: 10px 12px;
+    padding-right: 32px;
 }
 .note-field {
     display: flex;
@@ -2550,6 +2567,37 @@ input[type="number"].year-input {
     justify-content: space-between;
     gap: 12px;
     margin-top: 10px;
+    color: var(--muted);
+    font-size: 13px;
+}
+
+/* File-upload progress — same visual language as the PDF suite's bar above. */
+.upload-progress {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-top: 10px;
+}
+.upload-progress-track {
+    flex: 1;
+    height: 12px;
+    background: rgba(0, 0, 0, 0.08);
+    border-radius: 999px;
+    overflow: hidden;
+}
+:root[data-theme="dark"] .upload-progress-track {
+    background: rgba(255, 255, 255, 0.12);
+}
+.upload-progress-bar {
+    height: 100%;
+    width: 0%;
+    background: linear-gradient(90deg, var(--accent), var(--accent-2));
+    transition: width 0.2s ease;
+}
+.upload-progress-label {
+    flex: none;
+    min-width: 5.5em;
+    text-align: right;
     color: var(--muted);
     font-size: 13px;
 }

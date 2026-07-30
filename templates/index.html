@@ -176,33 +176,37 @@
                   <input id="note-case-pn" type="text" autocomplete="off">
                 </label>
                 <label class="note-field">
-                  <span>Petitioner Address</span>
-                  <input id="note-case-pa" type="text" autocomplete="off">
-                </label>
-                <label class="note-field">
-                  <span>Petitioner Contact</span>
-                  <input id="note-case-pc" type="text" autocomplete="off">
-                </label>
-                <label class="note-field">
                   <span>Respondent Name</span>
                   <input id="note-case-rn" type="text" autocomplete="off">
+                </label>
+                <label class="note-field">
+                  <span>Petitioner Address</span>
+                  <input id="note-case-pa" type="text" autocomplete="off">
                 </label>
                 <label class="note-field">
                   <span>Respondent Address</span>
                   <input id="note-case-ra" type="text" autocomplete="off">
                 </label>
                 <label class="note-field">
+                  <span>Petitioner Contact</span>
+                  <input id="note-case-pc" type="text" autocomplete="off">
+                </label>
+                <label class="note-field">
                   <span>Respondent Contact</span>
                   <input id="note-case-rc" type="text" autocomplete="off">
                 </label>
-                <label class="note-field">
-                  <span>We’re Representing</span>
-                  <select id="note-case-party">
-                    <option value="">Select</option>
-                    <option value="Petitioner">Petitioner</option>
-                    <option value="Respondent">Respondent</option>
-                  </select>
+                <label class="note-field note-field-wide">
+                  <span>Case Name (auto — renames the case folder when saved)</span>
+                  <input id="note-case-name-preview" type="text" disabled>
                 </label>
+                <div class="note-field note-field-wide">
+                  <span>We’re Representing</span>
+                  <input type="hidden" id="note-case-party">
+                  <div class="op-tabs" role="tablist">
+                    <button type="button" class="op-tab" data-value="Petitioner" role="tab" aria-selected="false">Petitioner</button>
+                    <button type="button" class="op-tab" data-value="Respondent" role="tab" aria-selected="false">Respondent</button>
+                  </div>
+                </div>
               </div>
             </div>
 

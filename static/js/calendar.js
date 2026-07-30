@@ -627,7 +627,8 @@
              <option value="1440">1 day</option>
              <option value="10080">1 week</option>
              <option value="43200">1 month</option>
-           </select> before</label>
+           </select></label>
+         <span class="rem-before-word">before</span>
          <label class="rem-every-wrap" hidden>every
            <select class="rem-every"></select></label>
        </div>`;

@@ -295,9 +295,9 @@ def continuing_view_on(
     conn: sqlite3.Connection, row: sqlite3.Row, D: date, now: datetime
 ) -> Optional[Dict[str, Any]]:
     """How a continuing task/deadline shows on date D, or None if it does not
-    appear.  Appearance span is [due .. completion_date] (open-ended if not
-    completed) — so a pre-dated completion trims later days for free while the
-    days it occupied stay visible and annotated."""
+    appear.  Appearance span is [due .. completion_date], and for an item that is
+    still open it stops at TODAY — a pre-dated completion trims later days for
+    free while the days it occupied stay visible and annotated."""
     if not row["continuing"] or row["event_type"] not in CONTINUING_TYPES:
         return None
     due = date.fromisoformat(row["event_date"])
@@ -305,6 +305,11 @@ def continuing_view_on(
         return None
     comp = _completion_date(row)
     if comp is not None and D > comp:
+        return None
+    # An still-open item rolls forward only as far as today.  Without this an
+    # overdue task was drawn on every future day for ever (it has no end date),
+    # flooding next month and every month after it.
+    if comp is None and D > due and D > now.date():
         return None
 
     d = {key: row[key] for key in row.keys()}
@@ -492,7 +497,11 @@ def events_for_month(conn: sqlite3.Connection, year: int, month: int) -> List[Di
     for row in c_rows:
         due = date.fromisoformat(row["event_date"])
         comp = _completion_date(row)
-        last = win_end if comp is None else min(win_end, comp)
+        if comp is None:
+            # Still open: roll forward to today, never into future months.
+            last = min(win_end, max(due, now.date()))
+        else:
+            last = min(win_end, comp)
         day = max(win_start, due)
         while day <= last:
             v = continuing_view_on(conn, row, day, now)

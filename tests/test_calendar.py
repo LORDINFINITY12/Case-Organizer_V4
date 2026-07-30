@@ -183,6 +183,35 @@ class TestQueries:
         overdue = cal.get_event(db, overdue_id)
         assert overdue["overdue"] is True
 
+    def test_continuing_task_rolls_forward_only_to_today(self, user_client, fsroot, db):
+        """An open continuing task must roll forward to today and STOP.  It used
+        to be drawn on every day of every future month (it has no end date),
+        flooding the calendar ad infinitum."""
+        from services import calendar_events as cal
+
+        case = _mk_case(fsroot)
+        due = TODAY - timedelta(days=3)
+        cal.create_event(db, event_type="task", event_date=due.isoformat(),
+                         title="Draft notice", continuing=True, **case)
+        db.commit()
+
+        # This month: one appearance per day from the due date through today —
+        # and nothing after today.
+        data = user_client.get(
+            f"/api/calendar/events?year={TODAY.year}&month={TODAY.month}",
+            headers=CSRF).get_json()
+        days = sorted(e["event_date"] for e in data["events"]
+                      if e["title"] == "Draft notice")
+        assert days, "the task should still appear on its own days"
+        assert max(days) == TODAY_ISO, f"rolled past today: {max(days)}"
+
+        # A future month must be completely empty of it.
+        nxt = (TODAY.replace(day=1) + timedelta(days=31))
+        future = user_client.get(
+            f"/api/calendar/events?year={nxt.year}&month={nxt.month}",
+            headers=CSRF).get_json()
+        assert not [e for e in future["events"] if e["title"] == "Draft notice"]
+
     def test_month_range_boundaries(self, user_client, fsroot, db):
         from services import calendar_events as cal
 
@@ -309,6 +338,37 @@ class TestCascades:
         rows = db.execute("SELECT case_name FROM case_events").fetchall()
         assert [r["case_name"] for r in rows] == ["Foo v. Renamed"]
 
+    def test_rename_case_by_coordinates(self, client, test_admin, fsroot, db):
+        """The note editor addresses a case as year/month/name rather than by an
+        absolute path, so renaming has to work from those coordinates too."""
+        from services import calendar_events as cal
+
+        case = _mk_case(fsroot)
+        cal.create_event(db, event_type="hearing", event_date=TODAY_ISO, **case)
+        db.commit()
+        _login_as(client, test_admin)
+
+        resp = client.post("/api/rename-case", json={
+            "year": case["case_year"],
+            "month": case["case_month"],
+            "case": case["case_name"],
+            "new_name": "Coord v. Renamed",
+        }, headers=CSRF)
+        assert resp.status_code == 200, resp.get_json()
+
+        assert (fsroot / case["case_year"] / case["case_month"] / "Coord v. Renamed").is_dir()
+        rows = db.execute("SELECT case_name FROM case_events").fetchall()
+        assert [r["case_name"] for r in rows] == ["Coord v. Renamed"]
+
+    def test_rename_case_by_coordinates_rejects_traversal(self, client, test_admin, fsroot):
+        _mk_case(fsroot)
+        _login_as(client, test_admin)
+        resp = client.post("/api/rename-case", json={
+            "year": "..", "month": "..", "case": "etc",
+            "new_name": "Nope v. Nope",
+        }, headers=CSRF)
+        assert resp.status_code == 400, resp.get_json()
+
     def test_delete_case_removes_events(self, client, test_admin, fsroot, db):
         from services import calendar_events as cal
 
@@ -410,8 +470,18 @@ class TestDigest:
         shared = build_digest_pdf(data, TODAY)
         assert shared[:5] == b"%PDF-" and len(shared) > 800
 
+        # The PDF has no separate "Assigned to you" table — just the four buckets,
+        # with the recipient's own matters tinted in place so nothing is repeated.
+        from services.digest import _ordered_sections
+        assert [name for name, _ in _ordered_sections(data)] == [
+            "Today's Listings", "Filings / Deadlines Due Today",
+            "Overdue / Unfiled", "Tomorrow",
+        ]
+
         personal = build_digest_pdf(data, TODAY, for_user_id=test_user.id)
         assert personal[:5] == b"%PDF-"
+        # Highlighting makes the personalised PDF differ from the shared one.
+        assert personal != shared
 
         # An all-empty digest (every section "Nothing scheduled.") still renders.
         empty = {"today_hearings": [], "due_today": [], "overdue": [],

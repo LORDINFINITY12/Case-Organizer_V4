@@ -188,27 +188,16 @@ def _pdf_when(ev: Dict[str, Any], today: date) -> str:
     return out
 
 
-def _ordered_sections(
-    data: Dict[str, Any], today: date, for_user_id: Optional[int]
-) -> List[tuple[str, List[Dict[str, Any]]]]:
-    sections: List[tuple[str, List[Dict[str, Any]]]] = []
-    if for_user_id is not None and data["assigned"].get(for_user_id):
-        own_ids = set(data["assigned"][for_user_id])
-        seen: set = set()
-        own: List[Dict[str, Any]] = []
-        for bucket in ("today_hearings", "due_today", "overdue", "tomorrow"):
-            for ev in data[bucket]:
-                if ev["id"] in own_ids and ev["id"] not in seen:
-                    seen.add(ev["id"])
-                    own.append(ev)
-        sections.append(("Assigned to you", own))
-    sections += [
+def _ordered_sections(data: Dict[str, Any]) -> List[tuple[str, List[Dict[str, Any]]]]:
+    """The digest buckets in reading order.  Events assigned to the recipient are
+    highlighted in place (see build_digest_pdf) rather than duplicated into a
+    separate table, so each matter appears exactly once."""
+    return [
         ("Today's Listings", data["today_hearings"]),
         ("Filings / Deadlines Due Today", data["due_today"]),
         ("Overdue / Unfiled", data["overdue"]),
         ("Tomorrow", data["tomorrow"]),
     ]
-    return sections
 
 
 def build_digest_pdf(
@@ -241,6 +230,13 @@ def build_digest_pdf(
     accent = colors.HexColor("#2f6f57")
     section_bg = colors.HexColor("#eef4f1")
     grid = colors.HexColor("#c9d6cf")
+    # Rows for matters assigned to the recipient are tinted instead of being
+    # split out into their own table.
+    assigned_bg = colors.HexColor("#fdf3d0")
+
+    own_ids: set = set()
+    if for_user_id is not None:
+        own_ids = set(data["assigned"].get(for_user_id) or [])
 
     def P(text: str, style: ParagraphStyle = cell) -> Paragraph:
         return Paragraph(escape(str(text or "")), style)
@@ -258,7 +254,7 @@ def build_digest_pdf(
     ]
 
     r = 1
-    for name, events in _ordered_sections(data, today, for_user_id):
+    for name, events in _ordered_sections(data):
         rows.append([P(f"{name} ({len(events)})", sect), "", "", "", ""])
         style_cmds += [("SPAN", (0, r), (-1, r)),
                        ("BACKGROUND", (0, r), (-1, r), section_bg)]
@@ -277,6 +273,8 @@ def build_digest_pdf(
                 P(_pdf_when(ev, today)),
                 P(", ".join(ev.get("assignee_emails") or [])),
             ])
+            if ev["id"] in own_ids:
+                style_cmds.append(("BACKGROUND", (0, r), (-1, r), assigned_bg))
             r += 1
 
     buf = BytesIO()
@@ -294,8 +292,10 @@ def build_digest_pdf(
         Paragraph(today.strftime("%A, %d %B %Y"), subtitle),
         table,
         Spacer(1, 8),
-        Paragraph("Automated daily digest — Case Organizer", subtitle),
     ]
+    if own_ids:
+        story.append(Paragraph("Highlighted rows are assigned to you.", subtitle))
+    story.append(Paragraph("Automated daily digest — Case Organizer", subtitle))
     doc.build(story)
     return buf.getvalue()
 

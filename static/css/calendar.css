@@ -337,7 +337,16 @@ body.cal-resizing {
    (at-time / repeating) on a clean sub-row below. */
 .cal-reminder-row { display: flex; flex-direction: column; gap: 8px; margin-bottom: 12px; }
 .rem-main { display: flex; gap: 8px; align-items: stretch; }
-.rem-main .rem-kind { flex: 1; min-width: 0; }
+/* The kind <select> is replaced by a Long-List Dropdown, so the flex sizing has
+   to target the generated .ll-dropdown wrapper (the <select> itself is hidden),
+   and the visible trigger has to fill it so it matches the delete button height. */
+.rem-main > .ll-dropdown { flex: 1; min-width: 0; }
+.rem-main > .ll-dropdown > .ll-dropdown-trigger,
+.rem-del {
+    height: 42px;
+    box-sizing: border-box;
+}
+.rem-main > .ll-dropdown > .ll-dropdown-trigger { display: flex; align-items: center; }
 .rem-del {
     flex: none;
     width: 42px;
@@ -351,11 +360,15 @@ body.cal-resizing {
 .rem-del:hover { background: rgba(239, 68, 68, 0.12) !important; border-color: #ef4444 !important; }
 .rem-extra { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
 .rem-extra label { display: flex; flex-direction: row; align-items: center; gap: 6px; margin: 0; white-space: nowrap; }
-/* Repeating-before: "From <lead> before   every <freq>" on one row. The lead is
-   chosen first; the "every" dropdown only appears once a lead is picked. Both are
-   Long-List Dropdowns sized to content so they read inline and match the home page. */
-.rem-repeat { flex-wrap: nowrap; }
-.rem-repeat .ll-dropdown { flex: none; width: auto; min-width: 7.5em; }
+/* Repeating-before reads "From <lead>   before   every <freq>" across the full
+   row: equal thirds so the lead sits left, "before" is dead centre and the
+   cadence sits right.  The lead is chosen first; "every" appears after it. */
+.rem-repeat { flex-wrap: nowrap; gap: 10px; }
+.rem-repeat .rem-lead-field { flex: 1; justify-content: flex-start; min-width: 0; }
+.rem-repeat .rem-before-word { flex: 1; text-align: center; }
+.rem-repeat .rem-every-wrap { flex: 1; justify-content: flex-end; min-width: 0; }
+.rem-repeat .ll-dropdown { flex: 1; min-width: 0; }
+.rem-repeat .ll-dropdown > .ll-dropdown-trigger { height: 42px; display: flex; align-items: center; box-sizing: border-box; }
 .agenda-item--task       { border-left-color: #10b981; }
 /* Empty row keyed like a real agenda item, so section headers and their
    content read differently at a glance even on an empty day. */

@@ -2472,6 +2472,19 @@ def api_rename_case():
     data = request.get_json(silent=True) or {}
     raw_path = (data.get("path") or "").strip()
     new_name = normalize_ws(data.get("new_name") or "")
+
+    # Alternative addressing by calendar coordinates, used by the note editor
+    # (which knows a case as year/month/name, not as an absolute path).  Each
+    # component is validated before it is joined; _safe_path re-checks below.
+    if not raw_path:
+        parts = [(data.get(k) or "").strip() for k in ("year", "month", "case")]
+        if all(parts):
+            for part in parts:
+                err = validate_fs_component(part)
+                if err:
+                    return jsonify({"ok": False, "msg": err}), 400
+            raw_path = str(FS_ROOT.joinpath(*parts))
+
     if not raw_path or not new_name:
         return jsonify({"ok": False, "msg": "Missing 'path' or 'new_name'"}), 400
 

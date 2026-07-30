@@ -1,3 +1,34 @@
+case-organizer (4.8.3) stable; urgency=high
+
+  * URGENT calendar fix. An overdue task or deadline is open-ended, and the
+    rollover drew it on EVERY day it had not been completed — including every
+    future day, so browsing ahead showed it repeated ad infinitum. A still-open
+    item now rolls forward to today and stops; a completed one still shows the
+    days it occupied, annotated. Covered by a regression test.
+  * Supreme Court transfer petitions are tagged again: "Transfer Petition
+    (Civil)" alongside "Transfer Petition (Criminal)", so the case directory
+    name says which jurisdiction it is at a glance.
+  * Manage Case — picking a case from the party-name search now clears the
+    search box and its results; the case is loaded on the Date tab instead.
+  * Reminders occupy the full row: the kind dropdown stretches (the flex sizing
+    was still targeting the hidden <select> the dropdown replaced) and the
+    remove button is exactly the same height as it.
+  * "Repeating before" is laid out in even thirds — "From <lead>" on the left,
+    "before" dead centre, "every <cadence>" on the right.
+  * The View/Edit Note editor now mirrors the Create Case form 1:1: a fixed
+    two-column grid with petitioner details on the left and respondent details
+    on the right, matching control metrics, and the same Petitioner/Respondent
+    tab control instead of a dropdown. It also shows the live "Case Name (auto)"
+    preview — and saving a change to the party names RENAMES the case directory
+    to match (admin only), cascading calendar events with it.
+  * File uploads show a progress bar (Manage Case and Case Law), switching to
+    "Processing…" once the bytes are sent and the server is still working.
+  * The daily brief PDF no longer repeats your matters in a separate "Assigned
+    to you" table — each matter appears once, and the rows assigned to the
+    recipient are tinted instead.
+
+ -- Izumi <swarajswarupaggarwal@gmail.com>  Thu, 30 Jul 2026 17:40:00 +0530
+
 case-organizer (4.8.2) stable; urgency=high
 
   * URGENT login fix. The session cookie was Secure-by-default in production,

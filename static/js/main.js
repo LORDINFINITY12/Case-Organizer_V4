@@ -23,6 +23,67 @@ function _csrfToken() {
   return m ? m.content : '';
 }
 
+/**
+ * POST a FormData with upload progress.  fetch() cannot report how much of the
+ * body has gone out, so uploads go through XHR and drive a determinate bar.
+ * Resolves (never rejects) with { ok, status, data, text }.
+ */
+function uploadWithProgress(url, formData, onProgress){
+  return new Promise((resolve) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', url);
+    xhr.setRequestHeader('X-CSRF-Token', _csrfToken());
+    xhr.upload.addEventListener('progress', (e) => {
+      if (e.lengthComputable && typeof onProgress === 'function') {
+        onProgress(e.loaded / e.total);
+      }
+    });
+    // A fast (or fully buffered) upload can finish without ever emitting an
+    // intermediate progress event — LAN and loopback both do this.  Mark the
+    // send complete so the bar moves on to "Processing…" instead of sitting at 0%.
+    xhr.upload.addEventListener('load', () => {
+      if (typeof onProgress === 'function') onProgress(1);
+    });
+    const finish = () => {
+      let data = null;
+      try { data = JSON.parse(xhr.responseText); } catch (_e) { data = null; }
+      resolve({
+        ok: xhr.status >= 200 && xhr.status < 300,
+        status: xhr.status,
+        data,
+        text: xhr.responseText || '',
+      });
+    };
+    xhr.addEventListener('load', finish);
+    xhr.addEventListener('error', () => resolve({ ok: false, status: 0, data: null, text: '' }));
+    xhr.addEventListener('abort', () => resolve({ ok: false, status: 0, data: null, text: '' }));
+    xhr.send(formData);
+  });
+}
+
+/**
+ * Determinate progress bar appended to `host`.  Once the bytes are all sent the
+ * server is still validating/writing, so the label switches to "Processing…"
+ * rather than sitting at a misleading 100%.
+ */
+function makeProgressBar(host){
+  if (!host) return { set(){}, done(){} };
+  const wrap = el('div', 'upload-progress');
+  wrap.innerHTML = '<div class="upload-progress-track"><div class="upload-progress-bar"></div></div>'
+                 + '<span class="upload-progress-label">0%</span>';
+  host.appendChild(wrap);
+  const bar = wrap.querySelector('.upload-progress-bar');
+  const label = wrap.querySelector('.upload-progress-label');
+  return {
+    set(frac){
+      const pct = Math.max(0, Math.min(100, Math.round((frac || 0) * 100)));
+      bar.style.width = pct + '%';
+      label.textContent = pct >= 100 ? 'Processing…' : pct + '%';
+    },
+    done(){ wrap.remove(); },
+  };
+}
+
 const HTML_ESCAPE = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
 function escapeHtml(value){
   return String(value ?? '').replace(/[&<>\"']/g, ch => HTML_ESCAPE[ch] || ch);
@@ -431,7 +492,7 @@ const FILE_SUBCATS = {
     { group: "Summary Proceedings", items: ["Summary Suit (Order XXXVII CPC)","Summary Judgment","Recovery Suit","Other"] },
     { group: "Company / NCLT (Civil)", items: ["Oppression & Mismanagement","Reduction of Share Capital","Amalgamation","Merger","Restoration","Other"] },
     { group: "Writ Jurisdiction", items: ["Writ Petition (Article 226)","Supervisory Petition (Article 227)","Habeas Corpus","Mandamus","Certiorari","Prohibition","Quo Warranto","Other"] },
-    { group: "Supreme Court Constitutional", items: ["Writ Petition (Article 32)","Original Suit (Article 131)","Transfer Petition","Special Leave Petition (Civil)","Review Petition","Curative Petition","Other"] },
+    { group: "Supreme Court Constitutional", items: ["Writ Petition (Article 32)","Original Suit (Article 131)","Transfer Petition (Civil)","Special Leave Petition (Civil)","Review Petition","Curative Petition","Other"] },
     { group: "Motor Accident Claims (MACT)", items: ["Claim Petition","Compensation Enhancement Appeal","Insurance Recovery","Other"] },
     { group: "Service & Tribunals", items: ["Service Matter (CAT/SAT)","Departmental Appeal","RERA Complaint","Electricity Petition","Election Petition","Other"] },
   ],
@@ -468,7 +529,7 @@ const FILE_SUBCATS = {
     { group: "Arbitration", items: ["Domestic Arbitration","International Commercial Arbitration","Section 9","Section 11","Section 34","Section 36","Enforcement of Foreign Award","Other"] },
     { group: "Technology & Digital Commerce", items: ["IT Act","Data Protection","Software Licensing","SaaS Agreements","E-Commerce","Cyber Contracts","Domain Name Disputes","Other"] },
     { group: "High Court (Commercial)", items: ["Writ Petition (Article 226)","Supervisory Petition (Article 227)","Other"] },
-    { group: "Supreme Court (Commercial)", items: ["Writ Petition (Article 32)","Special Leave Petition","Review Petition","Curative Petition","Transfer Petition","Other"] },
+    { group: "Supreme Court (Commercial)", items: ["Writ Petition (Article 32)","Special Leave Petition","Review Petition","Curative Petition","Transfer Petition (Civil)","Other"] },
     { group: "Regulatory Tribunals", items: ["NCLAT Appeal","TDSAT (Telecom)","APTEL (Electricity)","MSME Facilitation","RERA (Commercial)","Other"] },
   ],
 };
@@ -2821,6 +2882,10 @@ function manageCaseForm(){
         caseSel.value = item.case;
         caseSel.dispatchEvent(new Event('change'));
         updateCaseActions();
+        // Picking a result resets the search: the case is now loaded on the
+        // Date tab, so a stale query and result list are just noise.
+        if (nameInput) nameInput.value = '';
+        nameResults.innerHTML = '';
       });
       nameResults.append(btn);
     });
@@ -3054,13 +3119,16 @@ function manageCaseForm(){
     fd.set('Date', $('#mc-date')?.value || '');
     selectedFiles.forEach(f => fd.append('file', f));
 
-    const r = await fetch('/manage-case/upload', { method: 'POST', headers: { 'X-CSRF-Token': _csrfToken() }, body: fd });
-    let data = null;
+    const progress = makeProgressBar(fileList);
+    let r;
     try {
-      data = await r.json();
-    } catch (_err) {
-      const raw = await r.text().catch(() => '');
-      const compact = (raw || '').replace(/\s+/g, ' ').trim();
+      r = await uploadWithProgress('/manage-case/upload', fd, (frac) => progress.set(frac));
+    } finally {
+      progress.done();
+    }
+    let data = r.data;
+    if (!data) {
+      const compact = (r.text || '').replace(/\s+/g, ' ').trim();
       const fallback = compact ? compact.slice(0, 220) : '';
       data = {
         ok: false,
@@ -3305,9 +3373,10 @@ function caseLawUploadForm(){
     fd.set('note', note);
     fd.append('file', file);
 
+    const progress = makeProgressBar(fileLabel?.parentElement);
     try {
-      const resp = await fetch('/case-law/upload', { method: 'POST', headers: { 'X-CSRF-Token': _csrfToken() }, body: fd });
-      const data = await resp.json().catch(()=>({}));
+      const resp = await uploadWithProgress('/case-law/upload', fd, (frac) => progress.set(frac));
+      const data = resp.data || {};
       if (!resp.ok || !data.ok) {
         throw new Error(data.msg || `HTTP ${resp.status}`);
       }
@@ -3330,6 +3399,8 @@ function caseLawUploadForm(){
       }
     } catch (err) {
       alert(`Upload failed: ${err.message || err}`);
+    } finally {
+      progress.done();
     }
   });
 }
@@ -3878,9 +3949,45 @@ function bindGlobalNotesModalHandlers(){
       if (tpl && tpl.content) {
         mount.appendChild(tpl.content.cloneNode(true));
         const form = document.getElementById('notesCaseForm');
-        if (form) convertAllSelectsToLLD(form);
+        if (form) {
+          convertAllSelectsToLLD(form);
+          wireCaseNoteParties(form);
+        }
       }
     }
+  }
+
+  /** Sync the hidden "We're Representing" value from the Create-Case style tabs. */
+  function setNoteParty(value){
+    const hidden = document.getElementById('note-case-party');
+    if (hidden) hidden.value = value || '';
+    document.querySelectorAll('#notesCaseForm .op-tab').forEach((tab) => {
+      const on = tab.dataset.value === value;
+      tab.classList.toggle('active', on);
+      tab.setAttribute('aria-selected', String(on));
+    });
+  }
+
+  /** Live "Case Name (auto)" preview — mirrors Create Case, and is what the case
+   *  folder gets renamed to on save. */
+  function noteDerivedCaseName(){
+    const pn = (document.getElementById('note-case-pn')?.value || '').trim();
+    const rn = (document.getElementById('note-case-rn')?.value || '').trim();
+    return (pn && rn) ? `${pn} v. ${rn}` : '';
+  }
+
+  function refreshNoteCaseNamePreview(){
+    const preview = document.getElementById('note-case-name-preview');
+    if (preview) preview.value = noteDerivedCaseName();
+  }
+
+  function wireCaseNoteParties(form){
+    form.querySelectorAll('.op-tab').forEach((tab) => {
+      tab.addEventListener('click', () => setNoteParty(tab.dataset.value));
+    });
+    ['note-case-pn', 'note-case-rn'].forEach((id) => {
+      form.querySelector('#' + id)?.addEventListener('input', refreshNoteCaseNamePreview);
+    });
   }
 
   const getVal = (id) => {
@@ -4157,9 +4264,8 @@ function bindGlobalNotesModalHandlers(){
       setVal('note-case-rn', data.respondentName);
       setVal('note-case-ra', data.respondentAddress);
       setVal('note-case-rc', data.respondentContact);
-      if (casePartySel) {
-        casePartySel.value = data.ourParty || '';
-      }
+      setNoteParty(data.ourParty || '');
+      refreshNoteCaseNamePreview();
       setCaseCategoryOptions(data.caseCategory || '');
       setVal('note-case-origin-state', data.originState);
       setVal('note-case-origin-district', data.originDistrict);
@@ -4579,6 +4685,9 @@ function bindGlobalNotesModalHandlers(){
       rawContent = payloadContent;
       originalContent = rawContent;
       showClientFlash(intent === 'create' ? 'Note.json created.' : 'Notes saved.', 'success');
+      // The folder name follows the party names, exactly as Create Case derives
+      // it.  Done after the write so the note lands before the path moves.
+      await maybeRenameCaseFolder(year, month, cname);
       modal.dataset.intent = 'update';
       setState('view');
       if (typeof window.__refreshNoteButton === 'function') {
@@ -4587,6 +4696,45 @@ function bindGlobalNotesModalHandlers(){
     } catch (err) {
       showClientFlash(`Save failed: ${err.message || err}`, 'error');
     }
+  }
+
+  /**
+   * Rename the case directory when the party names now derive a different case
+   * name.  The note itself is already saved, so a failure here is reported
+   * without losing the edit (renaming is admin-only).
+   */
+  async function maybeRenameCaseFolder(year, month, cname){
+    const derived = noteDerivedCaseName();
+    if (!derived || derived === cname) return;
+    let data = {};
+    try {
+      const resp = await fetch('/api/rename-case', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': _csrfToken() },
+        body: JSON.stringify({ year, month, case: cname, new_name: derived }),
+      });
+      data = await resp.json().catch(() => ({}));
+      if (!resp.ok || !data.ok) {
+        showClientFlash(
+          `Notes saved, but the case folder was not renamed: ${data.msg || 'HTTP ' + resp.status}`,
+          'error');
+        return;
+      }
+    } catch (err) {
+      showClientFlash(`Notes saved, but the case folder was not renamed: ${err.message || err}`, 'error');
+      return;
+    }
+
+    if (noteContext) noteContext.caseName = derived;
+    // Keep the Manage Case picker pointing at the case under its new name.
+    const caseSel = document.getElementById('mc-case');
+    if (caseSel) {
+      Array.from(caseSel.options).forEach((opt) => {
+        if (opt.value === cname) { opt.value = derived; opt.textContent = derived; }
+      });
+      if (caseSel.value === cname) caseSel.value = derived;
+    }
+    showClientFlash(`Case folder renamed to “${derived}”.`, 'success');
   }
 
   function handleCancel(){
