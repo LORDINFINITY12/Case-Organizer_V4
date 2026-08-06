@@ -1,0 +1,22 @@
+{
+  "name": "Case Organizer",
+  "short_name": "Case Organizer",
+  "description": "Case files, calendar, invoices and case law for a legal practice.",
+  "display": "standalone",
+  "start_url": "/",
+  "scope": "/",
+  "background_color": "#101317",
+  "theme_color": "#101317",
+  "icons": [
+    {
+      "src": "/static/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/static/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}

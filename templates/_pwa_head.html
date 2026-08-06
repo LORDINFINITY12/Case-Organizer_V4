@@ -1,0 +1,19 @@
+{# Home-screen install support (iOS Safari + Android/Chrome).
+
+   Included from every page's <head>. Purely additive metadata: it changes
+   nothing for a normal browser tab, it only lets the site be added to the home
+   screen and launched without browser chrome.
+
+   The colours match the app's dark theme (--bg #101317), which is the default,
+   so the standalone splash and status bar do not flash white on launch. #}
+<link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
+<meta name="theme-color" content="#101317">
+
+{# iOS ignores the manifest's display mode; these are what give it a chromeless
+   launch, and the title shown under the home-screen icon. #}
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Case Organizer">
+<link rel="apple-touch-icon" href="{{ url_for('static', filename='icons/apple-touch-icon.png') }}">
+<link rel="apple-touch-icon" sizes="180x180" href="{{ url_for('static', filename='icons/apple-touch-icon.png') }}">

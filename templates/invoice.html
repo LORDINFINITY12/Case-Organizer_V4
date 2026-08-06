@@ -24,6 +24,7 @@
   <link rel="stylesheet" href="{{ static_url('css/style.css') }}" />
   <link rel="icon" type="image/png" href="{{ url_for('static', filename='img/Case_Organizer_logo.png') }}" />
   <link rel="stylesheet" href="{{ static_url('css/invoice.css') }}" />
+  {% include '_pwa_head.html' %}
 </head>
 <body data-role="{{ current_user.role if current_user else '' }}">
   <div class="app-shell">
