@@ -163,3 +163,59 @@ class TestDeleteCertificate:
     def test_unknown_id_404(self, client, test_admin, fsroot):
         _login_as(client, test_admin)
         assert client.delete("/api/certificates/99999", headers=CSRF).status_code == 404
+
+
+class TestDownloadRecords:
+    """Manage Records offers download alongside delete."""
+
+    def test_admin_downloads_certificate(self, client, test_admin, db, fsroot):
+        cid, pdf = _seed_certificate(db, fsroot, number="10/C/26")
+        _login_as(client, test_admin)
+        resp = client.get(f"/api/certificates/{cid}/download")
+        assert resp.status_code == 200
+        assert resp.data == pdf.read_bytes()
+        assert "attachment" in resp.headers.get("Content-Disposition", "")
+        # the row and the file both survive a download
+        assert db.execute("SELECT 1 FROM certificates WHERE id = ?", (cid,)).fetchone()
+        assert pdf.exists()
+
+    def test_admin_downloads_legal_notice(self, client, test_admin, db, fsroot):
+        nid, pdf = _seed_notice(db, fsroot, number="10/LN/26")
+        _login_as(client, test_admin)
+        resp = client.get(f"/api/legal-notices/{nid}/download")
+        assert resp.status_code == 200
+        assert resp.data == pdf.read_bytes()
+        assert "attachment" in resp.headers.get("Content-Disposition", "")
+
+    def test_missing_file_reports_404_not_500(self, client, test_admin, db, fsroot):
+        cid, _ = _seed_certificate(db, fsroot, number="11/C/26", with_file=False)
+        _login_as(client, test_admin)
+        assert client.get(f"/api/certificates/{cid}/download").status_code == 404
+
+    def test_unknown_id_404(self, client, test_admin, fsroot):
+        _login_as(client, test_admin)
+        assert client.get("/api/certificates/99999/download").status_code == 404
+        assert client.get("/api/legal-notices/99999/download").status_code == 404
+
+    def test_non_admin_cannot_download(self, client, test_user, db, fsroot):
+        cid, _ = _seed_certificate(db, fsroot, number="12/C/26")
+        nid, _ = _seed_notice(db, fsroot, number="12/LN/26")
+        _login_as(client, test_user)
+        assert client.get(f"/api/certificates/{cid}/download").status_code in (302, 403)
+        assert client.get(f"/api/legal-notices/{nid}/download").status_code in (302, 403)
+
+    def test_path_outside_storage_root_refused(self, client, test_admin, db, fsroot, tmp_path):
+        """A row whose file_path escapes FS_ROOT must not be served."""
+        outside = tmp_path / "outside.pdf"
+        outside.write_bytes(b"%PDF-1.4 secret")
+        db.execute(
+            "INSERT INTO certificates(certificate_number, intern_name, file_path,"
+            " payload_json, generated_by) VALUES(?, ?, ?, '{}', NULL)",
+            ("13/C/26", "Asha Intern", str(outside)),
+        )
+        db.commit()
+        cid = db.execute(
+            "SELECT id FROM certificates WHERE certificate_number = ?", ("13/C/26",)
+        ).fetchone()["id"]
+        _login_as(client, test_admin)
+        assert client.get(f"/api/certificates/{cid}/download").status_code == 404

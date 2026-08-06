@@ -5192,3 +5192,293 @@ document.addEventListener('submit', (e) => {
     e.preventDefault();
   }
 }, true);
+
+/* ==========================================================================
+   Phone chrome.
+
+   Front-end only: no template or backend change. Everything below is built at
+   runtime and ONLY on small screens — on a desktop viewport this block exits
+   immediately and the DOM is untouched.
+
+   The drawer is populated by cloning the existing .user-menu-item links, so it
+   always lists exactly what the server rendered for this user's role (interns
+   see no generators, non-admins see no Settings) and can never drift from the
+   real navigation.
+   ========================================================================== */
+(function () {
+  'use strict';
+
+  const MOBILE = window.matchMedia('(max-width: 640px)');
+  if (!MOBILE.matches) return;
+  if (document.getElementById('m-bottombar')) return;      // already built
+  if (document.body.classList.contains('login-body')) return;  // login has no chrome
+
+  const ICON = (cls) => `<i class="fa-solid ${cls}" aria-hidden="true"></i>`;
+
+  /* ---------- drawer, cloned from the server-rendered account menu ---------- */
+
+  const drawer = document.createElement('nav');
+  drawer.id = 'm-drawer';
+  drawer.className = 'm-drawer';
+  drawer.setAttribute('aria-label', 'All pages');
+  drawer.hidden = true;
+
+  const sheet = document.createElement('div');
+  sheet.className = 'm-drawer-sheet';
+
+  // Who am I? Read it from the account toggle the server rendered (hidden on
+  // phones), so the drawer always names the signed-in user.
+  const toggle = document.querySelector('.user-menu-toggle');
+  const who = toggle ? toggle.textContent.trim() : '';
+  const role = document.body.dataset.role || '';
+  const initial = who ? who.trim().charAt(0).toUpperCase() : '?';
+
+  sheet.innerHTML =
+      '<div class="m-drawer-grip" aria-hidden="true"></div>'
+    + (who
+        ? '<div class="m-drawer-account">'
+        +   '<span class="m-drawer-avatar" aria-hidden="true">' + initial + '</span>'
+        +   '<span class="m-drawer-who">'
+        +     '<span class="m-drawer-email"></span>'
+        +     (role ? '<span class="m-drawer-role">' + role + '</span>' : '')
+        +   '</span>'
+        + '</div>'
+        : '')
+    + '<h2 class="m-drawer-title">Go to</h2>';
+
+  // Set the address as text, never as HTML.
+  const emailEl = sheet.querySelector('.m-drawer-email');
+  if (emailEl) emailEl.textContent = who;
+
+  const grid = document.createElement('div');
+  grid.className = 'm-drawer-grid';
+
+  // Home is not in the account menu, so it leads the list.
+  const brand = document.querySelector('a.brand');
+  const dest = [];
+  if (brand) dest.push({ href: brand.getAttribute('href'), icon: 'fa-house', label: 'Home' });
+  document.querySelectorAll('.user-menu-item').forEach((a) => {
+    const label = a.querySelector('.user-menu-label');
+    const i = a.querySelector('i');
+    dest.push({
+      href: a.getAttribute('href'),
+      icon: i ? i.className.replace('fa-solid', '').trim() : 'fa-link',
+      label: label ? label.textContent.trim() : a.textContent.trim(),
+      badge: a.querySelector('.badge') ? a.querySelector('.badge').textContent.trim() : '',
+    });
+  });
+
+  const here = location.pathname;
+  dest.forEach((d) => {
+    const a = document.createElement('a');
+    a.className = 'm-drawer-item' + (d.href === here ? ' active' : '');
+    a.href = d.href;
+    a.innerHTML = `<span class="m-drawer-icon">${ICON(d.icon)}</span>`
+                + `<span class="m-drawer-label">${d.label}</span>`
+                + (d.badge ? `<span class="m-drawer-badge">${d.badge}</span>` : '');
+    grid.appendChild(a);
+  });
+
+  sheet.appendChild(grid);
+
+  // Sign out sits apart from navigation.
+  const logout = document.querySelector('a[href*="logout"], form[action*="logout"] button');
+  if (logout) {
+    const out = document.createElement('a');
+    out.className = 'm-drawer-item danger';
+    out.href = logout.tagName === 'A' ? logout.getAttribute('href') : '#';
+    out.innerHTML = `<span class="m-drawer-icon">${ICON('fa-right-from-bracket')}</span>`
+                  + '<span class="m-drawer-label">Sign out</span>';
+    if (logout.tagName !== 'A') {
+      out.addEventListener('click', (e) => { e.preventDefault(); logout.click(); });
+    }
+    sheet.appendChild(out);
+  }
+
+  drawer.appendChild(sheet);
+  document.body.appendChild(drawer);
+
+  function openDrawer() {
+    drawer.hidden = false;
+    requestAnimationFrame(() => drawer.classList.add('open'));
+    document.body.classList.add('m-locked');
+  }
+  function closeDrawer() {
+    drawer.classList.remove('open');
+    document.body.classList.remove('m-locked');
+    setTimeout(() => { drawer.hidden = true; }, 200);
+  }
+  drawer.addEventListener('click', (e) => { if (e.target === drawer) closeDrawer(); });
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && !drawer.hidden) closeDrawer();
+  });
+
+  /* ---------- bottom bar ---------- */
+
+  const bar = document.createElement('nav');
+  bar.id = 'm-bottombar';
+  bar.className = 'm-bottombar';
+  bar.setAttribute('aria-label', 'Primary');
+
+  const find = (frag) => dest.find((d) => d.href && d.href.indexOf(frag) !== -1);
+  const tabs = [
+    { href: brand ? brand.getAttribute('href') : '/', icon: 'fa-house', label: 'Home' },
+    find('/calendar') && { href: find('/calendar').href, icon: 'fa-calendar-days', label: 'Calendar' },
+    find('/messages') && { href: find('/messages').href, icon: 'fa-envelope', label: 'Mail',
+                           badge: (find('/messages') || {}).badge },
+  ].filter(Boolean);
+
+  tabs.forEach((t) => {
+    const a = document.createElement('a');
+    a.className = 'm-tabbtn' + (t.href === here ? ' active' : '');
+    a.href = t.href;
+    a.innerHTML = ICON(t.icon)
+                + `<span>${t.label}</span>`
+                + (t.badge ? `<span class="m-tab-badge">${t.badge}</span>` : '');
+    bar.appendChild(a);
+  });
+
+  const more = document.createElement('button');
+  more.type = 'button';
+  more.className = 'm-tabbtn';
+  more.setAttribute('aria-haspopup', 'true');
+  more.innerHTML = ICON('fa-bars') + '<span>Menu</span>';
+  more.addEventListener('click', () => (drawer.hidden ? openDrawer() : closeDrawer()));
+  bar.appendChild(more);
+
+  document.body.appendChild(bar);
+  document.body.classList.add('m-has-bottombar');
+
+  /* ---------- the open form sits directly under the card that opened it ---
+     On desktop #form-host is a section below the whole card grid, which is fine
+     when the grid is 2x2. Stacked on a phone that puts the form three cards
+     below the one you tapped. Move the host under the active card instead; the
+     remaining cards flow beneath it. */
+  const cardGrid = document.querySelector('.cards-grid');
+  const formHost = document.getElementById('form-host');
+  if (cardGrid && formHost) {
+    const homeForCards = formHost.parentElement;
+    const hostAnchor = document.createComment('form-host-home');
+    homeForCards.insertBefore(hostAnchor, formHost);
+
+    document.addEventListener('click', (e) => {
+      const card = e.target.closest('.card.selectable');
+      if (!card || !cardGrid.contains(card)) return;
+      setTimeout(() => {
+        if (card.classList.contains('active') && formHost.innerHTML.trim()) {
+          card.insertAdjacentElement('afterend', formHost);
+          formHost.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+        } else {
+          // Toggled off (or another card took over): park it back where it lives.
+          hostAnchor.parentNode.insertBefore(formHost, hostAnchor.nextSibling);
+        }
+      }, 80);
+    });
+  }
+
+  /* ---------- long-press opens the case action menu -----------------------
+     There is no right-click on a phone, and the desktop menu is positioned at
+     the pointer. Long-press (500ms) opens it, and the CSS presents it as a
+     bottom sheet with a backdrop rather than a floating menu at a coordinate. */
+  (function () {
+    let timer = null, startY = 0, fired = false;
+
+    function sheetFor(menu) {
+      if (!menu) return;
+      document.querySelectorAll('.m-menu-backdrop').forEach((b) => b.remove());
+      const back = document.createElement('div');
+      back.className = 'm-menu-backdrop';
+      document.body.appendChild(back);
+      const close = () => {
+        menu.classList.remove('open');
+        back.remove();
+      };
+      back.addEventListener('click', close);
+      menu.querySelectorAll('button, a').forEach((b) => b.addEventListener('click', close, { once: true }));
+      menu.classList.add('open');
+    }
+
+    document.addEventListener('touchstart', (e) => {
+      const row = e.target.closest('.result-item, .mc-name-result, [data-case-row]');
+      if (!row) return;
+      fired = false;
+      startY = e.touches[0].clientY;
+      timer = setTimeout(() => {
+        const btn = row.querySelector('.case-menu-btn, [data-case-menu], .icon-btn');
+        fired = true;
+        if (btn) { btn.click(); setTimeout(() => sheetFor(document.querySelector('.case-action-menu.open')), 30); }
+        else { row.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, clientX: 0, clientY: 0 }));
+               setTimeout(() => sheetFor(document.querySelector('.case-action-menu.open')), 30); }
+      }, 500);
+    }, { passive: true });
+
+    const cancel = (e) => {
+      if (timer && e.touches && e.touches[0] && Math.abs(e.touches[0].clientY - startY) > 12) {
+        clearTimeout(timer); timer = null;                    // treat as a scroll
+      }
+    };
+    document.addEventListener('touchmove', cancel, { passive: true });
+    document.addEventListener('touchend', (e) => {
+      if (timer) { clearTimeout(timer); timer = null; }
+      if (fired) { e.preventDefault(); fired = false; }        // don't also open the case
+    });
+  })();
+
+  /* ---------- calendar: tap a day to select, tap again to open it -------
+     On desktop the day agenda is a side column. On a phone that column ends up
+     below the fold, so the day you tapped appears to do nothing. Here it
+     becomes a sheet you push into, iOS-style, and pop back out of. */
+  const calGrid = document.getElementById('cal-month-grid');
+  const calSide = document.querySelector('.cal-side');
+  if (calGrid && calSide) {
+    const backdrop = document.createElement('div');
+    backdrop.className = 'm-day-backdrop';
+    document.body.appendChild(backdrop);
+
+    const head = document.createElement('div');
+    head.className = 'm-day-head';
+    head.innerHTML = '<button type="button" class="m-day-back" aria-label="Back to month">'
+                   + '<i class="fa-solid fa-chevron-left"></i></button>'
+                   + '<span class="m-day-title"></span>';
+    calSide.insertBefore(head, calSide.firstChild);
+
+    const title = head.querySelector('.m-day-title');
+
+    function openDay() {
+      // Mirror whatever the agenda is showing as the sheet's title.
+      const h = calSide.querySelector('.cal-side-title, h2, h3');
+      title.textContent = h ? h.textContent.trim() : 'Day';
+      document.body.classList.add('m-day-open');
+      calSide.scrollTop = 0;
+    }
+    function closeDay() { document.body.classList.remove('m-day-open'); }
+
+    head.querySelector('.m-day-back').addEventListener('click', closeDay);
+    backdrop.addEventListener('click', closeDay);
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && document.body.classList.contains('m-day-open')) closeDay();
+    });
+
+    // Capture phase: read `selected` BEFORE calendar.js re-renders the grid, so
+    // "already selected" means this is the second tap on the same day.
+    calGrid.addEventListener('click', (e) => {
+      const cell = e.target.closest('.cal-cell');
+      if (!cell || cell.classList.contains('other-month')) return;
+      if (cell.classList.contains('selected')) setTimeout(openDay, 60);
+    }, true);
+
+    // Opening the event modal from inside the sheet would trap it behind the
+    // backdrop; drop the sheet first.
+    calSide.addEventListener('click', (e) => {
+      const t = e.target.closest('button, a');
+      if (!t) return;
+      // Controls that belong to the sheet itself (its Day/Case tabs, the swap
+      // button, the back chevron) must NOT dismiss it — only things that open a
+      // modal on top should, so the modal is not trapped behind the backdrop.
+      if (t.classList.contains('m-day-back')) return;
+      if (t.closest('.cal-side-tabs, .cal-side-head, .m-day-head')) return;
+      if (t.hasAttribute('data-cal-tab') || t.classList.contains('mc-tab')) return;
+      setTimeout(closeDay, 30);
+    });
+  }
+})();

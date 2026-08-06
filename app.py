@@ -4159,7 +4159,6 @@ def api_update_note(year, month, case_name):
         return jsonify({"ok": False, "msg": "Write failed."}), 500
 
 
-
 # ---- API: Create Note.json --------------------------------
 @app.post("/api/create-note")
 @require_login_api
@@ -6045,6 +6044,30 @@ def api_certificate_delete(cid: int):
     return jsonify({"ok": True})
 
 
+# ---- GET /api/certificates/<id>/download — fetch the stored PDF -----------
+@app.get("/api/certificates/<int:cid>/download")
+@require_admin
+def api_certificate_download(cid: int):
+    """Send a certificate's stored PDF back as a download (admin only).
+
+    The registry stores the path written at generation time, and a record can
+    outlive its file, so a missing file is reported rather than raising.
+    """
+    conn = get_app_db()
+    row = conn.execute(
+        "SELECT certificate_number, file_path FROM certificates WHERE id = ?", (cid,)
+    ).fetchone()
+    if not row:
+        return "Certificate not found.", 404
+    try:
+        disk_path = _safe_path(Path(row["file_path"]), FS_ROOT)
+    except (ValueError, OSError):
+        return "Certificate file is outside the storage root.", 404
+    if not disk_path.is_file():
+        return "The stored PDF for this certificate is no longer on disk.", 404
+    return send_file(disk_path, as_attachment=True, download_name=disk_path.name)
+
+
 # ════════════════════════════════════════════════════════════════════
 # VAKALATNAMA LIBRARY
 # ════════════════════════════════════════════════════════════════════
@@ -6689,6 +6712,26 @@ def api_legal_notice_delete(nid: int):
     conn.execute("DELETE FROM legal_notices WHERE id = ?", (nid,))
     conn.commit()
     return jsonify({"ok": True})
+
+
+# ---- GET /api/legal-notices/<id>/download — fetch the stored PDF ---------
+@app.get("/api/legal-notices/<int:nid>/download")
+@require_admin
+def api_legal_notice_download(nid: int):
+    """Send a legal notice's stored PDF back as a download (admin only)."""
+    conn = get_app_db()
+    row = conn.execute(
+        "SELECT notice_number, file_path FROM legal_notices WHERE id = ?", (nid,)
+    ).fetchone()
+    if not row:
+        return "Legal notice not found.", 404
+    try:
+        disk_path = _safe_path(Path(row["file_path"]), FS_ROOT)
+    except (ValueError, OSError):
+        return "Legal notice file is outside the storage root.", 404
+    if not disk_path.is_file():
+        return "The stored PDF for this legal notice is no longer on disk.", 404
+    return send_file(disk_path, as_attachment=True, download_name=disk_path.name)
 
 
 # ---- POST /api/legal-notices/add-to-case — copy a notice into a case -----

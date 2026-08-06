@@ -1,3 +1,38 @@
+case-organizer (4.9) stable; urgency=medium
+
+  * Mobile front end. The app is now usable on a phone, built entirely in the
+    front end: a media query below 640px plus a script block that exits
+    immediately on anything wider. No template, route or backend change, so the
+    desktop layout and workflow are untouched.
+    - Every interactive control is at least 44px tall, and inputs render at
+      16px so iOS stops zooming on focus.
+    - Multi-column forms stack. .form-card is a grid whose implicit column
+      sizes to max-content, which pushed the Manage Case fields 18px past the
+      screen edge and took 30 elements off-screen with them.
+    - Modals become full-width sheets with their own scroll container, a
+      sticky header, and a sticky action bar, so Save and Cancel stay reachable
+      on a long form. Previously the action row sat below the fold, under the
+      phone's address bar, and the mobile navigation bar painted over it.
+    - A bottom navigation bar and a drawer listing every page, built by cloning
+      the account menu the server already renders, so it cannot drift and stays
+      correct per role. The drawer names the signed-in account, and logout
+      leaves the top bar entirely rather than sitting under the thumb.
+    - The card that opens a form now holds it directly beneath itself, with the
+      remaining cards pushed below; only one form is open at a time.
+    - Calendar: the day agenda is a sheet you push into (tap to select, tap
+      again to open) instead of a side column below the fold. Month grid shows
+      per-day dots; the month navigation no longer runs off both edges.
+    - Invoice: the A4 line-item table becomes one labelled card per item, and
+      every contenteditable value renders as a real, visible field.
+    - Long-press on a search result opens the case action menu as a bottom
+      sheet, since there is no right-click on a phone.
+  * Manage Records: each legal notice and certificate can now be downloaded as
+    well as deleted, via /api/certificates/<id>/download and
+    /api/legal-notices/<id>/download (admin only, path-checked against the
+    storage root).
+
+ -- Izumi <swarajswarupaggarwal@gmail.com>  Thu, 06 Aug 2026 23:55:00 +0530
+
 case-organizer (4.8.3) stable; urgency=high
 
   * URGENT calendar fix. An overdue task or deadline is open-ended, and the

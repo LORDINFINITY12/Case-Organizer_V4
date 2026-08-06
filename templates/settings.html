@@ -322,7 +322,13 @@
                       <td>{{ rec.notice_number }}</td>
                       <td>{{ rec.recipient_name }}</td>
                       <td>{{ rec.created_at }}</td>
-                      <td>
+                      <td class="record-actions">
+                        <a class="icon-btn record-download-btn"
+                           href="{{ url_for('api_legal_notice_download', nid=rec.id) }}"
+                           title="Download notice PDF"
+                           aria-label="Download notice {{ rec.notice_number }}">
+                          <i class="fa-solid fa-download"></i>
+                        </a>
                         <button type="button" class="icon-btn icon-danger record-delete-btn"
                                 data-record-kind="legal-notices" data-record-id="{{ rec.id }}"
                                 data-record-label="notice {{ rec.notice_number }}"
@@ -358,7 +364,13 @@
                       <td>{{ rec.certificate_number }}</td>
                       <td>{{ rec.intern_name }}</td>
                       <td>{{ rec.created_at }}</td>
-                      <td>
+                      <td class="record-actions">
+                        <a class="icon-btn record-download-btn"
+                           href="{{ url_for('api_certificate_download', cid=rec.id) }}"
+                           title="Download certificate PDF"
+                           aria-label="Download certificate {{ rec.certificate_number }}">
+                          <i class="fa-solid fa-download"></i>
+                        </a>
                         <button type="button" class="icon-btn icon-danger record-delete-btn"
                                 data-record-kind="certificates" data-record-id="{{ rec.id }}"
                                 data-record-label="certificate {{ rec.certificate_number }}"

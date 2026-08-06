@@ -1882,6 +1882,21 @@ input[type="number"].year-input {
     filter: brightness(0.98);
 }
 
+/* Records tables: download sits beside delete in the trailing action cell. */
+.record-actions {
+    display: flex;
+    gap: 6px;
+    justify-content: flex-end;
+    white-space: nowrap;
+}
+.record-download-btn {
+    color: var(--text);
+}
+.record-download-btn:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+}
+
 .case-action-menu {
     position: fixed;
     z-index: 9999;
@@ -3718,4 +3733,1051 @@ input[type="number"].year-input {
 :root:not([data-theme="dark"]) .bento-tool-shell .category-filter:not(.active):hover {
     background-color: #eef2f7;   /* was #374151 */
     color: #1f2430;
+}
+
+/* ==========================================================================
+   Phone layout (<= 640px).
+
+   Front-end only, and scoped entirely inside this media query, so no rule
+   here can apply to the desktop layout. The markup and JavaScript are the
+   desktop's, unchanged, which is what keeps functionality identical on both.
+   ========================================================================== */
+@media (max-width: 640px) {
+
+    /* The search row is a 1fr/auto/auto grid; at phone width the button is
+       pushed past the right edge and clipped. Stack it instead. */
+    .search-row {
+        grid-template-columns: 1fr;
+    }
+    .search-row > button {
+        width: 100%;
+    }
+
+    /* Modals had no height cap and no scroll container, so any form taller
+       than the screen put its own Save button out of reach. Present them as a
+       full-width sheet that scrolls internally. */
+    .modal {
+        place-items: end stretch;
+        /* Above the bottom nav (z-index 60), which was covering the action row
+           and hiding Save/Cancel entirely. */
+        z-index: 100 !important;
+    }
+    .modal-content {
+        width: 100%;
+        max-height: 92dvh;
+        overflow-y: auto;
+        -webkit-overflow-scrolling: touch;
+        border-radius: 16px 16px 0 0;
+        /* No top/bottom padding on the scroll container: the sticky header sits
+           at scroll-top, so any padding above it leaves a gap through which the
+           scrolled content shows over the title. The header and action bar
+           supply their own padding instead. */
+        padding-top: 0 !important;
+        padding-bottom: 0 !important;
+    }
+
+    /* Submit/Cancel pinned to the bottom of the sheet's own scroll container, so
+       they are reachable no matter how long the form is or where the phone's
+       browser chrome happens to be. Previously they sat at the end of the
+       scrolled content, below the fold and under the address bar. */
+    /* No negative margins: with border-box children at width:100% they push the
+       row past the sheet's edge and give the whole modal a horizontal scroll. */
+    .modal-content .modal-actions {
+        position: sticky;
+        bottom: 0;
+        z-index: 3;
+        display: flex !important;
+        gap: 8px;
+        width: 100%;
+        margin: 12px 0 0 !important;
+        padding: 12px 0 calc(12px + env(safe-area-inset-bottom, 0px));
+        background: var(--card);
+        border-top: 1px solid var(--input-border, #e6e8ef);
+    }
+    .modal-content .modal-actions > * {
+        flex: 1 1 0;
+        min-height: 48px;
+        margin: 0 !important;
+    }
+    /* Sticky header so you always know which sheet you are in. */
+    .modal-content .modal-head {
+        position: sticky;
+        top: 0;
+        z-index: 6;
+        background: var(--card);
+        width: 100%;
+        margin: 0 0 10px !important;
+        padding: 14px 0 10px;
+        border-bottom: 1px solid var(--input-border, #e6e8ef);
+    }
+
+    /* Nothing inside a sheet may exceed it, and the sheet never scrolls
+       sideways. */
+    .modal-content { overflow-x: hidden !important; }
+    .modal-content * { max-width: 100% !important; min-width: 0 !important; }
+    .modal-content .form-grid,
+    .modal-content .case-picker,
+    .modal-content .mc-name-search,
+    .modal-content .cal-field {
+        display: block !important;
+        width: 100% !important;
+    }
+    .modal-content .form-grid > *,
+    .modal-content .case-picker > *,
+    .modal-content .mc-name-search > * {
+        width: 100% !important;
+        margin: 0 0 10px !important;
+    }
+
+    /* ---- inside a sheet: rows that were multi-column on desktop ---------
+       min-width:0 lets these shrink, which is what stops the sheet scrolling
+       sideways — but three columns in ~350px squeezes each control to a stub.
+       Stack them instead, full width, labels leading. */
+    .modal-content .rem-repeat,
+    .modal-content .participant-row,
+    .modal-content .cal-time-fields {
+        display: block !important;
+    }
+    .modal-content .rem-repeat > *,
+    .modal-content .participant-row > *,
+    .modal-content .cal-time-fields > * {
+        width: 100% !important;
+        margin: 0 0 8px !important;
+        justify-content: flex-start !important;
+        text-align: left !important;
+    }
+    .modal-content .rem-repeat .ll-dropdown,
+    .modal-content .participant-row .ll-dropdown,
+    .modal-content .participant-row select,
+    .modal-content .participant-row input {
+        width: 100% !important;
+    }
+    /* Reminder repeat block, laid out as:
+           From
+           [ lead dropdown            ]
+           before                every
+           [ cadence dropdown         ]
+       `display: contents` on the every-label lifts its word and its dropdown
+       into the same grid, so "before" and "every" can share one row. */
+    .modal-content .rem-repeat {
+        display: grid !important;
+        grid-template-columns: 1fr 1fr;
+        gap: 2px 10px;
+        align-items: center;
+    }
+    .modal-content .rem-lead-field {
+        grid-column: 1 / -1;
+        display: block !important;
+    }
+    .modal-content .rem-before-word {
+        grid-column: 1;
+        justify-self: start;
+        text-align: left !important;
+        width: auto !important;
+        margin: 6px 0 2px !important;
+        font-size: 0.82rem;
+        color: var(--muted);
+    }
+    .modal-content .rem-every-wrap { display: contents !important; }
+    /* display:contents beats the UA's [hidden] rule, so re-hide explicitly. */
+    .modal-content .rem-every-wrap[hidden] { display: none !important; }
+    .modal-content .rem-every-word {
+        grid-column: 2;
+        justify-self: end;
+        text-align: right !important;
+        width: auto !important;
+        margin: 6px 0 2px !important;
+        font-size: 0.82rem;
+        color: var(--muted);
+    }
+    .modal-content .rem-every-wrap .ll-dropdown {
+        grid-column: 1 / -1;
+        width: 100% !important;
+        margin: 0 !important;
+    }
+
+    /* Who-appeared: name and remove share a row instead of the × dangling on a
+       line of its own. */
+    .modal-content .participant-row {
+        display: grid !important;
+        grid-template-columns: 1fr 48px;
+        gap: 8px;
+        align-items: center;
+    }
+    .modal-content .participant-row > *:nth-child(1) { grid-column: 1 / -1; }
+    .modal-content .participant-row > *:nth-child(2) { grid-column: 1; margin: 0 !important; }
+    .modal-content .participant-row > *:nth-child(3) {
+        grid-column: 2;
+        width: 48px !important;
+        min-width: 48px !important;
+        height: 48px !important;
+        margin: 0 !important;
+        justify-self: end;
+        /* Sizing the box alone left the glyph sitting in the corner: the button
+           keeps its inherited padding and line-height. Centre the content. */
+        display: inline-flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        padding: 0 !important;
+        line-height: 1 !important;
+        font-size: 16px;
+        text-align: center;
+    }
+    .modal-content .participant-row > *:nth-child(3) > * {
+        margin: 0 !important;
+        line-height: 1 !important;
+    }
+    /* Same for every other square icon button inside a sheet. */
+    .modal-content .rem-del,
+    .modal-content .cite-remove,
+    .modal-content button[aria-label*="emove"],
+    .modal-content .icon-btn {
+        display: inline-flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        padding: 0 !important;
+        line-height: 1 !important;
+    }
+
+    /* Remove buttons stay square instead of stretching to the full row. */
+    .modal-content .rem-del,
+    .modal-content .participant-row .btn-ghost.pr-remove,
+    .modal-content .participant-row button[class*="remove"] {
+        width: 48px !important;
+        min-width: 48px !important;
+        flex: 0 0 48px !important;
+        margin-left: auto !important;
+    }
+    /* The kind dropdown and its delete stay side by side. */
+    .modal-content .rem-main { display: flex !important; gap: 8px; align-items: stretch; }
+    .modal-content .rem-main > .ll-dropdown { flex: 1 1 auto !important; width: auto !important; }
+
+    /* Dropdown panels must be readable, not a 60px column of wrapped words.
+       They are portalled to <body>, so the sheet's max-width rule cannot
+       constrain them — but min-width:0 elsewhere was letting them collapse. */
+    .ll-dropdown-panel, .search-dropdown-panel {
+        min-width: 200px !important;
+        max-width: calc(100vw - 24px) !important;
+    }
+    .ll-dropdown-panel .ll-option, .search-dropdown-panel .sd-option {
+        white-space: nowrap;
+        min-height: 44px;
+        display: flex;
+        align-items: center;
+    }
+
+    /* ---- touch targets -------------------------------------------------
+       Everything interactive gets a 48px minimum box. Thumbs are not mice. */
+    button, .btn-primary, .btn-secondary, .btn-ghost, .icon-btn,
+    input, select, textarea, .ll-dropdown-trigger, .search-dropdown-input,
+    .user-menu-item, .op-tab, .mc-tab, .glow-tab {
+        min-height: 48px;
+        font-size: 16px;               /* < 16px makes iOS zoom on focus */
+    }
+    textarea { min-height: 120px; }
+    .icon-btn { min-width: 48px; }
+
+    /* ---- one column everywhere ---------------------------------------- */
+    /* Stack every multi-column form. Overriding grid-template-columns proved
+       unreliable here (the two-column tracks survived even an inline
+       !important), so these drop out of grid layout altogether and stack as
+       blocks — which also means no track can push a field off-screen. Gap is
+       replaced by child margin, since block layout has none. */
+    .form-grid,
+    .note-grid,
+    .notes-form .note-grid,
+    .settings-grid,
+    .cards-grid,
+    .case-picker {
+        display: block !important;
+    }
+    .form-grid > *,
+    .note-grid > *,
+    .notes-form .note-grid > *,
+    .settings-grid > *,
+    .cards-grid > *,
+    .case-picker > * {
+        width: 100%;
+        max-width: 100%;
+        margin: 0 0 12px;
+    }
+    .form-grid > *:last-child,
+    .note-grid > *:last-child,
+    .cards-grid > *:last-child { margin-bottom: 0; }
+
+    /* .form-card is a grid; its implicit column sizes to MAX-CONTENT and grid
+       items refuse to shrink below min-content, so a wide child (the case
+       picker, the search row) blows straight through the card's padded content
+       box and drags every field off-screen with it. Block layout has no such
+       track, and min-width:0 lets anything that stays flex/grid actually
+       shrink. */
+    #form-host .form-card,
+    .form-card,
+    .mc-name-search,
+    .search-section,
+    .adv-form {
+        display: block !important;
+    }
+    #form-host .form-card > *,
+    .mc-name-search > *,
+    .adv-form > * {
+        width: 100% !important;
+        max-width: 100% !important;
+        min-width: 0 !important;
+        margin: 0 0 10px;
+    }
+    /* Anything still laying out as flex/grid must be allowed to shrink. */
+    .form-card *,
+    .notes-form *,
+    .settings-card * {
+        min-width: 0;
+    }
+    /* Inputs and controls never exceed their container. */
+    #form-host input,
+    #form-host select,
+    #form-host textarea,
+    #form-host .ll-dropdown,
+    #form-host .search-dropdown,
+    #form-host button {
+        max-width: 100% !important;
+    }
+
+    /* ---- input legibility --------------------------------------------
+       Hairline borders and 40%-opacity placeholders vanish on a phone in
+       daylight. Solid borders, readable placeholder, clear focus ring. */
+    input, select, textarea,
+    .ll-dropdown-trigger, .search-dropdown-input {
+        border: 1px solid var(--input-border, #cfd6e4) !important;
+        background: var(--input-bg, #fff) !important;
+        color: var(--text) !important;
+    }
+    ::placeholder { color: var(--muted) !important; opacity: 0.85 !important; }
+    input:focus, select:focus, textarea:focus,
+    .ll-dropdown-trigger:focus, .search-dropdown-input:focus {
+        outline: 2px solid var(--accent) !important;
+        outline-offset: 1px;
+    }
+
+    /* ---- citation rows: no orphan remove button ----------------------- */
+    .citation-row {
+        display: grid !important;
+        grid-template-columns: 1fr auto;
+        gap: 8px;
+        align-items: center;
+        padding: 10px;
+        border: 1px solid var(--input-border, #e6e8ef);
+        border-radius: 12px;
+        margin-bottom: 10px;
+    }
+    .citation-row > *:not(.cite-remove) { grid-column: 1; width: 100% !important; }
+    .citation-row .cite-remove {
+        grid-column: 2;
+        grid-row: 1 / -1;
+        align-self: center;
+        width: 44px; height: 44px;
+        min-width: 44px;
+        display: inline-flex; align-items: center; justify-content: center;
+        margin: 0;
+    }
+
+    /* ---- calendar: month grid, then the day pushes up as a sheet ------- */
+    .calendar-layout {
+        display: block !important;
+        height: auto !important;
+        min-height: 0 !important;
+    }
+    .cal-divider { display: none !important; }
+    .cal-card { height: auto !important; overflow: visible !important; }
+    .cal-grid { grid-auto-rows: minmax(52px, auto) !important; }
+    .cal-cell { padding: 4px !important; }
+    .cal-cell .cal-chip { font-size: 0 !important; padding: 0 !important; border-left: 0 !important;
+        width: 6px; height: 6px; border-radius: 50%; display: inline-block;
+        margin: 1px; background: var(--accent); }
+    .cal-cell .cal-more { display: none !important; }
+    .cal-header { flex-wrap: wrap; }
+    .cal-actions { width: 100%; justify-content: stretch; }
+    .cal-actions > * { flex: 1; }
+
+    /* The day agenda becomes a sheet you push into, instead of sitting in a
+       column below the month where it is invisible on a phone. */
+    .cal-side {
+        position: fixed !important;
+        left: 0; right: 0; bottom: 0; top: auto !important;
+        z-index: 65;
+        max-width: none !important;
+        min-width: 0 !important;
+        flex: none !important;
+        max-height: 86dvh;
+        overflow-y: auto;
+        background: var(--card);
+        border-top: 1px solid var(--input-border, #e6e8ef);
+        border-radius: 18px 18px 0 0;
+        box-shadow: 0 -8px 32px rgba(0,0,0,0.28);
+        transform: translateY(101%);
+        transition: transform 0.25s ease;
+        padding: 0 14px calc(70px + env(safe-area-inset-bottom, 0px));
+    }
+    body.m-day-open .cal-side { transform: translateY(0); }
+    body.m-day-open { overflow: hidden; }
+
+    .m-day-backdrop {
+        position: fixed; inset: 0; z-index: 64;
+        background: rgba(0,0,0,0.45);
+        opacity: 0; pointer-events: none;
+        transition: opacity 0.25s ease;
+    }
+    body.m-day-open .m-day-backdrop { opacity: 1; pointer-events: auto; }
+
+    .m-day-head {
+        position: sticky; top: 0; z-index: 2;
+        display: flex; align-items: center; gap: 8px;
+        margin: 0 -14px 8px; padding: 8px 10px;
+        background: var(--card);
+        border-bottom: 1px solid var(--input-border, #e6e8ef);
+    }
+    .m-day-back {
+        width: 44px; height: 44px; min-width: 44px;
+        display: inline-flex; align-items: center; justify-content: center;
+        background: none; border: 0; color: var(--accent);
+        font-size: 1.1rem; cursor: pointer;
+    }
+    .m-day-title { flex: 1; font-weight: 600; font-size: 0.98rem; }
+    .m-day-grip {
+        width: 40px; height: 4px; border-radius: 2px;
+        background: var(--input-border, #e6e8ef);
+        margin: 8px auto 0;
+    }
+
+    /* The month nav (<< < Month > >>) is wider than the screen: the year jumps
+       hang off both edges. Let it size to the viewport and shrink the arrows. */
+    .cal-header { display: block !important; }
+    .cal-header-left, .cal-nav, .cal-actions {
+        grid-column: auto !important;
+        justify-self: auto !important;
+    }
+    .cal-nav {
+        display: flex !important;
+        justify-content: space-between;
+        align-items: center;
+        gap: 4px;
+        width: 100%;
+        margin: 6px 0;
+    }
+    .cal-nav button {
+        min-width: 40px;
+        width: 40px;
+        padding: 0 !important;
+        flex: none;
+    }
+    .cal-title {
+        flex: 1;
+        min-width: 0 !important;
+        text-align: center;
+        font-size: 1.02rem !important;
+    }
+    .cal-actions { display: flex; gap: 8px; width: 100%; }
+    .cal-actions > * { flex: 1; min-width: 0; white-space: nowrap; font-size: 0.85rem; }
+
+    /* The sheet header already names the day; the agenda's own heading repeats
+       it directly underneath. */
+    body.m-day-open .cal-side-title { display: none !important; }
+
+    /* Case links inside the agenda are the primary tap target there. */
+    .agenda-case { display: inline-block; min-height: 40px; line-height: 1.35; }
+
+    /* ---- buttons: icon beside the label, never overlapping it --------- */
+    .btn-primary, .btn-secondary, .btn-ghost, .cite-add-btn {
+        display: inline-flex !important;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        line-height: 1.2;
+        white-space: nowrap;
+    }
+    .btn-primary > i, .btn-secondary > i, .btn-ghost > i {
+        position: static !important;
+        margin: 0 !important;
+        flex: none;
+    }
+
+    /* Today belongs on the nav row, not stranded on a line of its own. */
+    .cal-header-left {
+        display: inline-block;
+        margin: 0 0 6px;
+    }
+    .cal-header-left .btn-ghost, #btn-today { width: auto; min-width: 96px; }
+
+    /* ---- Case Law name search: label above, input full width ---------- */
+    .cl-name-option {
+        display: grid !important;
+        grid-template-columns: auto 1fr;
+        gap: 6px 10px;
+        align-items: center;
+    }
+    .cl-name-option input[type="radio"] { grid-column: 1; grid-row: 1; }
+    .cl-name-option span {
+        grid-column: 2; grid-row: 1;
+        flex: none !important;
+        width: auto !important;
+        white-space: nowrap;
+    }
+    .cl-name-option input[type="text"] {
+        grid-column: 1 / -1; grid-row: 2;
+        width: 100% !important;
+        max-width: 100% !important;
+    }
+
+    /* Mode tabs scroll rather than clipping "Advanced". */
+    /* .cls-mode-tabs is natively a grid of equal columns with overflow hidden,
+       which is exactly right. Turning it into a content-width scroller (to stop
+       "Advanced" clipping) produced ragged, half-visible cells on a real phone.
+       Keep the grid; win the space back with tighter padding and type. */
+    .cls-mode-tabs > *, .mc-tabs > *, .glow-tabs > * {
+        padding-left: 4px !important;
+        padding-right: 4px !important;
+        font-size: 0.82rem !important;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        min-width: 0 !important;
+    }
+    .glow-tabs {
+        display: flex !important;
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+        scrollbar-width: none;
+    }
+    .glow-tabs::-webkit-scrollbar { display: none; }
+    .glow-tabs > * { flex: 1 0 auto; }
+
+    /* The Day/Case pair must split the bar evenly. The scroll rule above packs
+       tabs to the left at content width, which left a dead gap to the right of
+       "Case" and made the row look lopsided. */
+    .cal-side-head { display: flex !important; align-items: center; gap: 8px; width: 100%; }
+    .cal-side-tabs {
+        flex: 1 1 auto;
+        display: flex !important;
+        overflow: visible !important;
+        width: auto !important;
+    }
+    .cal-side-tabs > * {
+        flex: 1 1 0 !important;
+        width: auto !important;
+        min-width: 0 !important;
+        text-align: center;
+        justify-content: center;
+    }
+    .cal-side-toggle, #cal-side-swap {
+        flex: 0 0 48px !important;
+        width: 48px !important;
+        height: 48px !important;
+        padding: 0 !important;
+        display: inline-flex !important;
+        align-items: center;
+        justify-content: center;
+    }
+
+    /* The selected tab paints a square block that spills past the bar's rounded
+       corners. Clipping the container to its own radius makes the highlight
+       follow the curve, and the end tabs carry matching radii so the corner is
+       filled rather than notched. */
+    .cal-side-tabs {
+        overflow: hidden !important;
+        border-radius: 12px;
+    }
+    .cal-side-tabs > * {
+        border-radius: 0 !important;
+        margin: 0 !important;
+    }
+    .cal-side-tabs > *:first-child { border-radius: 12px 0 0 12px !important; }
+    .cal-side-tabs > *:last-child  { border-radius: 0 12px 12px 0 !important; }
+
+    /* The panel content was butting straight up against the tab bar. */
+    .cal-side-head { margin: 0 0 14px !important; }
+    .cal-panel { padding-top: 2px; }
+    .cal-panel > *:first-child { margin-top: 0 !important; }
+    .cal-panel .cal-section-label,
+    .cal-panel h3,
+    .cal-panel h4 { margin-top: 14px; }
+    .cal-panel > *:first-child.cal-section-label,
+    .cal-panel > h3:first-child,
+    .cal-panel > h4:first-child { margin-top: 4px; }
+    .cal-side .cal-scroll { padding-top: 4px; }
+
+    /* ---- citations: stacked fields, remove pinned to the corner ------- */
+    /* Citations: a plain vertical stack. Absolute positioning of the remove
+       button collapsed the dropdown wrapper into a sliver, so nothing here is
+       taken out of flow. */
+    .citation-row {
+        display: block !important;
+        position: static !important;
+        padding: 12px !important;
+        border: 1px solid var(--input-border, #e6e8ef);
+        border-radius: 12px;
+        margin-bottom: 10px;
+    }
+    .citation-row > *,
+    .citation-row .ll-dropdown,
+    .citation-row .search-dropdown,
+    .citation-row select,
+    .citation-row input {
+        display: block !important;
+        position: static !important;
+        float: none !important;
+        width: 100% !important;
+        max-width: 100% !important;
+        min-width: 0 !important;
+        margin: 0 0 8px !important;
+    }
+    .citation-row .cite-remove {
+        width: 100% !important;
+        height: 44px !important;
+        min-height: 44px;
+        margin: 2px 0 0 !important;
+    }
+    .cite-add-btn { width: 100% !important; min-height: 48px; margin-top: 4px; }
+
+    /* The citations list is a flex/grid container; min-width:0 let each row
+       collapse to a ~30px sliver with the dropdown crushed inside it. Force the
+       list to block flow and every row to full width. */
+    /* .citations-row-wrapper is a flex row holding [list][+]. Giving the +
+       button width:100% made it consume the whole row and collapse the list to
+       0px, which is what crushed every citation into a 26px sliver. Stack them
+       instead: list on top, + underneath. */
+    .citations-row-wrapper {
+        display: block !important;
+        width: 100% !important;
+    }
+    .citations-list, #clu-citations-list, #note-cl-citations-list {
+        display: block !important;
+        width: 100% !important;
+        flex: none !important;
+        min-width: 100% !important;
+    }
+    .citations-list > *, .citation-row {
+        display: block !important;
+        width: 100% !important;
+        max-width: 100% !important;
+        flex: none !important;
+    }
+    .citation-row .ll-dropdown-trigger,
+    .citation-row input {
+        width: 100% !important;
+        min-height: 48px;
+        box-sizing: border-box;
+    }
+    /* convertSelectToLLD hides the native <select> with an inline style. Any
+       `display: ... !important` of mine beats that inline rule and makes the
+       raw select reappear beside its own dropdown — hence two "Journal"
+       controls. Keep every LLD-managed select hidden, whatever else matches. */
+    .ll-dropdown > select,
+    .search-dropdown > select { display: none !important; }
+
+    /* No sidebar on a phone, so nothing to swap sides. */
+    .cal-side-toggle, #cal-side-swap { display: none !important; }
+
+    /* Case action menu: a bottom sheet, not a menu pinned to the tap point. */
+    .case-action-menu {
+        position: fixed !important;
+        left: 0 !important;
+        right: 0 !important;
+        top: auto !important;
+        bottom: 0 !important;
+        width: 100% !important;
+        min-width: 0 !important;
+        max-width: none !important;
+        transform: none !important;
+        border-radius: 16px 16px 0 0 !important;
+        padding: 8px 10px calc(14px + env(safe-area-inset-bottom, 0px)) !important;
+        box-shadow: 0 -8px 32px rgba(0,0,0,0.35) !important;
+        z-index: 80 !important;
+    }
+    .case-action-menu button, .case-action-menu a {
+        display: flex !important;
+        align-items: center;
+        gap: 12px;
+        width: 100%;
+        min-height: 52px;
+        padding: 0 12px;
+        font-size: 1rem;
+        text-align: left;
+    }
+    .m-menu-backdrop {
+        position: fixed; inset: 0; z-index: 79;
+        background: rgba(0,0,0,0.45);
+    }
+
+    /* A long press on a result must reach our handler, not raise the OS
+       selection/callout menu. */
+    .result-item, .mc-name-result, [data-case-row] {
+        -webkit-touch-callout: none;
+        -webkit-user-select: none;
+        user-select: none;
+    }
+    .result-item input, .result-item textarea { user-select: text; }
+
+    /* ---- action rows: stack, full width, no overlap ------------------- */
+    .form-actions, .invoice-actions, .cls-actions {
+        display: block !important;
+        margin-top: 10px;
+    }
+    .form-actions > *, .cls-actions > * {
+        width: 100% !important;
+        max-width: 100% !important;
+        margin: 0 0 8px !important;
+        float: none !important;
+        position: static !important;
+    }
+    /* The icon button keeps its square footprint beside the note button. */
+    .mc-actions-right {
+        display: flex !important;
+        gap: 8px;
+        margin-left: 0 !important;
+        width: 100% !important;
+    }
+    .mc-actions-right > .mc-icon-btn {
+        flex: 0 0 48px;
+        width: 48px !important;
+        height: 48px !important;
+        margin: 0 !important;
+    }
+    .mc-actions-right > #create-note-btn {
+        flex: 1 1 auto;
+        width: auto !important;
+        margin: 0 !important;
+    }
+
+    /* ======================================================================
+       INVOICE — rebuilt for the phone.
+
+       The desktop page is a scale model of an A4 sheet: a 4-column line-item
+       table inside a fixed-width box. At 375px that renders ~40px columns and
+       words break mid-syllable ("Servic e or item"). Here the sheet becomes a
+       full-width document and each line item becomes its own labelled card, so
+       every field is legible and editable with a thumb.
+       ====================================================================== */
+    .invoice-page { padding: 0 !important; }
+    .invoice-box {
+        width: 100% !important;
+        max-width: 100% !important;
+        min-width: 0 !important;
+        margin: 0 !important;
+        padding: 16px !important;
+        transform: none !important;
+        zoom: normal !important;
+        font-size: 15px !important;
+        border-radius: 14px;
+    }
+    .invoice-top { display: block !important; }
+    .invoice-title { font-size: 1.5rem !important; margin-bottom: 10px; }
+    .invoice-meta { display: flex !important; gap: 10px; flex-wrap: wrap; }
+    .invoice-meta label { flex: 1; min-width: 130px; display: block; }
+
+    /* From / To stack instead of sitting in two narrow columns. */
+    .invoice-parties { display: block !important; }
+    .party-block { width: 100% !important; margin-bottom: 14px; }
+    .party-block.party-recipient { text-align: left !important; }
+
+    /* Every editable value gets a real, visible field. On desktop these are
+       bare text with a dashed underline; on a phone that is invisible and you
+       cannot tell what you are editing. */
+    .invoice-box [contenteditable="true"] {
+        display: block;
+        width: 100%;
+        min-height: 44px;
+        padding: 10px 12px;
+        margin-top: 4px;
+        border: 1px solid var(--input-border, #cfd6e4) !important;
+        border-radius: 10px;
+        background: var(--input-bg, #fff) !important;
+        color: var(--text) !important;
+        font-size: 15px;
+        line-height: 1.35;
+        word-break: break-word;
+    }
+    .invoice-box [contenteditable="true"]:focus {
+        outline: 2px solid var(--accent);
+        outline-offset: 1px;
+    }
+    .invoice-box .meta-label,
+    .invoice-box .party-heading {
+        font-size: 11px !important;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: var(--muted) !important;
+        margin: 0;
+    }
+
+    /* Line items: table -> cards. */
+    .invoice-table,
+    .invoice-table tbody,
+    .invoice-table tfoot,
+    .invoice-table tr,
+    .invoice-table td { display: block !important; width: 100% !important; }
+    .invoice-table thead { display: none !important; }
+    .invoice-table { border-collapse: separate !important; border-spacing: 0 !important; }
+    .invoice-table tbody tr {
+        position: relative;
+        border: 1px solid var(--input-border, #e6e8ef);
+        border-radius: 12px;
+        padding: 12px 52px 12px 12px;
+        margin-bottom: 10px;
+    }
+    .invoice-table tbody td {
+        padding: 6px 0 !important;
+        border: 0 !important;
+        text-align: left !important;
+    }
+    .invoice-table tbody td::before {
+        display: block;
+        font-size: 11px;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: var(--muted);
+    }
+    .invoice-table tbody td:nth-child(1)::before { content: "Item no."; }
+    .invoice-table tbody td:nth-child(2)::before { content: "Item"; }
+    .invoice-table tbody td:nth-child(3)::before { content: "Description"; }
+    .invoice-table tbody td:nth-child(4)::before { content: "Amount"; }
+    /* The row's remove control sits in the corner, not in the flow. */
+    .invoice-table tbody td:nth-child(5),
+    .invoice-table tbody td:last-child:not(:nth-child(-n+4)) {
+        position: absolute;
+        top: 8px; right: 8px;
+        width: 40px !important;
+        padding: 0 !important;
+    }
+    .invoice-table tbody td:nth-child(5)::before { content: none; }
+    .invoice-table tbody td:nth-child(5) button,
+    .invoice-table tbody td:nth-child(5) a {
+        width: 40px; height: 40px; min-width: 40px;
+        display: inline-flex; align-items: center; justify-content: center;
+    }
+
+    /* Total reads as a summary line, not a stray table row. */
+    .invoice-table tfoot tr.total {
+        display: flex !important;
+        justify-content: space-between;
+        align-items: center;
+        border-top: 2px solid var(--input-border, #e6e8ef);
+        padding-top: 12px;
+        margin-top: 4px;
+        font-size: 1.05rem;
+        font-weight: 600;
+    }
+    .invoice-table tfoot td { width: auto !important; padding: 0 !important; }
+    .invoice-table tfoot .total-label { text-align: left !important; }
+
+    .invoice-add, #add-invoice-item {
+        width: 100% !important;
+        min-height: 48px;
+        margin-top: 6px;
+    }
+    .invoice-actions { display: block !important; }
+    .invoice-actions > * { width: 100% !important; margin-bottom: 8px; }
+    .invoice-intro, .contenteditable-hint { font-size: 0.85rem; }
+    .full-span, .note-field-wide { grid-column: 1 / -1; }
+
+    /* Action cards: full-width rows rather than a cramped 2-up grid. */
+    .card.big {
+        min-height: 0;
+        padding: 18px 16px;
+        display: flex;
+        flex-direction: row;
+        align-items: center;
+        gap: 14px;
+        text-align: left;
+    }
+    .card.big i, .card.big svg, .card.big img { margin: 0; flex: none; }
+
+    /* ---- page chrome --------------------------------------------------- */
+    .home, .calendar-page, .app-shell > main {
+        padding-left: 12px;
+        padding-right: 12px;
+    }
+    .topbar { padding: 8px 12px; }
+    .topbar .brand { font-size: 1rem; }
+    /* The account dropdown is replaced by the drawer, which carries My
+       Account and Sign out along with every other destination. Logout leaves
+       the top bar entirely: it is a destructive action sitting under the
+       thumb's travel path, and it is one tap away inside the drawer. */
+    .user-menu-toggle, .user-menu-panel, .logout-form { display: none !important; }
+
+    .m-drawer-account {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 4px 2px 12px;
+        margin-bottom: 10px;
+        border-bottom: 1px solid var(--input-border, #e6e8ef);
+    }
+    .m-drawer-avatar {
+        flex: none;
+        width: 38px; height: 38px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 50%;
+        background: color-mix(in srgb, var(--accent) 20%, transparent);
+        color: var(--accent);
+        font-weight: 600;
+    }
+    .m-drawer-who { min-width: 0; display: flex; flex-direction: column; }
+    .m-drawer-email {
+        font-size: 0.9rem;
+        font-weight: 600;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+    .m-drawer-role {
+        font-size: 0.72rem;
+        color: var(--muted);
+        text-transform: capitalize;
+    }
+
+    /* Tables scroll rather than burst the viewport. */
+    .table-wrapper { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+    .settings-table { min-width: 520px; }
+
+    /* ---- bottom bar ---------------------------------------------------- */
+    body.m-has-bottombar {
+        padding-bottom: calc(62px + env(safe-area-inset-bottom, 0px));
+    }
+    body.m-locked { overflow: hidden; }
+
+    .m-bottombar {
+        position: fixed;
+        left: 0; right: 0; bottom: 0;
+        z-index: 60;
+        display: grid;
+        grid-auto-flow: column;
+        grid-auto-columns: 1fr;
+        background: color-mix(in srgb, var(--card) 95%, transparent);
+        backdrop-filter: blur(12px);
+        border-top: 1px solid var(--input-border, #e6e8ef);
+        padding-bottom: env(safe-area-inset-bottom, 0px);
+    }
+    .m-tabbtn {
+        position: relative;
+        min-height: 62px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 3px;
+        border: 0;
+        background: none;
+        color: var(--muted);
+        font-size: 11px;
+        font-weight: 500;
+        text-decoration: none;
+        cursor: pointer;
+    }
+    .m-tabbtn i { font-size: 1.2rem; }
+    .m-tabbtn.active { color: var(--accent); }
+    .m-tab-badge {
+        position: absolute;
+        top: 8px;
+        left: 50%;
+        margin-left: 6px;
+        min-width: 17px;
+        padding: 0 4px;
+        border-radius: 9px;
+        background: #ef4444;
+        color: #fff;
+        font-size: 10px;
+        line-height: 17px;
+        text-align: center;
+    }
+
+    /* ---- drawer -------------------------------------------------------- */
+    .m-drawer {
+        position: fixed;
+        inset: 0;
+        z-index: 70;
+        background: rgba(0, 0, 0, 0.5);
+        opacity: 0;
+        transition: opacity 0.2s ease;
+        display: flex;
+        align-items: flex-end;
+        /* Closed, it must not intercept taps. An author `display` beats the UA's
+           [hidden] rule, so the attribute alone does NOT hide this element:
+           without the two rules below, the drawer sits invisibly over the whole
+           page at z-index 70 and swallows every tap meant for the page beneath. */
+        pointer-events: none;
+    }
+    .m-drawer[hidden] { display: none !important; }
+    .m-drawer.open { opacity: 1; pointer-events: auto; }
+    .m-drawer-sheet {
+        width: 100%;
+        max-height: 88dvh;
+        overflow-y: auto;
+        background: var(--card);
+        border-radius: 18px 18px 0 0;
+        padding: 10px 14px calc(18px + env(safe-area-inset-bottom, 0px));
+        transform: translateY(14px);
+        transition: transform 0.2s ease;
+    }
+    .m-drawer.open .m-drawer-sheet { transform: translateY(0); }
+    .m-drawer-grip {
+        width: 40px; height: 4px;
+        margin: 4px auto 10px;
+        border-radius: 2px;
+        background: var(--input-border, #e6e8ef);
+    }
+    .m-drawer-title {
+        margin: 0 0 10px;
+        font-size: 0.8rem;
+        font-weight: 600;
+        color: var(--muted);
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+    }
+    .m-drawer-grid {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 8px;
+    }
+    .m-drawer-item {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        min-height: 56px;
+        padding: 10px 12px;
+        border: 1px solid var(--input-border, #e6e8ef);
+        border-radius: 14px;
+        color: var(--text);
+        text-decoration: none;
+        font-size: 0.88rem;
+        line-height: 1.2;
+    }
+    .m-drawer-item:active { background: color-mix(in srgb, var(--accent) 12%, transparent); }
+    .m-drawer-item.active { border-color: var(--accent); color: var(--accent); }
+    .m-drawer-item.danger { grid-column: 1 / -1; margin-top: 8px; color: #ef4444; }
+    .m-drawer-icon {
+        flex: none;
+        width: 32px; height: 32px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 9px;
+        background: color-mix(in srgb, var(--accent) 15%, transparent);
+        color: var(--accent);
+    }
+    .m-drawer-item.danger .m-drawer-icon {
+        background: color-mix(in srgb, #ef4444 15%, transparent);
+        color: #ef4444;
+    }
+    .m-drawer-label { flex: 1; min-width: 0; }
+    .m-drawer-badge {
+        flex: none;
+        min-width: 20px;
+        padding: 1px 6px;
+        border-radius: 10px;
+        background: #ef4444;
+        color: #fff;
+        font-size: 11px;
+        text-align: center;
+    }
 }

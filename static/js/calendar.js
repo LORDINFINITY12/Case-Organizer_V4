@@ -629,7 +629,7 @@
              <option value="43200">1 month</option>
            </select></label>
          <span class="rem-before-word" hidden>before</span>
-         <label class="rem-every-wrap" hidden>every
+         <label class="rem-every-wrap" hidden><span class="rem-every-word">every</span>
            <select class="rem-every"></select></label>
        </div>`;
     const kind = row.querySelector('.rem-kind');
