@@ -417,6 +417,105 @@ class TestCascades:
         }, headers=CSRF)
         assert resp.status_code == 400, resp.get_json()
 
+    def test_deleting_an_event_can_be_undone(self, user_client, fsroot, db, test_user):
+        """Delete returns a snapshot; restoring it brings back the event AND its
+        assignees, otherwise an undo silently loses the people it was for."""
+        from services import calendar_events as cal
+
+        case = _mk_case(fsroot)
+        eid = cal.create_event(db, event_type="hearing", event_date=TODAY_ISO,
+                               purpose="Final arguments",
+                               assignee_ids=[test_user.id], **case)
+        db.commit()
+
+        resp = user_client.delete(f"/api/calendar/events/{eid}", headers=CSRF)
+        assert resp.status_code == 200
+        undo = resp.get_json()["undo"]
+        assert undo and undo["event"]["id"] == eid
+        assert db.execute("SELECT 1 FROM case_events WHERE id = ?", (eid,)).fetchone() is None
+
+        r2 = user_client.post("/api/calendar/events/restore", json={"undo": undo}, headers=CSRF)
+        assert r2.status_code == 200, r2.get_json()
+        back = cal.get_event(db, eid)
+        assert back is not None and back["purpose"] == "Final arguments"
+        assert [a["user_id"] for a in back["assignees"]] == [test_user.id], "assignees lost on undo"
+
+    def test_undo_twice_is_harmless(self, user_client, fsroot, db):
+        from services import calendar_events as cal
+
+        case = _mk_case(fsroot)
+        eid = cal.create_event(db, event_type="task", event_date=TODAY_ISO,
+                               title="Draft", **case)
+        db.commit()
+        undo = user_client.delete(f"/api/calendar/events/{eid}", headers=CSRF).get_json()["undo"]
+        for _ in range(2):
+            r = user_client.post("/api/calendar/events/restore", json={"undo": undo}, headers=CSRF)
+            assert r.status_code == 200, r.get_json()
+        assert db.execute(
+            "SELECT COUNT(*) c FROM case_events WHERE id = ?", (eid,)
+        ).fetchone()["c"] == 1
+
+    def test_marking_done_reports_the_previous_status_for_undo(self, user_client, fsroot, db):
+        from services import calendar_events as cal
+
+        case = _mk_case(fsroot)
+        eid = cal.create_event(db, event_type="task",
+                               event_date=(TODAY - timedelta(days=3)).isoformat(),
+                               title="Late task", **case)
+        db.commit()
+        r = user_client.post(f"/api/calendar/events/{eid}/mark-complete",
+                             json={"completed_at": TODAY_ISO}, headers=CSRF)
+        assert r.status_code == 200
+        assert r.get_json()["undo"]["status"] == "pending"
+
+        # and undoing it really does restore overdue behaviour
+        cal.update_event(db, eid, {"status": "pending"})
+        db.commit()
+        assert cal.get_event(db, eid)["overdue"] is True
+
+    def test_restore_rejects_rubbish(self, user_client, fsroot):
+        for bad in (None, "nope", {}, {"event": {}}):
+            r = user_client.post("/api/calendar/events/restore",
+                                 json={"undo": bad}, headers=CSRF)
+            assert r.status_code == 400, bad
+
+    def test_adjourning_records_the_date_it_was_adjourned_to(self, user_client, fsroot, db, test_user):
+        """Adjourning must create the follow-up hearing and link to it, or the
+        only fact that matters — the next date — is lost."""
+        from services import calendar_events as cal
+
+        case = _mk_case(fsroot)
+        eid = cal.create_event(db, event_type="hearing", event_date=TODAY_ISO,
+                               purpose="Arguments", assignee_ids=[test_user.id], **case)
+        db.commit()
+
+        next_date = (TODAY + timedelta(days=21)).isoformat()
+        r = user_client.put(f"/api/calendar/events/{eid}",
+                            json={"status": "adjourned", "adjourned_to": next_date},
+                            headers=CSRF)
+        assert r.status_code == 200, r.get_json()
+
+        row = cal.get_event(db, eid)
+        assert row["status"] == "adjourned"
+        assert row["related_event_id"], "no follow-up was linked"
+
+        follow = cal.get_event(db, row["related_event_id"])
+        assert follow["event_date"] == next_date
+        assert follow["event_type"] == "hearing"
+        assert follow["case_name"] == case["case_name"]
+        assert [a["user_id"] for a in follow["assignees"]] == [test_user.id]
+
+    def test_adjourning_rejects_a_bad_date(self, user_client, fsroot, db):
+        from services import calendar_events as cal
+
+        case = _mk_case(fsroot)
+        eid = cal.create_event(db, event_type="hearing", event_date=TODAY_ISO, **case)
+        db.commit()
+        r = user_client.put(f"/api/calendar/events/{eid}",
+                            json={"status": "adjourned", "adjourned_to": "31/02/2026"},
+                            headers=CSRF)
+        assert r.status_code == 400
+
     def test_delete_case_removes_events(self, client, test_admin, fsroot, db):
         from services import calendar_events as cal
 

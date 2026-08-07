@@ -3002,6 +3002,28 @@ def api_calendar_update_event(event_id: int):
 
     try:
         cal.update_event(conn, event_id, data)
+
+        # Adjourning: record what it was adjourned TO. The schema already
+        # defines related_event_id on a hearing as "the next hearing this one
+        # was adjourned to", so the follow-up is a real entry on the calendar
+        # rather than a date buried in this row.
+        adjourned_to = (data.get("adjourned_to") or "").strip()
+        if data.get("status") == "adjourned" and adjourned_to:
+            if not _valid_iso_date(adjourned_to):
+                return jsonify({"ok": False, "msg": "Invalid adjourned-to date"}), 400
+            existing = cal.get_event(conn, event_id)
+            follow_up = cal.create_event(
+                conn,
+                event_type=existing["event_type"],
+                case_year=existing["case_year"],
+                case_month=existing["case_month"],
+                case_name=existing["case_name"],
+                event_date=adjourned_to,
+                title=existing.get("title") or "",
+                purpose=existing.get("purpose"),
+                assignee_ids=[a["user_id"] for a in (existing.get("assignees") or [])],
+            )
+            cal.update_event(conn, event_id, {"related_event_id": follow_up})
         if "assignee_ids" in data:
             assignee_ids, err = _validate_assignee_ids(data.get("assignee_ids"))
             if err:
@@ -3030,10 +3052,36 @@ def api_calendar_update_event(event_id: int):
 @require_login_api
 def api_calendar_delete_event(event_id: int):
     conn = get_app_db()
+    # Snapshot first so the client can offer an undo. Returned to the caller
+    # rather than held server-side: no expiry to manage, and it survives a
+    # restart of the app between the delete and the undo.
+    snapshot = cal.snapshot_event(conn, event_id)
     if not cal.delete_event(conn, event_id):
         return jsonify({"ok": False, "msg": "Event not found"}), 404
     conn.commit()
-    return jsonify({"ok": True})
+    return jsonify({"ok": True, "undo": snapshot})
+
+
+@app.post("/api/calendar/events/restore")
+@require_login_api
+def api_calendar_restore_event():
+    """Put back an event from the snapshot returned by DELETE (undo)."""
+    data = request.get_json(silent=True) or {}
+    snap = data.get("undo")
+    if not isinstance(snap, dict):
+        return jsonify({"ok": False, "msg": "Nothing to restore"}), 400
+    conn = get_app_db()
+    try:
+        event_id = cal.restore_event(conn, snap)
+    except Exception as exc:                       # malformed snapshot
+        log.warning("Event restore failed: %s", exc)
+        return jsonify({"ok": False, "msg": "Could not restore that entry."}), 400
+    if event_id is None:
+        return jsonify({"ok": False, "msg": "Could not restore that entry."}), 400
+    with suppress(Exception):
+        rem.recompute_event_reminders(conn, event_id)
+    conn.commit()
+    return jsonify({"ok": True, "event": cal.get_event(conn, event_id)})
 
 
 @app.post("/api/calendar/events/<int:event_id>/mark-filed")
@@ -3062,6 +3110,9 @@ def api_calendar_mark_complete(event_id: int):
     if not _valid_iso_date(completed_at[:10]):
         return jsonify({"ok": False, "msg": "Invalid completed_at"}), 400
     conn = get_app_db()
+    prev = conn.execute(
+        "SELECT status, completed_at FROM case_events WHERE id = ?", (event_id,)
+    ).fetchone()
     try:
         if not cal.mark_complete(conn, event_id, completed_at):
             return jsonify({"ok": False, "msg": "Event not found"}), 404
@@ -3069,7 +3120,12 @@ def api_calendar_mark_complete(event_id: int):
         return jsonify({"ok": False, "msg": str(exc)}), 400
     rem.recompute_event_reminders(conn, event_id)
     conn.commit()
-    return jsonify({"ok": True, "event": cal.get_event(conn, event_id)})
+    return jsonify({
+        "ok": True,
+        "event": cal.get_event(conn, event_id),
+        # What it was before, so the client can offer "Undo".
+        "undo": {"status": prev["status"] if prev else "pending"},
+    })
 
 
 @app.get("/api/calendar/events/<int:event_id>/reminders")

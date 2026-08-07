@@ -550,3 +550,61 @@ body.cal-resizing {
     }
     .cal-grid { grid-auto-rows: minmax(84px, auto); }
 }
+
+/* ---- undo banner -------------------------------------------------------
+   Shown briefly after a delete or a completion. Deliberately quiet: bottom
+   centre, out of the way of the month grid, and it fades itself out. */
+.cal-undo-banner {
+    position: fixed;
+    left: 50%;
+    bottom: 24px;
+    z-index: 120;
+    transform: translate(-50%, 12px);
+    opacity: 0;
+    transition: opacity 0.18s ease, transform 0.18s ease;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    max-width: min(560px, calc(100vw - 32px));
+    padding: 10px 10px 10px 16px;
+    border-radius: 12px;
+    background: var(--card);
+    color: var(--text);
+    border: 1px solid color-mix(in srgb, var(--muted) 26%, transparent);
+    box-shadow: 0 10px 34px rgba(0, 0, 0, 0.35);
+    font-size: 0.9rem;
+}
+.cal-undo-banner.show { opacity: 1; transform: translate(-50%, 0); }
+.cal-undo-text { flex: 1; min-width: 0; }
+.cal-undo-btn {
+    flex: none;
+    min-height: 36px;
+    padding: 0 14px;
+    border-radius: 9px;
+    border: 1px solid var(--accent);
+    background: transparent;
+    color: var(--accent);
+    font: inherit;
+    font-weight: 600;
+    cursor: pointer;
+}
+.cal-undo-btn:hover { background: color-mix(in srgb, var(--accent) 14%, transparent); }
+.cal-undo-close {
+    flex: none;
+    width: 36px; height: 36px;
+    display: inline-flex; align-items: center; justify-content: center;
+    border: 0; background: none; color: var(--muted); cursor: pointer;
+}
+
+/* On a phone it spans the width just above the bottom navigation bar. */
+@media (max-width: 640px) {
+    .cal-undo-banner {
+        left: 12px; right: 12px;
+        bottom: calc(74px + env(safe-area-inset-bottom, 0px));
+        transform: translateY(12px);
+        max-width: none;
+    }
+    .cal-undo-banner.show { transform: translateY(0); }
+    .cal-undo-btn { min-height: 44px; }
+    .cal-undo-close { width: 44px; height: 44px; }
+}

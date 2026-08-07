@@ -101,6 +101,59 @@
     return r.json().catch(() => ({ ok: false, msg: 'Bad response' }));
   }
 
+  /* ---------- adjourned-to ----------
+     Recording that a matter was adjourned without recording the date it was
+     adjourned TO loses the only fact that matters. The field appears when the
+     status is set to Adjourned, and saving creates the follow-up entry. */
+
+  let adjournedDate = { get: () => null, set: () => {}, clear: () => {} };
+
+  function syncAdjournedField() {
+    const field = $id('ev-adjourned-field');
+    const sel = $id('ev-status');
+    if (!field || !sel) return;
+    const show = sel.value === 'adjourned' && !$id('ev-status-field').hidden;
+    field.hidden = !show;
+  }
+
+  /* ---------- undo banner ----------
+     Deleting or completing an entry is easy to do by accident and, until now,
+     impossible to walk back. A quiet banner offers a way out for a few seconds
+     without interrupting anything; ignoring it just lets it fade. */
+
+  let undoTimer = null;
+
+  function showUndoBanner(message, onUndo) {
+    const existing = $id('cal-undo-banner');
+    if (existing) existing.remove();
+    if (undoTimer) { clearTimeout(undoTimer); undoTimer = null; }
+
+    const bar = document.createElement('div');
+    bar.id = 'cal-undo-banner';
+    bar.className = 'cal-undo-banner';
+    bar.setAttribute('role', 'status');
+    bar.innerHTML = '<span class="cal-undo-text"></span>'
+                  + '<button type="button" class="cal-undo-btn">Undo</button>'
+                  + '<button type="button" class="cal-undo-close" aria-label="Dismiss">'
+                  + '<i class="fa-solid fa-xmark"></i></button>';
+    bar.querySelector('.cal-undo-text').textContent = message;
+    document.body.appendChild(bar);
+    requestAnimationFrame(() => bar.classList.add('show'));
+
+    const close = () => {
+      bar.classList.remove('show');
+      setTimeout(() => bar.remove(), 200);
+      if (undoTimer) { clearTimeout(undoTimer); undoTimer = null; }
+    };
+    bar.querySelector('.cal-undo-close').addEventListener('click', close);
+    bar.querySelector('.cal-undo-btn').addEventListener('click', async () => {
+      close();
+      try { await onUndo(); } catch (err) { alert('Undo failed: ' + (err.message || err)); }
+      await refreshAll();
+    });
+    undoTimer = setTimeout(close, 9000);
+  }
+
   /* ---------- state ---------- */
 
   const now = new Date();
@@ -666,6 +719,9 @@
     if (typeof convertAllSelectsToLLD === 'function') convertAllSelectsToLLD(row);
     return row;
   }
+  $id('ev-status')?.addEventListener('change', syncAdjournedField);
+  if ($id('ev-adjourned-to')) adjournedDate = initDateField('ev-adjourned-to');
+
   $id('ev-add-reminder')?.addEventListener('click', () => {
     $id('ev-reminders-list').appendChild(reminderRow());
   });
@@ -706,6 +762,8 @@
     $id('ev-notes').value = existing ? (existing.notes || '') : '';
     $id('ev-status-field').hidden = !existing;
     if (existing) $id('ev-status').value = existing.status;
+    adjournedDate.clear();
+    syncAdjournedField();
     renderAssignees('ev-assignees', (existing?.assignees || []).map((a) => a.user_id));
 
     // Timing / recurrence / continuing
@@ -777,6 +835,14 @@
     let data;
     if (editing) {
       payload.status = $id('ev-status').value;
+      if (payload.status === 'adjourned') {
+        const to = adjournedDate.get();
+        if (!to) {
+          alert('Enter the date this was adjourned to (dd/mm/yyyy).');
+          return;
+        }
+        payload.adjourned_to = to;
+      }
       data = await api(`/api/calendar/events/${editing.id}`, {
         method: 'PUT', body: JSON.stringify(payload),
       });
@@ -927,6 +993,11 @@
       const data = await api(`/api/calendar/events/${id}`, { method: 'DELETE' });
       if (!data.ok) { alert(data.msg || 'Delete failed'); return; }
       await refreshAll();
+      if (data.undo) {
+        showUndoBanner('Entry deleted.', () => api('/api/calendar/events/restore', {
+          method: 'POST', body: JSON.stringify({ undo: data.undo }),
+        }));
+      }
     } else if (act === 'file') {
       const data = await api(`/api/calendar/events/${id}/mark-filed`, {
         method: 'POST', body: JSON.stringify({}),
@@ -944,6 +1015,10 @@
       });
       if (!data.ok) { alert(data.msg || 'Failed'); return; }
       await refreshAll();
+      const prevStatus = (data.undo && data.undo.status) || 'pending';
+      showUndoBanner('Marked done.', () => api(`/api/calendar/events/${id}`, {
+        method: 'PUT', body: JSON.stringify({ status: prevStatus }),
+      }));
     } else if (act === 'edit' || act === 'appear') {
       let ev = await getEvent(id);
       if (!ev) {

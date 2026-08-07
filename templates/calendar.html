@@ -227,6 +227,20 @@
             <option value="cancelled">Cancelled</option>
           </select>
         </label>
+        <!-- Adjourning is meaningless without saying to when; shown only for
+             that status. Saving creates the follow-up entry and links this one
+             to it via related_event_id. -->
+        <div class="cal-field full-span" id="ev-adjourned-field" hidden>
+          <span>Adjourned to</span>
+          <div class="cal-date-wrap">
+            <input type="text" id="ev-adjourned-to" placeholder="dd/mm/yyyy" inputmode="numeric" autocomplete="off">
+            <button type="button" class="cal-date-btn" aria-label="Pick date">
+              <i class="fa-solid fa-calendar-days"></i>
+            </button>
+            <input type="date" class="cal-date-native" tabindex="-1" aria-hidden="true">
+          </div>
+          <p class="cal-auto-note" id="ev-adjourned-note">A follow-up entry is created on that date.</p>
+        </div>
         <!-- Recurrence — meetings only; a plain full-width field like the rest. -->
         <label class="cal-field full-span" id="ev-recur-field" hidden>Repeats
           <select id="ev-recur-freq">

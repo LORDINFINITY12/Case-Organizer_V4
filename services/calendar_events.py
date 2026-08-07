@@ -33,6 +33,7 @@ from __future__ import annotations
 import calendar as _calendar
 import math
 import sqlite3
+from contextlib import suppress
 from datetime import date, datetime, time as dtime, timedelta
 from typing import Any, Dict, Iterable, List, Mapping, Optional
 
@@ -437,6 +438,68 @@ def update_event(conn: sqlite3.Connection, event_id: int, fields: Dict[str, Any]
         (*updates.values(), event_id),
     )
     return cur.rowcount > 0
+
+
+# Child tables that hang off an event and are cascaded away with it.
+_EVENT_CHILD_TABLES = ("event_participants", "event_assignees", "event_reminders")
+
+
+def snapshot_event(conn: sqlite3.Connection, event_id: int) -> Optional[Dict[str, Any]]:
+    """Capture an event and its children so a delete can be undone.
+
+    Returned as plain dicts, which lets the caller hand it straight back to the
+    client and pass it to restore_event() later. Soft-deleting instead would
+    mean filtering `deleted_at` in every query in this module, and one missed
+    query would put deleted events back on screen.
+    """
+    row = conn.execute("SELECT * FROM case_events WHERE id = ?", (event_id,)).fetchone()
+    if row is None:
+        return None
+    snap: Dict[str, Any] = {"event": {k: row[k] for k in row.keys()}, "children": {}}
+    for table in _EVENT_CHILD_TABLES:
+        try:
+            rows = conn.execute(
+                f"SELECT * FROM {table} WHERE event_id = ?", (event_id,)
+            ).fetchall()
+        except sqlite3.Error:
+            continue
+        snap["children"][table] = [{k: r[k] for k in r.keys()} for r in rows]
+    return snap
+
+
+def restore_event(conn: sqlite3.Connection, snap: Mapping[str, Any]) -> Optional[int]:
+    """Re-insert a snapshot produced by snapshot_event(), keeping its id.
+
+    Returns the event id, or None if the snapshot is unusable or that id is
+    already back (a double-undo, which should be a no-op rather than an error).
+    """
+    if not isinstance(snap, Mapping):
+        return None
+    ev = snap.get("event")
+    if not isinstance(ev, Mapping) or "id" not in ev:
+        return None
+    event_id = ev["id"]
+    if conn.execute("SELECT 1 FROM case_events WHERE id = ?", (event_id,)).fetchone():
+        return event_id
+
+    cols = [c for c in ev.keys()]
+    conn.execute(
+        f"INSERT INTO case_events ({', '.join(cols)}) "
+        f"VALUES ({', '.join('?' for _ in cols)})",
+        tuple(ev[c] for c in cols),
+    )
+    for table, rows in (snap.get("children") or {}).items():
+        if table not in _EVENT_CHILD_TABLES:
+            continue
+        for r in rows or []:
+            cols = list(r.keys())
+            with suppress(sqlite3.Error):
+                conn.execute(
+                    f"INSERT INTO {table} ({', '.join(cols)}) "
+                    f"VALUES ({', '.join('?' for _ in cols)})",
+                    tuple(r[c] for c in cols),
+                )
+    return event_id
 
 
 def delete_event(conn: sqlite3.Connection, event_id: int) -> bool:
