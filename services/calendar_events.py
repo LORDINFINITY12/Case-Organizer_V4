@@ -319,8 +319,20 @@ def continuing_view_on(
     d["rolled_forward"] = (D > due)
     if comp is not None and D <= comp:
         d["completed_on"] = row["completed_at"]
-        d["overdue"] = False
-        d["display_note"] = f"completed on {comp.isoformat()}"
+        # Completing an item does not un-ring the bell: the days it sat past its
+        # due date WERE overdue and stay marked so, otherwise a long-overdue
+        # task becomes indistinguishable from one done on time the moment it is
+        # ticked off, and the history of how late it ran is lost.
+        late_days = (D - due).days
+        d["overdue"] = late_days > 0
+        d["was_overdue"] = late_days > 0
+        d["days_late"] = late_days
+        total_late = (comp - due).days
+        d["display_note"] = (
+            f"completed on {comp.isoformat()}"
+            + (f" — {total_late} day{'s' if total_late != 1 else ''} overdue"
+               if total_late > 0 else " — on time")
+        )
     else:
         d["overdue"] = _is_overdue(row, datetime.combine(D, dtime(23, 59)))
     return _attach_dict(conn, d)
@@ -409,6 +421,14 @@ def update_event(conn: sqlite3.Connection, event_id: int, fields: Dict[str, Any]
         updates["all_day"] = 1 if updates["all_day"] else 0
     if "continuing" in updates:
         updates["continuing"] = 1 if updates["continuing"] else 0
+
+    # Reopening. completed_at is not a client-updatable field, so without this
+    # a task edited from 'done' back to 'pending' kept its completion stamp —
+    # and _is_overdue requires completed_at IS NULL, so the item could never
+    # become overdue or pending again however it was edited.
+    if "status" in updates and updates["status"] != "done":
+        updates["completed_at"] = None
+
     if not updates:
         return False
     sets = ", ".join(f"{col} = ?" for col in updates)

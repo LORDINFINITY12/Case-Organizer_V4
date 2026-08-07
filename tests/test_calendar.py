@@ -212,6 +212,54 @@ class TestQueries:
             headers=CSRF).get_json()
         assert not [e for e in future["events"] if e["title"] == "Draft notice"]
 
+    def test_reopening_a_done_task_makes_it_overdue_again(self, user_client, fsroot, db):
+        """Editing status back to pending must clear the completion stamp, or
+        _is_overdue (which requires completed_at IS NULL) can never fire again."""
+        from services import calendar_events as cal
+
+        case = _mk_case(fsroot)
+        eid = cal.create_event(db, event_type="task",
+                               event_date=(TODAY - timedelta(days=5)).isoformat(),
+                               title="Draft notice", **case)
+        db.commit()
+        assert cal.get_event(db, eid)["overdue"] is True
+
+        cal.mark_complete(db, eid, TODAY_ISO)
+        db.commit()
+        done = cal.get_event(db, eid)
+        assert done["status"] == "done" and done["overdue"] is False
+
+        cal.update_event(db, eid, {"status": "pending"})
+        db.commit()
+        reopened = cal.get_event(db, eid)
+        assert reopened["status"] == "pending"
+        assert reopened["completed_at"] is None, "completion stamp survived the reopen"
+        assert reopened["overdue"] is True, "reopened task is not overdue again"
+
+    def test_completing_a_late_task_keeps_its_overdue_history(self, user_client, fsroot, db):
+        """A task completed late must still show the days it ran over, rather
+        than every past day silently becoming an ordinary entry."""
+        from services import calendar_events as cal
+
+        case = _mk_case(fsroot)
+        due = TODAY - timedelta(days=4)
+        eid = cal.create_event(db, event_type="task", event_date=due.isoformat(),
+                               title="Late filing", continuing=True, **case)
+        db.commit()
+        cal.mark_complete(db, eid, TODAY_ISO)
+        db.commit()
+
+        data = user_client.get(
+            f"/api/calendar/events?year={TODAY.year}&month={TODAY.month}",
+            headers=CSRF).get_json()
+        days = {e["event_date"]: e for e in data["events"] if e["title"] == "Late filing"}
+
+        assert days[due.isoformat()]["overdue"] is False, "the due date itself was not late"
+        late = days[(due + timedelta(days=1)).isoformat()]
+        assert late["overdue"] is True, "a day it ran past its due date lost its overdue mark"
+        assert late["days_late"] == 1
+        assert "overdue" in days[TODAY_ISO]["display_note"]
+
     def test_month_range_boundaries(self, user_client, fsroot, db):
         from services import calendar_events as cal
 

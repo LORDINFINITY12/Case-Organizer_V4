@@ -3766,7 +3766,9 @@ input[type="number"].year-input {
         width: 100%;
         max-height: 92dvh;
         overflow-y: auto;
+        overscroll-behavior: contain;
         -webkit-overflow-scrolling: touch;
+        touch-action: pan-y;
         border-radius: 16px 16px 0 0;
         /* No top/bottom padding on the scroll container: the sticky header sits
            at scroll-top, so any padding above it leaves a gap through which the
@@ -3802,8 +3804,11 @@ input[type="number"].year-input {
     /* Sticky header so you always know which sheet you are in. */
     .modal-content .modal-head {
         position: sticky;
-        top: 0;
+        /* -1px closes the sub-pixel seam that let a sliver of the scrolling
+           content show above the title on fractional-DPR screens. */
+        top: -1px;
         z-index: 6;
+        border-radius: 16px 16px 0 0;   /* match the sheet's rounded top */
         background: var(--card);
         width: 100%;
         margin: 0 0 10px !important;
@@ -4033,6 +4038,18 @@ input[type="number"].year-input {
         min-width: 0;
     }
     /* Inputs and controls never exceed their container. */
+    /* date/time inputs carry an intrinsic width wider than the column and
+       ignore max-width alone, so they need an explicit basis. */
+    #form-host input[type="date"],
+    #form-host input[type="time"],
+    #form-host input[type="datetime-local"],
+    .modal-content input[type="date"],
+    .modal-content input[type="time"] {
+        width: 100% !important;
+        min-width: 0 !important;
+        -webkit-appearance: none;
+        appearance: none;
+    }
     #form-host input,
     #form-host select,
     #form-host textarea,
@@ -4101,6 +4118,14 @@ input[type="number"].year-input {
     /* The day agenda becomes a sheet you push into, instead of sitting in a
        column below the month where it is invisible on a phone. */
     .cal-side {
+        overscroll-behavior: contain;
+        -webkit-overflow-scrolling: touch;
+        touch-action: pan-y;
+        /* calendar.css loads AFTER this file and sets .cal-side{overflow:hidden}
+           for the desktop side column, which silently won the cascade and made
+           the sheet unscrollable by touch. */
+        overflow-y: auto !important;
+        overflow-x: hidden !important;
         position: fixed !important;
         left: 0; right: 0; bottom: 0; top: auto !important;
         z-index: 65;
@@ -4108,7 +4133,6 @@ input[type="number"].year-input {
         min-width: 0 !important;
         flex: none !important;
         max-height: 86dvh;
-        overflow-y: auto;
         background: var(--card);
         border-top: 1px solid var(--input-border, #e6e8ef);
         border-radius: 18px 18px 0 0;
@@ -4122,6 +4146,7 @@ input[type="number"].year-input {
 
     .m-day-backdrop {
         position: fixed; inset: 0; z-index: 64;
+        touch-action: none;
         background: rgba(0,0,0,0.45);
         opacity: 0; pointer-events: none;
         transition: opacity 0.25s ease;
@@ -4696,6 +4721,8 @@ input[type="number"].year-input {
         position: fixed;
         inset: 0;
         z-index: 70;
+        touch-action: none;
+        overscroll-behavior: contain;
         background: rgba(0, 0, 0, 0.5);
         opacity: 0;
         transition: opacity 0.2s ease;
@@ -4713,6 +4740,12 @@ input[type="number"].year-input {
         width: 100%;
         max-height: 88dvh;
         overflow-y: auto;
+        /* Without this the touch scroll chains to the document underneath, so
+           the sheet appears frozen while the page behind it moves. body{
+           overflow:hidden} does not prevent that on iOS. */
+        overscroll-behavior: contain;
+        -webkit-overflow-scrolling: touch;
+        touch-action: pan-y;
         background: var(--card);
         border-radius: 18px 18px 0 0;
         padding: 10px 14px calc(18px + env(safe-area-inset-bottom, 0px));
@@ -4720,6 +4753,17 @@ input[type="number"].year-input {
         transition: transform 0.2s ease;
     }
     .m-drawer.open .m-drawer-sheet { transform: translateY(0); }
+    .m-sheet-grip {
+        width: 44px; height: 5px;
+        border-radius: 3px;
+        background: var(--input-border, #e6e8ef);
+        margin: 8px auto 4px;
+        flex: none;
+    }
+    .m-sheet-grab {
+        touch-action: none;             /* the drag belongs to us, not the scroller */
+        cursor: grab;
+    }
     .m-drawer-grip {
         width: 40px; height: 4px;
         margin: 4px auto 10px;

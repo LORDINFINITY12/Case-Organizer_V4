@@ -5297,6 +5297,7 @@ document.addEventListener('submit', (e) => {
 
   drawer.appendChild(sheet);
   document.body.appendChild(drawer);
+  makeSheetDraggable(sheet, () => closeDrawer());
 
   function openDrawer() {
     drawer.hidden = false;
@@ -5348,6 +5349,68 @@ document.addEventListener('submit', (e) => {
 
   document.body.appendChild(bar);
   document.body.classList.add('m-has-bottombar');
+
+  /* ---------- swipe a sheet down to dismiss it ---------------------------
+     A bottom sheet you can only escape by tapping the backdrop feels stuck.
+     This adds the expected drag: pull down on the grip (or on the sheet's own
+     header) and it follows your finger, releasing past a threshold — or with
+     enough downward velocity — to close.
+
+     The drag is bound to the grip/header, not the whole sheet, so it never
+     competes with scrolling the content inside. */
+  function makeSheetDraggable(sheet, onClose, handleSelector) {
+    if (!sheet) return;
+    const grip = document.createElement('div');
+    grip.className = 'm-sheet-grip';
+    const handle = handleSelector ? sheet.querySelector(handleSelector) : null;
+    (handle || sheet).insertBefore(grip, (handle || sheet).firstChild);
+    const dragZone = handle || grip;
+    dragZone.classList.add('m-sheet-grab');
+    grip.classList.add('m-sheet-grab');
+
+    let startY = 0, lastY = 0, startT = 0, dragging = false;
+
+    const begin = (y) => {
+      // Only start a drag when the content is already scrolled to the top,
+      // otherwise a downward pull should scroll, not dismiss.
+      if (sheet.scrollTop > 0) return;
+      dragging = true; startY = lastY = y; startT = Date.now();
+      sheet.style.transition = 'none';
+    };
+    const move = (y, e) => {
+      if (!dragging) return;
+      const dy = y - startY;
+      if (dy <= 0) { sheet.style.transform = ''; return; }
+      lastY = y;
+      sheet.style.transform = `translateY(${dy}px)`;
+      if (e && e.cancelable) e.preventDefault();
+    };
+    const end = () => {
+      if (!dragging) return;
+      dragging = false;
+      const dy = lastY - startY;
+      const velocity = dy / Math.max(1, Date.now() - startT);   // px per ms
+      sheet.style.transition = '';
+      sheet.style.transform = '';
+      if (dy > 90 || velocity > 0.5) onClose();
+    };
+
+    dragZone.addEventListener('touchstart', (e) => begin(e.touches[0].clientY), { passive: true });
+    dragZone.addEventListener('touchmove', (e) => move(e.touches[0].clientY, e), { passive: false });
+    dragZone.addEventListener('touchend', end);
+    dragZone.addEventListener('touchcancel', end);
+    // Pointer events so it is testable and works with a trackpad too.
+    dragZone.addEventListener('pointerdown', (e) => {
+      if (e.pointerType === 'touch') return;                    // already handled
+      begin(e.clientY);
+      const mv = (ev) => move(ev.clientY, ev);
+      const up = () => { end(); window.removeEventListener('pointermove', mv);
+                         window.removeEventListener('pointerup', up); };
+      window.addEventListener('pointermove', mv);
+      window.addEventListener('pointerup', up);
+    });
+  }
+  window.__caseorgMakeSheetDraggable = makeSheetDraggable;
 
   /* ---------- the open form sits directly under the card that opened it ---
      On desktop #form-host is a section below the whole card grid, which is fine
@@ -5453,6 +5516,7 @@ document.addEventListener('submit', (e) => {
     }
     function closeDay() { document.body.classList.remove('m-day-open'); }
 
+    makeSheetDraggable(calSide, closeDay, '.m-day-head');
     head.querySelector('.m-day-back').addEventListener('click', closeDay);
     backdrop.addEventListener('click', closeDay);
     document.addEventListener('keydown', (e) => {

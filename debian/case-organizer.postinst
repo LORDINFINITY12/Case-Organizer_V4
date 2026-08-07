@@ -103,6 +103,14 @@ SCRIPT
 
 case "$1" in
     configure)
+        # $2 is the previously-configured version: empty on a first install,
+        # set on an upgrade. Anything that belongs to first-time setup is gated
+        # on it, so a routine upgrade does not re-run the install-time work
+        # (recursive chown of the whole state dir, rewriting Postfix relay
+        # config) or print setup chatter to the terminal.
+        FIRST_INSTALL=false
+        [ -z "$2" ] && FIRST_INSTALL=true
+
         mkdir -p "$STATE_DIR" "$LOG_DIR" "$ETC_DIR"
 
         if ! getent group "$GROUP" >/dev/null; then
@@ -112,7 +120,13 @@ case "$1" in
             adduser --system --ingroup "$GROUP" --home "$STATE_DIR" --no-create-home "$USER"
         fi
 
-        chown -R "$USER:$GROUP" "$STATE_DIR" "$LOG_DIR"
+        # A recursive chown over the whole state directory (database, uploads,
+        # PDF job spool) is only needed when the user was just created.
+        if [ "$FIRST_INSTALL" = true ]; then
+            chown -R "$USER:$GROUP" "$STATE_DIR" "$LOG_DIR"
+        else
+            chown "$USER:$GROUP" "$STATE_DIR" "$LOG_DIR" 2>/dev/null || true
+        fi
 
         if [ ! -f "$ENV_FILE" ]; then
             cat >"$ENV_FILE" <<'ENVEOF'
@@ -136,6 +150,9 @@ ENVEOF
             systemctl enable case-organizer.service || true
         fi
 
+        # Postfix relay setup is first-install work. On an upgrade the operator's
+        # existing configuration is left exactly as it is.
+        if [ "$FIRST_INSTALL" = true ]; then
         db_get case-organizer/smtp-host
         SMTP_HOST="$RET"
         db_get case-organizer/smtp-port
@@ -156,6 +173,7 @@ ENVEOF
             cache_postfix_config "$SMTP_HOST" "$SMTP_PORT" "$SMTP_USER" "$SMTP_PASS" "$SMTP_TLS"
         else
             echo "Postfix SMTP configuration skipped: incomplete answers." >&2
+        fi
         fi
         ;;
 
