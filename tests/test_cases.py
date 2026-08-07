@@ -210,3 +210,73 @@ class TestManageUploadSubcategory:
         resp = auth_client.post("/manage-case/upload", data=data, headers=self.CSRF,
                                 content_type="multipart/form-data")
         assert resp.status_code == 400
+
+
+# ---------------------------------------------------------------------------
+# Chunked uploads (Cloudflare's 100 MB body limit)
+# ---------------------------------------------------------------------------
+class TestChunkedUpload:
+    """A sliced upload must land byte-identical and go through the same
+    validation as a direct one."""
+
+    @staticmethod
+    def _login(client, user):
+        from services.users import create_session
+        token = create_session(user.id, user_agent="pytest", ip_address="127.0.0.1")
+        with client.session_transaction() as sess:
+            sess["session_token"] = token
+            sess["user_id"] = user.id
+            sess["user_role"] = user.role
+            sess["user_email"] = user.email
+            sess["_csrf_token"] = "test-csrf-token"
+        return client
+
+    def test_chunks_reassemble_in_order(self, client, test_user, app):
+        import io, json
+        self._login(client, test_user)
+        parts = [b"%PDF-1.4 " + bytes([65 + i]) * 32 for i in range(4)]
+        for i, part in enumerate(parts):
+            r = client.post("/api/upload/chunk", data={
+                "upload_id": "abcd1234efgh", "index": str(i),
+                "chunk": (io.BytesIO(part), "big.pdf"),
+            }, content_type="multipart/form-data",
+               headers={"X-CSRF-Token": "test-csrf-token"})
+            assert r.status_code == 200, r.get_json()
+            assert r.get_json()["ok"] is True
+
+        import app as app_mod
+        spool = app_mod._chunk_path("abcd1234efgh")
+        assert spool.read_bytes() == b"".join(parts), "chunks did not reassemble in order"
+
+    def test_index_zero_restarts_a_retried_upload(self, client, test_user, app):
+        """A retry must not append to the leftovers of a failed attempt."""
+        import io
+        self._login(client, test_user)
+        for payload in (b"%PDF-1.4 first attempt", b"%PDF-1.4 retry"):
+            client.post("/api/upload/chunk", data={
+                "upload_id": "retry1234567", "index": "0",
+                "chunk": (io.BytesIO(payload), "f.pdf"),
+            }, content_type="multipart/form-data",
+               headers={"X-CSRF-Token": "test-csrf-token"})
+        import app as app_mod
+        assert app_mod._chunk_path("retry1234567").read_bytes() == b"%PDF-1.4 retry"
+
+    def test_upload_id_cannot_escape_the_spool(self, client, test_user, app):
+        import io
+        self._login(client, test_user)
+        for bad in ("../../etc/passwd", "a/b", "..", "x" * 200, ""):
+            r = client.post("/api/upload/chunk", data={
+                "upload_id": bad, "index": "0",
+                "chunk": (io.BytesIO(b"x"), "f.pdf"),
+            }, content_type="multipart/form-data",
+               headers={"X-CSRF-Token": "test-csrf-token"})
+            assert r.status_code == 400, f"{bad!r} was accepted"
+
+    def test_anonymous_cannot_upload_chunks(self, client, app):
+        import io
+        r = client.post("/api/upload/chunk", data={
+            "upload_id": "anon12345678", "index": "0",
+            "chunk": (io.BytesIO(b"x"), "f.pdf"),
+        }, content_type="multipart/form-data",
+           headers={"X-CSRF-Token": "test-csrf-token"})
+        assert r.status_code in (302, 401, 403)

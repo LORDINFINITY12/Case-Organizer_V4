@@ -4153,8 +4153,12 @@ input[type="number"].year-input {
     }
     body.m-day-open .m-day-backdrop { opacity: 1; pointer-events: auto; }
 
+    .cal-side .m-sheet-grip {
+        position: sticky; top: 0; z-index: 3;
+        background: var(--card);
+    }
     .m-day-head {
-        position: sticky; top: 0; z-index: 2;
+        position: sticky; top: 22px; z-index: 2;
         display: flex; align-items: center; gap: 8px;
         margin: 0 -14px 8px; padding: 8px 10px;
         background: var(--card);
@@ -4753,13 +4757,28 @@ input[type="number"].year-input {
         transition: transform 0.2s ease;
     }
     .m-drawer.open .m-drawer-sheet { transform: translateY(0); }
+    /* One grip, full width of the sheet so it is always centred at the top
+       edge regardless of what the header contains. */
     .m-sheet-grip {
+        display: block;
+        width: 100%;
+        height: 22px;
+        flex: none;
+        position: relative;
+        cursor: grab;
+        touch-action: none;
+    }
+    .m-sheet-grip::before {
+        content: "";
+        position: absolute;
+        top: 9px; left: 50%;
+        transform: translateX(-50%);
         width: 44px; height: 5px;
         border-radius: 3px;
         background: var(--input-border, #e6e8ef);
-        margin: 8px auto 4px;
-        flex: none;
     }
+    /* The old drawer-specific grip is replaced by the shared one. */
+    .m-drawer-grip { display: none !important; }
     .m-sheet-grab {
         touch-action: none;             /* the drag belongs to us, not the scroller */
         cursor: grab;

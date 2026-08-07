@@ -84,6 +84,76 @@ function makeProgressBar(host){
   };
 }
 
+/* ==========================================================================
+   Large uploads.
+
+   Cloudflare refuses request bodies over 100 MB, so a big PDF cannot be posted
+   in one piece through the tunnel. Anything at or above the threshold is sliced
+   and sent to /api/upload/chunk, then referenced by id in the normal form post.
+   The server reassembles it and runs it through the same validation as a direct
+   upload, so behaviour is identical either way — only the transport differs.
+   ========================================================================== */
+
+const CHUNK_THRESHOLD_BYTES = 80 * 1024 * 1024;   // safely under Cloudflare's 100 MB
+const CHUNK_SIZE_BYTES      = 16 * 1024 * 1024;
+
+function _uploadId() {
+  if (window.crypto && crypto.randomUUID) return crypto.randomUUID().replace(/-/g, '');
+  return 'u' + Date.now().toString(36) + Math.random().toString(36).slice(2, 12);
+}
+
+/**
+ * Send one oversized file in slices. Resolves with the id the form should
+ * reference. `onProgress` receives 0..1 across the whole file.
+ */
+async function uploadInChunks(file, onProgress) {
+  const id = _uploadId();
+  const total = Math.ceil(file.size / CHUNK_SIZE_BYTES);
+  for (let i = 0; i < total; i++) {
+    const slice = file.slice(i * CHUNK_SIZE_BYTES, (i + 1) * CHUNK_SIZE_BYTES);
+    const fd = new FormData();
+    fd.set('upload_id', id);
+    fd.set('index', String(i));
+    fd.set('total', String(total));
+    fd.append('chunk', slice, file.name);
+    const r = await uploadWithProgress('/api/upload/chunk', fd, (frac) => {
+      if (typeof onProgress === 'function') onProgress((i + (frac || 0)) / total);
+    });
+    if (!r.ok || !(r.data && r.data.ok)) {
+      throw new Error((r.data && r.data.msg) || `Chunk ${i + 1}/${total} failed (HTTP ${r.status})`);
+    }
+  }
+  if (typeof onProgress === 'function') onProgress(1);
+  return { id, filename: file.name };
+}
+
+/**
+ * Move every file at or over the threshold out of `fd` and into chunked
+ * transfers, recording them in a `chunked` field. Small files are left in the
+ * form untouched, so the common case is unchanged.
+ */
+async function offloadLargeFiles(fd, field, files, onProgress) {
+  const big = files.filter((f) => f.size >= CHUNK_THRESHOLD_BYTES);
+  if (!big.length) return fd;
+
+  const small = files.filter((f) => f.size < CHUNK_THRESHOLD_BYTES);
+  fd.delete(field);
+  small.forEach((f) => fd.append(field, f));
+
+  const bigBytes = big.reduce((n, f) => n + f.size, 0);
+  let done = 0;
+  const refs = [];
+  for (const f of big) {
+    const ref = await uploadInChunks(f, (frac) => {
+      if (typeof onProgress === 'function') onProgress((done + frac * f.size) / bigBytes);
+    });
+    done += f.size;
+    refs.push(ref);
+  }
+  fd.set('chunked', JSON.stringify(refs));
+  return fd;
+}
+
 const HTML_ESCAPE = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
 function escapeHtml(value){
   return String(value ?? '').replace(/[&<>\"']/g, ch => HTML_ESCAPE[ch] || ch);
@@ -3201,7 +3271,14 @@ function manageCaseForm(){
     const progress = makeProgressBar(fileList);
     let r;
     try {
-      r = await uploadWithProgress('/manage-case/upload', fd, (frac) => progress.set(frac));
+      // Oversized files go up in slices first; the form then just references
+      // them, keeping every request under Cloudflare's 100 MB body limit.
+      await offloadLargeFiles(fd, 'file', selectedFiles, (frac) => progress.set(frac * 0.9));
+      r = await uploadWithProgress('/manage-case/upload', fd, (frac) => progress.set(0.9 + frac * 0.1));
+    } catch (err) {
+      progress.done();
+      alert('Upload failed: ' + (err.message || err));
+      return;
     } finally {
       progress.done();
     }
@@ -5358,58 +5435,85 @@ document.addEventListener('submit', (e) => {
 
      The drag is bound to the grip/header, not the whole sheet, so it never
      competes with scrolling the content inside. */
-  function makeSheetDraggable(sheet, onClose, handleSelector) {
-    if (!sheet) return;
-    const grip = document.createElement('div');
-    grip.className = 'm-sheet-grip';
-    const handle = handleSelector ? sheet.querySelector(handleSelector) : null;
-    (handle || sheet).insertBefore(grip, (handle || sheet).firstChild);
-    const dragZone = handle || grip;
-    dragZone.classList.add('m-sheet-grab');
-    grip.classList.add('m-sheet-grab');
+  function makeSheetDraggable(sheet, onClose, headerSelector) {
+    if (!sheet || sheet.dataset.sheetDrag === '1') return;
+    sheet.dataset.sheetDrag = '1';
 
-    let startY = 0, lastY = 0, startT = 0, dragging = false;
+    // Reuse an existing grip rather than adding a second one, and always place
+    // it as a full-width bar ABOVE the header so it sits top-centre instead of
+    // squashed in beside the back button.
+    let grip = sheet.querySelector('.m-sheet-grip, .m-drawer-grip');
+    if (grip) {
+      grip.className = 'm-sheet-grip';
+    } else {
+      grip = document.createElement('div');
+      grip.className = 'm-sheet-grip';
+    }
+    sheet.insertBefore(grip, sheet.firstChild);
 
-    const begin = (y) => {
-      // Only start a drag when the content is already scrolled to the top,
-      // otherwise a downward pull should scroll, not dismiss.
-      if (sheet.scrollTop > 0) return;
-      dragging = true; startY = lastY = y; startT = Date.now();
-      sheet.style.transition = 'none';
+    const header = headerSelector ? sheet.querySelector(headerSelector) : null;
+
+    let startY = 0, lastY = 0, startT = 0, armed = false, dragging = false;
+
+    const canStart = (target) => {
+      if (sheet.scrollTop > 0) return false;          // scrolled: let it scroll
+      if (!target) return true;
+      // Never hijack a gesture that begins on something interactive.
+      return !target.closest('button, a, input, select, textarea, .ll-dropdown');
     };
+
+    const begin = (y, target) => {
+      if (!canStart(target)) return;
+      armed = true; dragging = false;
+      startY = lastY = y; startT = Date.now();
+    };
+
     const move = (y, e) => {
-      if (!dragging) return;
+      if (!armed) return;
       const dy = y - startY;
-      if (dy <= 0) { sheet.style.transform = ''; return; }
+      // Only take over once the gesture is clearly a downward pull. Anything
+      // upward, or a small jitter, stays with the scroller.
+      if (!dragging) {
+        if (dy < 8) return;
+        dragging = true;
+        sheet.style.transition = 'none';
+      }
       lastY = y;
-      sheet.style.transform = `translateY(${dy}px)`;
-      if (e && e.cancelable) e.preventDefault();
+      sheet.style.transform = 'translateY(' + Math.max(0, dy) + 'px)';
+      if (e && e.cancelable) e.preventDefault();      // stop it scrolling instead
     };
+
     const end = () => {
-      if (!dragging) return;
-      dragging = false;
-      const dy = lastY - startY;
-      const velocity = dy / Math.max(1, Date.now() - startT);   // px per ms
+      if (!armed) return;
+      const wasDragging = dragging;
+      armed = dragging = false;
       sheet.style.transition = '';
       sheet.style.transform = '';
+      if (!wasDragging) return;
+      const dy = lastY - startY;
+      const velocity = dy / Math.max(1, Date.now() - startT);
       if (dy > 90 || velocity > 0.5) onClose();
     };
 
-    dragZone.addEventListener('touchstart', (e) => begin(e.touches[0].clientY), { passive: true });
-    dragZone.addEventListener('touchmove', (e) => move(e.touches[0].clientY, e), { passive: false });
-    dragZone.addEventListener('touchend', end);
-    dragZone.addEventListener('touchcancel', end);
-    // Pointer events so it is testable and works with a trackpad too.
-    dragZone.addEventListener('pointerdown', (e) => {
-      if (e.pointerType === 'touch') return;                    // already handled
-      begin(e.clientY);
-      const mv = (ev) => move(ev.clientY, ev);
-      const up = () => { end(); window.removeEventListener('pointermove', mv);
-                         window.removeEventListener('pointerup', up); };
-      window.addEventListener('pointermove', mv);
-      window.addEventListener('pointerup', up);
+    // Bound to the whole sheet (and its header), so the pull works anywhere in
+    // the sheet when it is scrolled to the top — not only on the 5px grip.
+    [sheet, header].filter(Boolean).forEach((zone) => {
+      zone.addEventListener('touchstart', (e) => begin(e.touches[0].clientY, e.target), { passive: true });
+      zone.addEventListener('touchmove', (e) => move(e.touches[0].clientY, e), { passive: false });
+      zone.addEventListener('touchend', end);
+      zone.addEventListener('touchcancel', end);
+      zone.addEventListener('pointerdown', (e) => {
+        if (e.pointerType === 'touch') return;
+        begin(e.clientY, e.target);
+        const mv = (ev) => move(ev.clientY, ev);
+        const up = () => { end(); window.removeEventListener('pointermove', mv);
+                           window.removeEventListener('pointerup', up); };
+        window.addEventListener('pointermove', mv);
+        window.addEventListener('pointerup', up);
+      });
     });
   }
+
   window.__caseorgMakeSheetDraggable = makeSheetDraggable;
 
   /* ---------- the open form sits directly under the card that opened it ---

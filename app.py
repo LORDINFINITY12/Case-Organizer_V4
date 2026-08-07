@@ -2099,6 +2099,122 @@ def create_case():
 
 # ---- Manage Case (Upload, Copy & Rename) --------------------------------
 
+# ════════════════════════════════════════════════════════════════════
+# CHUNKED UPLOADS
+#
+# Cloudflare rejects request bodies over 100 MB, so anything larger cannot be
+# posted in one piece through the tunnel.  The client slices the file and sends
+# the parts here; each part is appended to a spool file.  The assembled file is
+# then handed back to the ordinary upload handlers as a FileStorage, so it goes
+# through exactly the same extension whitelist, magic-byte check and naming
+# rules as a direct upload — chunking is a transport detail, not a bypass.
+# ════════════════════════════════════════════════════════════════════
+
+CHUNK_DIR = UPLOAD_SPOOL_DIR / "chunks"
+_CHUNK_ID_RE = re.compile(r"^[A-Za-z0-9_-]{8,64}$")
+# Well under Cloudflare's 100 MB body ceiling, leaving room for the form fields.
+MAX_CHUNK_BYTES = int(os.environ.get("CASEORG_MAX_CHUNK_BYTES", str(16 * 1024 * 1024)))
+MAX_ASSEMBLED_BYTES = int(os.environ.get("CASEORG_MAX_UPLOAD_BYTES", str(5 * 1024 * 1024 * 1024)))
+
+
+def _chunk_path(upload_id: str) -> Path:
+    """Spool path for an upload id, refusing anything that is not a plain token."""
+    if not _CHUNK_ID_RE.match(upload_id or ""):
+        raise ValueError("Invalid upload id")
+    CHUNK_DIR.mkdir(parents=True, exist_ok=True)
+    return _safe_path(CHUNK_DIR / f"{upload_id}.part", CHUNK_DIR)
+
+
+@app.post("/api/upload/chunk")
+@require_login_api
+def api_upload_chunk():
+    """Append one slice of a large file to its spool file."""
+    upload_id = (request.form.get("upload_id") or "").strip()
+    try:
+        dest = _chunk_path(upload_id)
+    except (ValueError, OSError):
+        return jsonify({"ok": False, "msg": "Invalid upload id"}), 400
+
+    part = request.files.get("chunk")
+    if part is None:
+        return jsonify({"ok": False, "msg": "No chunk supplied"}), 400
+
+    try:
+        index = int(request.form.get("index", "0"))
+    except ValueError:
+        return jsonify({"ok": False, "msg": "Invalid chunk index"}), 400
+
+    # index 0 starts a fresh spool file so a retried upload cannot append to a
+    # half-written one from a previous attempt.
+    mode = "wb" if index == 0 else "ab"
+    written = 0
+    try:
+        with open(dest, mode) as fh:
+            while True:
+                block = part.stream.read(1024 * 1024)
+                if not block:
+                    break
+                written += len(block)
+                if written > MAX_CHUNK_BYTES:
+                    raise ValueError("Chunk too large")
+                if dest.stat().st_size + written > MAX_ASSEMBLED_BYTES:
+                    raise ValueError("Upload exceeds the maximum size")
+                fh.write(block)
+    except ValueError as exc:
+        with suppress(OSError):
+            dest.unlink()
+        return jsonify({"ok": False, "msg": str(exc)}), 413
+    except OSError as exc:
+        log.error("Chunk write failed: %s", exc)
+        return jsonify({"ok": False, "msg": "Could not store the chunk."}), 500
+
+    return jsonify({"ok": True, "received": dest.stat().st_size})
+
+
+def _assembled_uploads(form) -> list:
+    """Turn completed chunk spools named in the form into FileStorage objects.
+
+    The form carries `chunked` as a JSON array of {id, filename}.  Returns an
+    empty list when there are none, so callers can always concatenate.
+    """
+    raw = (form.get("chunked") or "").strip()
+    if not raw:
+        return []
+    try:
+        entries = json.loads(raw)
+    except ValueError:
+        return []
+
+    out = []
+    for entry in entries if isinstance(entries, list) else []:
+        try:
+            path = _chunk_path(str(entry.get("id", "")))
+        except (ValueError, OSError):
+            continue
+        if not path.is_file():
+            continue
+        name = secure_filename(str(entry.get("filename") or path.name))
+        if not name:
+            continue
+        # Kept open for the caller; the handler saves from it, then it is removed.
+        out.append(FileStorage(stream=open(path, "rb"), filename=name))
+    return out
+
+
+def _discard_assembled(form) -> None:
+    """Remove spool files once their contents have been saved."""
+    raw = (form.get("chunked") or "").strip()
+    if not raw:
+        return
+    try:
+        entries = json.loads(raw)
+    except ValueError:
+        return
+    for entry in entries if isinstance(entries, list) else []:
+        with suppress(ValueError, OSError):
+            _chunk_path(str(entry.get("id", ""))).unlink()
+
+
 @app.post("/manage-case/upload")
 @require_login_api
 def manage_case_upload():
@@ -2134,7 +2250,7 @@ def manage_case_upload():
         return jsonify({"ok": False, "msg": "Invalid Date. Use YYYY-MM-DD."}), 400
 
     # Accept MULTIPLE files
-    files = request.files.getlist("file")
+    files = request.files.getlist("file") + _assembled_uploads(request.form)
     if not files:
         return jsonify({"ok": False, "msg": "No files provided."}), 400
 
@@ -2192,6 +2308,7 @@ def manage_case_upload():
         if not saved_paths:
             return jsonify({"ok": False, "msg": "No files were saved (unsupported type?)"}), 400
 
+        _discard_assembled(request.form)
         return jsonify({"ok": True, "saved_as": saved_paths})
     # ---------- END Case Law handling ----------
 
@@ -2224,6 +2341,7 @@ def manage_case_upload():
         if not saved_paths:
             return jsonify({"ok": False, "msg": "No files were saved (unsupported type?)"}), 400
 
+        _discard_assembled(request.form)
         return jsonify({"ok": True, "saved_as": saved_paths})
     # ---------- END Legal Notices handling ----------
 
