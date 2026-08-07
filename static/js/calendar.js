@@ -132,12 +132,17 @@
     bar.id = 'cal-undo-banner';
     bar.className = 'cal-undo-banner';
     bar.setAttribute('role', 'status');
-    bar.innerHTML = '<span class="cal-undo-text"></span>'
+    bar.innerHTML = '<span class="cal-undo-icon"><i class="fa-solid fa-rotate-left"></i></span>'
+                  + '<span class="cal-undo-text"></span>'
                   + '<button type="button" class="cal-undo-btn">Undo</button>'
                   + '<button type="button" class="cal-undo-close" aria-label="Dismiss">'
-                  + '<i class="fa-solid fa-xmark"></i></button>';
+                  + '<i class="fa-solid fa-xmark"></i></button>'
+                  + '<span class="cal-undo-timebar"></span>';
     bar.querySelector('.cal-undo-text').textContent = message;
-    document.body.appendChild(bar);
+    // Mounted inside the month card so it spans exactly the calendar and not
+    // the sidebar, and follows the divider automatically when it is resized or
+    // moved to the other side — no width maths, nothing to keep in sync.
+    (document.querySelector('.cal-card') || document.body).appendChild(bar);
     requestAnimationFrame(() => bar.classList.add('show'));
 
     const close = () => {
@@ -151,7 +156,30 @@
       try { await onUndo(); } catch (err) { alert('Undo failed: ' + (err.message || err)); }
       await refreshAll();
     });
-    undoTimer = setTimeout(close, 9000);
+    // The bar is wide enough to be unmissable now, so the window stays short.
+    const UNDO_MS = 9000;
+    const timebar = bar.querySelector('.cal-undo-timebar');
+    if (timebar) {
+      timebar.style.transition = `transform ${UNDO_MS}ms linear`;
+      requestAnimationFrame(() => { timebar.style.transform = 'scaleX(0)'; });
+    }
+    // Hovering holds it open, so it cannot expire mid-read.
+    bar.addEventListener('mouseenter', () => {
+      if (undoTimer) { clearTimeout(undoTimer); undoTimer = null; }
+      if (timebar) {
+        const frac = timebar.getBoundingClientRect().width / bar.getBoundingClientRect().width;
+        timebar.style.transition = 'none';
+        timebar.style.transform = `scaleX(${frac})`;
+      }
+    });
+    bar.addEventListener('mouseleave', () => {
+      if (timebar) {
+        timebar.style.transition = `transform ${UNDO_MS}ms linear`;
+        requestAnimationFrame(() => { timebar.style.transform = 'scaleX(0)'; });
+      }
+      undoTimer = setTimeout(close, UNDO_MS);
+    });
+    undoTimer = setTimeout(close, UNDO_MS);
   }
 
   /* ---------- state ---------- */

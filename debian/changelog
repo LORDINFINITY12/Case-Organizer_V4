@@ -1,3 +1,37 @@
+case-organizer (4.9.1) stable; urgency=medium
+
+  * Large uploads no longer fail behind Cloudflare. Files at or over 80 MB are
+    sliced into 16 MB parts, sent to /api/upload/chunk and reassembled server
+    side, keeping every request under the 100 MB body limit the tunnel enforces.
+    The assembled file re-enters the normal upload handler, so it faces the same
+    extension whitelist and magic-byte checks as a direct upload.
+  * Reopening a completed task works again. Editing status from Done back to
+    Pending left the completion timestamp in place, and the overdue test
+    requires it to be empty, so the task could never become overdue again.
+  * Completing a late task keeps its history. Previously every day it had run
+    over silently became an ordinary entry the moment it was ticked off; those
+    days stay marked overdue and the entry records how many days late it was.
+  * Deleting an entry, or marking one done, can be undone. A banner appears
+    across the foot of the calendar for nine seconds with an Undo button; it
+    holds while hovered. Restoring brings back the entry with its assignees,
+    participants and reminders intact.
+  * Adjourning now requires the date it was adjourned to, and creates the
+    follow-up entry on that date carrying the same case, purpose and assignees,
+    linked from the original.
+  * Home-screen icons are packaged. 4.9 shipped the apple-touch-icon link
+    without the file behind it, because the icons directory and manifest were
+    never listed in the install manifest; iOS fell back to drawing a letter.
+  * Upgrades no longer re-run first-install work. postinst never checked whether
+    a previous version was configured, so the Postfix/debconf setup and a
+    recursive chown ran on every deploy.
+  * Mobile fixes: sheets scroll instead of passing the gesture to the page
+    behind them (calendar.css was overriding the scroll container); sheets can
+    be pulled down to dismiss from anywhere in the sheet, with a single grip
+    centred above the header; the sticky modal header no longer lets content
+    show above the title; and date fields stop overflowing Create Case.
+
+ -- Izumi <swarajswarupaggarwal@gmail.com>  Fri, 07 Aug 2026 00:35:00 +0530
+
 case-organizer (4.9) stable; urgency=medium
 
   * Mobile front end. The app is now usable on a phone, built entirely in the
