@@ -3194,6 +3194,13 @@ input[type="number"].year-input {
 /* ── Long-List Dropdown styling ───────────────────────────────────────────── */
 .ll-dropdown { position: relative; }
 .ll-dropdown-trigger {
+  /* The arrow below is an absolutely positioned ::after. Without a positioned
+     trigger it anchors to whatever ancestor happens to be positioned, so a
+     trigger rendered outside its .ll-dropdown wrapper flung the arrow to
+     right:12px of the page — a stray caret floating in the margin, level with
+     the field it belonged to. Anchoring it to its own element makes that
+     impossible; the trigger fills the wrapper, so nothing else moves. */
+  position: relative;
   width: 100%;
   padding: 10px 12px;
   padding-right: 32px;
@@ -4665,9 +4672,8 @@ input[type="number"].year-input {
         text-transform: capitalize;
     }
 
-    /* Tables scroll rather than burst the viewport. */
-    .table-wrapper { overflow-x: auto; -webkit-overflow-scrolling: touch; }
-    .settings-table { min-width: 520px; }
+    /* Settings tables are restacked into cards further down; they no longer
+       need a sideways scroller, which only hid the Actions column off-screen. */
 
     /* ---- bottom bar ---------------------------------------------------- */
     body.m-has-bottombar {
@@ -4842,5 +4848,101 @@ input[type="number"].year-input {
         color: #fff;
         font-size: 11px;
         text-align: center;
+    }
+
+    /* ---- Admin settings tables: rows become cards ---------------------
+       The users table carries six columns, the last of which holds a whole
+       editing form (email, role, Update, Send reset link, Deactivate,
+       Delete). No amount of narrowing makes that a table on a 390px screen,
+       and .table-wrapper's overflow-x meant the Actions column simply sat
+       off the right edge where it could not be reached.
+
+       So drop table layout entirely below 640px: each row becomes a card and
+       each cell a label/value line, the label coming from the data-label
+       attribute on the cell. The <thead> is redundant once every cell names
+       itself, so it is hidden — from assistive tech too, via display:none,
+       which keeps the header cells from being announced with no row to
+       belong to. */
+    .table-wrapper { overflow-x: visible; }
+
+    .settings-table,
+    .settings-table tbody,
+    .settings-table tr,
+    .settings-table td {
+        display: block;
+        width: 100%;
+    }
+    .settings-table thead { display: none; }
+
+    .settings-table tr {
+        margin-bottom: 12px;
+        padding: 12px 14px;
+        border: 1px solid var(--border, #e6e8ef);
+        border-radius: 12px;
+        background: var(--card, #fff);
+    }
+    .settings-table tr:last-child { margin-bottom: 0; }
+
+    .settings-table td {
+        display: grid;
+        grid-template-columns: minmax(0, 34%) minmax(0, 1fr);
+        gap: 10px;
+        align-items: baseline;
+        padding: 5px 0;
+        border-bottom: 0;
+        word-break: break-word;
+    }
+    .settings-table td::before {
+        content: attr(data-label);
+        color: var(--muted, #667085);
+        font-weight: 600;
+        font-size: 0.82rem;
+    }
+
+    /* Cells holding controls rather than text: the label would only steal
+       width from buttons that already need all of it. */
+    .settings-table td.settings-actions-cell,
+    .settings-table td.record-actions {
+        display: block;
+        margin-top: 8px;
+        padding-top: 10px;
+        border-top: 1px solid var(--border, #e6e8ef);
+    }
+    .settings-table td.settings-actions-cell::before,
+    .settings-table td.record-actions::before { content: none; }
+
+    /* The per-user editing form: one control per line, full width, so the
+       email field stops being clipped and every button is a real target. */
+    .settings-table .settings-inline-form {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        margin-bottom: 8px;
+    }
+    .settings-table .settings-inline-form input,
+    .settings-table .settings-inline-form select,
+    .settings-table .settings-inline-form button,
+    .settings-table .settings-user-action button {
+        width: 100%;
+        min-height: 44px;
+    }
+    .settings-table .settings-user-actions {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 8px;
+    }
+    .settings-table .settings-user-action { margin: 0; }
+
+    /* Download/delete icons sit side by side and stay 44px. */
+    .settings-table td.record-actions {
+        display: flex;
+        gap: 10px;
+    }
+    .settings-table td.record-actions .icon-btn {
+        flex: 1;
+        min-height: 44px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
     }
 }

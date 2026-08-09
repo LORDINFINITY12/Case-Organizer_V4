@@ -29,9 +29,14 @@
   }
   const TODAY_ISO = fmtDate(new Date());
 
+  // Pinned to en-IN rather than the browser's locale: on a US-configured
+  // machine the default puts the month first, which reads as the wrong date
+  // to everyone using this.
+  const DATE_LOCALE = 'en-IN';
+
   function prettyDate(iso) {
     const [y, m, d] = iso.split('-').map(Number);
-    return new Date(y, m - 1, d).toLocaleDateString(undefined, {
+    return new Date(y, m - 1, d).toLocaleDateString(DATE_LOCALE, {
       weekday: 'short', day: 'numeric', month: 'short', year: 'numeric',
     });
   }
@@ -64,6 +69,11 @@
     const native = wrap.querySelector('.cal-date-native');
     const btn = wrap.querySelector('.cal-date-btn');
 
+    // The native picker is laid invisibly over the button and takes the tap
+    // itself, so it has to track whatever is typed. Left unsynced it would
+    // open on today rather than on the date already showing.
+    const syncNative = () => { native.value = inToIso(input.value) || TODAY_ISO; };
+
     // Auto-insert slashes while typing digits (dd/mm/yyyy).
     input.addEventListener('input', (e) => {
       if (e.inputType && e.inputType.startsWith('delete')) return;
@@ -72,10 +82,13 @@
       if (digits.length > 4) out = `${digits.slice(0, 2)}/${digits.slice(2, 4)}/${digits.slice(4)}`;
       else if (digits.length > 2) out = `${digits.slice(0, 2)}/${digits.slice(2)}`;
       input.value = out;
+      syncNative();
     });
 
+    // Reachable by keyboard only, now that pointer events land on the overlaid
+    // input. showPicker() covers desktop browsers, where it does exist.
     btn.addEventListener('click', () => {
-      native.value = inToIso(input.value) || TODAY_ISO;
+      syncNative();
       try { native.showPicker(); } catch (_) { native.click(); }
     });
     native.addEventListener('change', () => {
@@ -84,8 +97,8 @@
 
     return {
       get() { return inToIso(input.value); },        // ISO or null
-      set(iso) { input.value = isoToIn(iso || ''); },
-      clear() { input.value = ''; },
+      set(iso) { input.value = isoToIn(iso || ''); syncNative(); },
+      clear() { input.value = ''; native.value = ''; },
     };
   }
 
@@ -220,7 +233,7 @@
     const y = state.year;
     const m = state.month;
     $id('cal-title').textContent = new Date(y, m, 1)
-      .toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
+      .toLocaleDateString(DATE_LOCALE, { month: 'long', year: 'numeric' });
 
     const first = new Date(y, m, 1);
     const startOffset = (first.getDay() + 6) % 7;   // Monday-first

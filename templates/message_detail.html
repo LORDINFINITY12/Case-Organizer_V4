@@ -72,7 +72,7 @@
         <div class="message-detail-meta">
           <span><strong>From:</strong> {{ message.sender_email }}</span>
           <span><strong>To:</strong> {{ message.recipient_email }}</span>
-          <span><strong>Sent:</strong> {{ message.created_at }}</span>
+          <span><strong>Sent:</strong> {{ message.created_at|dmy }}</span>
         </div>
         <div class="message-detail-body">{{ (message.body or '') | e }}</div>
         <div class="message-detail-actions">

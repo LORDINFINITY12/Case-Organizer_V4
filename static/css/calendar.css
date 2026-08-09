@@ -468,7 +468,10 @@ body.cal-resizing {
 .cal-date-wrap input[type="text"] { flex: 1; }
 .cal-date-btn {
     flex: none;
-    padding: 10px 14px;
+    /* Fixed width so the invisible native picker below can be laid exactly on
+       top of it, and wide enough to be a 44px touch target on a phone. */
+    width: 46px;
+    padding: 10px 0;
     border-radius: 12px;
     border: 1px solid var(--input-border, #e0e3ec);
     background: var(--input-bg, var(--card));
@@ -476,17 +479,27 @@ body.cal-resizing {
     cursor: pointer;
 }
 .cal-date-btn:hover { color: var(--accent); border-color: var(--accent); }
-/* Rendered but invisible so showPicker() can anchor its popup here. */
+/* The native picker is stacked invisibly ON TOP of the button, not tucked away
+   in a corner.  iOS has no showPicker(), and a synthetic click() on an
+   off-screen input opens nothing there, so the button was simply dead on a
+   phone.  Overlaying the real control means the tap lands on it directly and
+   iOS raises its own date wheel; the styled button shows through underneath.
+   The button keeps its click handler for keyboard activation, which pointer
+   taps no longer reach. */
 .cal-date-native {
     position: absolute;
+    top: 0;
     right: 0;
     bottom: 0;
-    width: 1px;
-    height: 1px;
-    opacity: 0;
-    border: 0;
+    width: 46px;
+    margin: 0;
     padding: 0;
-    pointer-events: none;
+    border: 0;
+    background: none;
+    opacity: 0;
+    cursor: pointer;
+    -webkit-appearance: none;
+    appearance: none;
 }
 .cal-assignees {
     border: 1px solid color-mix(in srgb, var(--muted) 25%, transparent);

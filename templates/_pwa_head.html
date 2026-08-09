@@ -17,3 +17,18 @@
 <meta name="apple-mobile-web-app-title" content="Case Organizer">
 <link rel="apple-touch-icon" href="{{ url_for('static', filename='icons/apple-touch-icon.png') }}">
 <link rel="apple-touch-icon" sizes="180x180" href="{{ url_for('static', filename='icons/apple-touch-icon.png') }}">
+
+{# The service worker exists only to stop the home-screen app getting stranded
+   on the edge's 502 page when the tunnel reconnects: a standalone container
+   has no address bar to refresh from, and WebKit keeps handing back the failed
+   navigation across relaunches. It caches nothing belonging to the app, so it
+   cannot serve anything stale. See static/sw.js. #}
+<script nonce="{{ csp_nonce }}">
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', function () {
+      navigator.serviceWorker.register('/sw.js', { scope: '/' }).catch(function () {
+        /* An enhancement only — if registration fails the app behaves as before. */
+      });
+    });
+  }
+</script>

@@ -1,3 +1,33 @@
+case-organizer (4.9.2) stable; urgency=medium
+
+  * The home-screen app no longer gets stranded when the site is briefly
+    unreachable. A standalone container has no address bar to refresh from, and
+    WebKit kept handing back the edge's cached 502 across relaunches, so the app
+    looked permanently dead and even re-adding the shortcut did not clear it. A
+    service worker now replaces any failed page load with a recovery page that
+    polls /ping and continues on its own once the origin answers. It caches
+    nothing belonging to the app, so it cannot serve anything stale, and it
+    leaves every API call, upload and form post untouched.
+  * The date picker works on a phone. The calendar button drove a 1px input
+    parked off-screen through showPicker(), which iOS does not implement, and
+    the click() fallback does nothing on a hidden control, so the button was
+    simply dead. The real picker is now laid invisibly over the button and
+    receives the tap itself.
+  * Administrator settings are usable on a phone. The users, legal notice and
+    certificate tables were 6-column layouts behind a sideways scroller, which
+    left the Actions column off the right edge where it could not be reached.
+    Each row is now a card with labelled fields, and every control is a 44px
+    target.
+  * A stray dropdown arrow no longer floats in the right margin. The arrow is an
+    absolutely positioned pseudo-element, and without a positioned trigger it
+    anchored to the page rather than to its own field.
+  * Dates read dd/mm/yyyy throughout. Stored timestamps were shown in the
+    database's own YYYY-MM-DD form, and the calendar's long dates followed the
+    browser's locale, which puts the month first on a US-configured machine.
+  * Removed a stale 190 KB copy of main.js that was being packaged and shipped.
+
+ -- Izumi <swarajswarupaggarwal@gmail.com>  Sat, 08 Aug 2026 16:45:00 +0530
+
 case-organizer (4.9.1) stable; urgency=medium
 
   * Large uploads no longer fail behind Cloudflare. Files at or over 80 MB are

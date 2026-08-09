@@ -185,12 +185,12 @@
               <tbody>
                 {% for user in users %}
                   <tr class="{% if not user.is_active %}inactive{% endif %}">
-                    <td>{{ user.email }}</td>
-                    <td>{{ user.role|capitalize }}</td>
-                    <td>{{ 'Active' if user.is_active else 'Inactive' }}</td>
-                    <td>{{ user.created_at or '—' }}</td>
-                    <td>{{ user.last_login_at or 'Never' }}</td>
-                    <td>
+                    <td data-label="Email">{{ user.email }}</td>
+                    <td data-label="Role">{{ user.role|capitalize }}</td>
+                    <td data-label="Status">{{ 'Active' if user.is_active else 'Inactive' }}</td>
+                    <td data-label="Created">{{ user.created_at|dmy or '—' }}</td>
+                    <td data-label="Last login">{{ user.last_login_at|dmy or 'Never' }}</td>
+                    <td class="settings-actions-cell" data-label="Actions">
                       <form method="post" class="settings-inline-form">
                         {{ csrf_input }}
                         <input type="hidden" name="form_name" value="update_user">
@@ -320,10 +320,10 @@
                 <tbody>
                   {% for rec in legal_notice_records %}
                     <tr data-record-row="ln-{{ rec.id }}">
-                      <td>{{ rec.notice_number }}</td>
-                      <td>{{ rec.recipient_name }}</td>
-                      <td>{{ rec.created_at }}</td>
-                      <td class="record-actions">
+                      <td data-label="Number">{{ rec.notice_number }}</td>
+                      <td data-label="Recipient">{{ rec.recipient_name }}</td>
+                      <td data-label="Created">{{ rec.created_at|dmy }}</td>
+                      <td class="record-actions" data-label="">
                         <a class="icon-btn record-download-btn"
                            href="{{ url_for('api_legal_notice_download', nid=rec.id) }}"
                            title="Download notice PDF"
@@ -362,10 +362,10 @@
                 <tbody>
                   {% for rec in certificate_records %}
                     <tr data-record-row="cert-{{ rec.id }}">
-                      <td>{{ rec.certificate_number }}</td>
-                      <td>{{ rec.intern_name }}</td>
-                      <td>{{ rec.created_at }}</td>
-                      <td class="record-actions">
+                      <td data-label="Number">{{ rec.certificate_number }}</td>
+                      <td data-label="Intern">{{ rec.intern_name }}</td>
+                      <td data-label="Created">{{ rec.created_at|dmy }}</td>
+                      <td class="record-actions" data-label="">
                         <a class="icon-btn record-download-btn"
                            href="{{ url_for('api_certificate_download', cid=rec.id) }}"
                            title="Download certificate PDF"

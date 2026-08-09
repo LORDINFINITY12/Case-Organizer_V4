@@ -8,5 +8,7 @@ static/js                      opt/case-organizer/static/
 static/bento                   opt/case-organizer/static/
 static/icons                   opt/case-organizer/static/
 static/manifest.json           opt/case-organizer/static/
+static/sw.js                   opt/case-organizer/static/
+static/offline.html            opt/case-organizer/static/
 services                       opt/case-organizer/
 debian/usr-bin-case-organizer  usr/bin/case-organizer

@@ -719,6 +719,39 @@ def inject_current_user() -> Dict[str, Any]:
     }
 
 
+@app.template_filter("dmy")
+def _format_dmy(value: Any, with_time: bool = True) -> str:
+    """Render a stored timestamp in Indian dd/mm/yyyy form.
+
+    SQLite hands these back as 'YYYY-MM-DD HH:MM:SS' strings, which read as
+    American dates to the people using this. Anything unrecognised is passed
+    through untouched rather than blanked, so a surprise format is visibly odd
+    instead of silently missing.
+    """
+    if value is None or value == "":
+        return ""
+    if isinstance(value, (datetime, date)):
+        dt: Optional[datetime] = (
+            value if isinstance(value, datetime) else datetime(value.year, value.month, value.day)
+        )
+    else:
+        text = str(value).strip()
+        dt = None
+        for fmt in ("%Y-%m-%d %H:%M:%S", "%Y-%m-%dT%H:%M:%S", "%Y-%m-%d %H:%M", "%Y-%m-%d"):
+            try:
+                dt = datetime.strptime(text, fmt)
+                break
+            except ValueError:
+                continue
+        if dt is None:
+            return text
+        if fmt == "%Y-%m-%d":
+            with_time = False
+    if with_time and (dt.hour or dt.minute or dt.second):
+        return dt.strftime("%d/%m/%Y %H:%M")
+    return dt.strftime("%d/%m/%Y")
+
+
 @app.context_processor
 def inject_csrf() -> Dict[str, Any]:
     """Provide csrf_token (string) and csrf_input (ready-made hidden field) to templates."""
@@ -976,6 +1009,7 @@ def _require_setup():
         "login",
         "static",
         "ping",
+        "service_worker",
         "__routes",
         "forgot_password",
         "reset_password",
@@ -7648,6 +7682,22 @@ def admin_settings():
 @app.get("/ping")
 def ping():
     return "pong"
+
+# ---- GET /sw.js — service worker, served from the root -------------------
+# The file lives in static/, but a worker may only control paths at or below
+# the URL it is served from, and this one has to control "/" to see page loads
+# at all.  Serving it here rather than at /static/sw.js is what gives it that
+# scope; Service-Worker-Allowed states it explicitly.
+@app.get("/sw.js")
+def service_worker():
+    response = send_from_directory(app.static_folder, "sw.js")
+    response.headers["Service-Worker-Allowed"] = "/"
+    response.headers["Content-Type"] = "application/javascript"
+    # Browsers revalidate the worker on navigation.  Without this the HTTP
+    # cache can pin a stale copy, and a broken worker would then be very hard
+    # to displace.
+    response.headers["Cache-Control"] = "no-cache"
+    return response
 
 # ---- GET /__routes — admin-only route map dump ---------------------------
 @app.get("/__routes")
