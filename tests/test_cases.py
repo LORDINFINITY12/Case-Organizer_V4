@@ -280,3 +280,106 @@ class TestChunkedUpload:
         }, content_type="multipart/form-data",
            headers={"X-CSRF-Token": "test-csrf-token"})
         assert r.status_code in (302, 401, 403)
+
+    def test_a_chunked_upload_lands_in_the_case_folder(self, client, test_user, app,
+                                                       tmp_path, monkeypatch):
+        """The handoff, end to end — spool through to a file on disk.
+
+        The tests above only ever exercised /api/upload/chunk, the part that
+        writes the spool. Nothing drove the other half, where the finished
+        spool is turned back into an upload, so a NameError on that line
+        survived a full green suite and shipped: every chunked upload 500'd.
+        """
+        import io, json
+        import app as app_module
+        fsroot = tmp_path / "fs"
+        monkeypatch.setattr(app_module, "FS_ROOT", fsroot)
+        self._login(client, test_user)
+
+        case_dir = fsroot / "2026" / "Aug" / "Alpha v. Beta"
+        case_dir.mkdir(parents=True, exist_ok=True)
+
+        body = b"%PDF-1.4 " + b"z" * 4096
+        for i, part in enumerate((body[:2048], body[2048:])):
+            r = client.post("/api/upload/chunk", data={
+                "upload_id": "handoff12345", "index": str(i),
+                "chunk": (io.BytesIO(part), "big.pdf"),
+            }, content_type="multipart/form-data",
+               headers={"X-CSRF-Token": "test-csrf-token"})
+            assert r.status_code == 200, r.get_json()
+
+        r = client.post("/manage-case/upload", data={
+            "Year": "2026", "Month": "Aug", "Case Name": "Alpha v. Beta",
+            "Domain": "Civil",
+            "chunked": json.dumps([{"id": "handoff12345", "filename": "big.pdf"}]),
+        }, content_type="multipart/form-data",
+           headers={"X-CSRF-Token": "test-csrf-token"})
+
+        assert r.status_code == 200, f"chunked upload failed: {r.status_code} {r.get_data(as_text=True)[:300]}"
+        assert r.get_json()["ok"] is True, r.get_json()
+
+        written = [p for p in case_dir.rglob("*") if p.is_file()]
+        assert written, "the assembled file never reached the case folder"
+        assert any(p.read_bytes() == body for p in written), "assembled contents do not match"
+
+    def test_a_finished_chunk_spool_is_cleaned_up(self, client, test_user, app,
+                                                  tmp_path, monkeypatch):
+        """Spools are large; leaving them behind fills the upload disk."""
+        import io, json
+        import app as app_mod
+        fsroot = tmp_path / "fs"
+        monkeypatch.setattr(app_mod, "FS_ROOT", fsroot)
+        self._login(client, test_user)
+
+        case_dir = fsroot / "2026" / "Aug" / "Gamma v. Delta"
+        case_dir.mkdir(parents=True, exist_ok=True)
+
+        client.post("/api/upload/chunk", data={
+            "upload_id": "cleanup12345", "index": "0",
+            "chunk": (io.BytesIO(b"%PDF-1.4 cleanup"), "c.pdf"),
+        }, content_type="multipart/form-data",
+           headers={"X-CSRF-Token": "test-csrf-token"})
+        assert app_mod._chunk_path("cleanup12345").exists()
+
+        r = client.post("/manage-case/upload", data={
+            "Year": "2026", "Month": "Aug", "Case Name": "Gamma v. Delta",
+            "Domain": "Civil",
+            "chunked": json.dumps([{"id": "cleanup12345", "filename": "c.pdf"}]),
+        }, content_type="multipart/form-data",
+           headers={"X-CSRF-Token": "test-csrf-token"})
+        assert r.status_code == 200 and r.get_json().get("ok") is True, r.get_json()
+
+        assert not app_mod._chunk_path("cleanup12345").exists(), "spool file was left behind"
+
+    def test_a_rejected_upload_still_cleans_up_its_spool(self, client, test_user, app,
+                                                         tmp_path, monkeypatch):
+        """The failure paths leak too, and they are the ones that repeat.
+
+        A user retrying a large upload that keeps being refused would otherwise
+        strand a full-size spool on every attempt.
+        """
+        import io, json
+        import app as app_mod
+        fsroot = tmp_path / "fs"
+        monkeypatch.setattr(app_mod, "FS_ROOT", fsroot)
+        (fsroot / "2026" / "Aug" / "Eps v. Zeta").mkdir(parents=True, exist_ok=True)
+        self._login(client, test_user)
+
+        # Not a PDF by magic bytes, so the handler refuses to save it.
+        client.post("/api/upload/chunk", data={
+            "upload_id": "rejected1234", "index": "0",
+            "chunk": (io.BytesIO(b"MZ this is an executable"), "x.pdf"),
+        }, content_type="multipart/form-data",
+           headers={"X-CSRF-Token": "test-csrf-token"})
+        assert app_mod._chunk_path("rejected1234").exists()
+
+        r = client.post("/manage-case/upload", data={
+            "Year": "2026", "Month": "Aug", "Case Name": "Eps v. Zeta",
+            "Domain": "Civil",
+            "chunked": json.dumps([{"id": "rejected1234", "filename": "x.pdf"}]),
+        }, content_type="multipart/form-data",
+           headers={"X-CSRF-Token": "test-csrf-token"})
+        assert r.get_json().get("ok") is not True, "a non-PDF should not have been saved"
+
+        assert not app_mod._chunk_path("rejected1234").exists(), \
+            "spool survived a rejected upload"

@@ -55,6 +55,32 @@ def test_offline_page_probes_ping(client):
     assert b"/ping" in client.get("/static/offline.html").data
 
 
+def test_worker_only_deletes_its_own_caches(client):
+    """BentoPDF keeps its assets in its own cache on this same origin.
+
+    The first version swept every cache returned by caches.keys(), which threw
+    away 'bentopdf-vN-static' each time the worker activated.
+    """
+    body = client.get("/sw.js").data.decode()
+    assert "CACHE_PREFIX" in body, "cache cleanup is not scoped by a prefix"
+    assert "keys.map((k) => caches.delete(k))" not in body, "blanket cache deletion is back"
+    assert body.count("startsWith(CACHE_PREFIX)") >= 2, \
+        "both activate and unregister must filter by prefix"
+
+
+def test_worker_leaves_bento_alone(client):
+    """Two workers competing over the same pages is not worth the risk."""
+    body = client.get("/sw.js").data.decode()
+    assert "/bento/" in body, "worker does not exclude the BentoPDF suite"
+
+
+def test_worker_never_intercepts_non_navigation_requests(client):
+    """Uploads and API calls must reach the network untouched."""
+    body = client.get("/sw.js").data.decode()
+    assert "req.mode !== 'navigate'" in body
+    assert "req.method !== 'GET'" in body
+
+
 # ---------------------------------------------------------------------------
 # dd/mm/yyyy filter
 # ---------------------------------------------------------------------------

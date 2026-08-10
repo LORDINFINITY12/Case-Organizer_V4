@@ -34,9 +34,10 @@ from flask import (
     Request,
     Flask, request, jsonify, session, redirect, url_for,
     render_template, render_template_string, flash, send_file, send_from_directory, g, abort,
-    has_request_context,
+    has_request_context, after_this_request,
 )
 from markupsafe import Markup
+from werkzeug.datastructures import FileStorage
 from werkzeug.exceptions import BadRequest, InternalServerError, RequestEntityTooLarge
 from werkzeug.utils import secure_filename
 
@@ -2285,6 +2286,19 @@ def manage_case_upload():
 
     # Accept MULTIPLE files
     files = request.files.getlist("file") + _assembled_uploads(request.form)
+
+    # A spool is as large as the upload itself, so leaving one behind costs real
+    # disk — enough of them and the spool volume fills and every later upload
+    # fails on write.  This handler has three success returns and a dozen error
+    # ones, and relying on each to remember the cleanup already failed once, so
+    # register it against the request instead: it runs however this ends,
+    # including on an unhandled exception.
+    if request.form.get("chunked"):
+        @after_this_request
+        def _drop_spools(response):
+            _discard_assembled(request.form)
+            return response
+
     if not files:
         return jsonify({"ok": False, "msg": "No files provided."}), 400
 
@@ -2342,7 +2356,6 @@ def manage_case_upload():
         if not saved_paths:
             return jsonify({"ok": False, "msg": "No files were saved (unsupported type?)"}), 400
 
-        _discard_assembled(request.form)
         return jsonify({"ok": True, "saved_as": saved_paths})
     # ---------- END Case Law handling ----------
 
@@ -2375,7 +2388,6 @@ def manage_case_upload():
         if not saved_paths:
             return jsonify({"ok": False, "msg": "No files were saved (unsupported type?)"}), 400
 
-        _discard_assembled(request.form)
         return jsonify({"ok": True, "saved_as": saved_paths})
     # ---------- END Legal Notices handling ----------
 

@@ -17,7 +17,12 @@
  * show the recovery page a moment too eagerly.
  */
 
-const VERSION = 'caseorg-v1';
+// Every cache this worker owns starts with this prefix. Cleanup is filtered on
+// it because BentoPDF ships its own service worker and its own cache
+// ('bentopdf-vN-static') on the same origin; a blanket sweep of caches.keys()
+// deletes that too, throwing away the assets its tools load from.
+const CACHE_PREFIX = 'caseorg-';
+const VERSION = CACHE_PREFIX + 'v1';
 const OFFLINE_URL = '/static/offline.html';
 
 self.addEventListener('install', (event) => {
@@ -33,7 +38,13 @@ self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches
       .keys()
-      .then((keys) => Promise.all(keys.filter((k) => k !== VERSION).map((k) => caches.delete(k))))
+      .then((keys) =>
+        Promise.all(
+          keys
+            .filter((k) => k.startsWith(CACHE_PREFIX) && k !== VERSION)
+            .map((k) => caches.delete(k))
+        )
+      )
       .then(() => self.clients.claim())
   );
 });
@@ -45,6 +56,11 @@ self.addEventListener('fetch', (event) => {
   // and any form POST — goes straight to the network untouched, so no request
   // that changes data can ever be replayed or answered from a cache.
   if (req.mode !== 'navigate' || req.method !== 'GET') return;
+
+  // BentoPDF is a self-contained app under /bento/ with its own service worker
+  // and its own offline handling. Leave it entirely alone rather than have two
+  // workers competing over the same pages.
+  if (new URL(req.url).pathname.startsWith('/bento/')) return;
 
   event.respondWith(
     fetch(req)
@@ -69,7 +85,9 @@ self.addEventListener('message', (event) => {
   event.waitUntil(
     caches
       .keys()
-      .then((keys) => Promise.all(keys.map((k) => caches.delete(k))))
+      .then((keys) =>
+        Promise.all(keys.filter((k) => k.startsWith(CACHE_PREFIX)).map((k) => caches.delete(k)))
+      )
       .then(() => self.registration.unregister())
   );
 });

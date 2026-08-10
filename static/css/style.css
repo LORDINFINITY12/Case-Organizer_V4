@@ -3191,6 +3191,53 @@ input[type="number"].year-input {
 /* Match the unified court dropdown's input to the note-field input styling. */
 .note-field .search-dropdown-input { border-radius: 10px; padding: 8px 10px; }
 
+/* ── Indian dd/mm/yyyy date field ──────────────────────────────────────────
+   A native <input type="date"> renders in the browser's locale and cannot be
+   forced to another order, so on a machine configured for the US it shows
+   mm/dd/yyyy — which reads as a different date entirely to the people using
+   this. The visible control is therefore a text field in Indian order backed
+   by a hidden input carrying the ISO value the server parses.
+
+   The native picker is kept, laid invisibly over the button, because iOS has
+   no showPicker() and ignores a synthetic click on a hidden control. Mirrors
+   .cal-date-* in calendar.css, which is not loaded on the home page. */
+.date-in-wrap {
+    position: relative;
+    display: flex;
+    gap: 8px;
+    align-items: stretch;
+}
+.date-in-wrap .date-in-text { flex: 1; min-width: 0; }
+.date-in-btn {
+    flex: none;
+    width: 46px;
+    padding: 10px 0;
+    border-radius: 12px;
+    border: 1px solid var(--input-border, #e6e8ef);
+    background: var(--input-bg, var(--card));
+    color: var(--muted);
+    cursor: pointer;
+}
+.date-in-btn:hover { color: var(--accent); border-color: var(--accent); }
+.date-in-native {
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    width: 46px;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    background: none;
+    opacity: 0;
+    cursor: pointer;
+    /* pointer-events inherits, and this element exists solely to receive the
+       tap, so it must not pick up a `none` from any container it sits in. */
+    pointer-events: auto;
+    -webkit-appearance: none;
+    appearance: none;
+}
+
 /* ── Long-List Dropdown styling ───────────────────────────────────────────── */
 .ll-dropdown { position: relative; }
 .ll-dropdown-trigger {

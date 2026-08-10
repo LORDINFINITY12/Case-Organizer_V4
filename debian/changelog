@@ -1,3 +1,35 @@
+case-organizer (4.9.3) stable; urgency=medium
+
+  * Large uploads work again. The chunked upload added in 4.9.1 had never
+    worked at all: the code that turns a finished chunk spool back into an
+    upload referenced FileStorage without importing it, so every large upload
+    raised a NameError and returned the generic "server failed while processing
+    the upload" message. The client offloads anything over 80 MB to that path
+    regardless of the network, which is why files that used to upload fine over
+    the local address stopped working too. The suite missed it because the
+    tests only ever drove /api/upload/chunk, the half that writes the spool, and
+    nothing exercised the handoff; a test now covers the whole path.
+  * Finished uploads no longer leave their spool behind. A spool is as large as
+    the file itself, and the general upload path never removed it, so the spool
+    volume filled steadily until writes started failing. Cleanup is now
+    registered against the request, so it runs on every exit — success, refusal
+    or unhandled error — rather than depending on each of a dozen returns to
+    remember it.
+  * PDF tools no longer hang on larger jobs. The service worker added in 4.9.2
+    deleted every cache on the origin whenever it activated, including the one
+    BentoPDF keeps its own assets in. It now only ever removes its own caches,
+    and leaves /bento/ alone entirely, since that suite ships its own worker.
+  * Create Case and Manage Case take dates as dd/mm/yyyy. Both used a native
+    date field, which renders in the browser's locale and shows mm/dd/yyyy on a
+    machine configured for the US. The visible field is now text in Indian
+    order, backed by a hidden field carrying the ISO value the server parses.
+  * Choosing Manage Case from a search result works with a form already open.
+    Opening it went through a card click, which toggles, so when Manage Case
+    was already the open form the click closed it and the case was never
+    filled in — it only worked if you did it twice.
+
+ -- Izumi <swarajswarupaggarwal@gmail.com>  Mon, 10 Aug 2026 18:20:00 +0530
+
 case-organizer (4.9.2) stable; urgency=medium
 
   * The home-screen app no longer gets stranded when the site is briefly

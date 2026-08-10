@@ -23,6 +23,105 @@ function _csrfToken() {
   return m ? m.content : '';
 }
 
+/* ---------- Indian dd/mm/yyyy date fields ----------
+   A native <input type="date"> renders in the browser's locale and cannot be
+   forced to another order, so on a US-configured machine it shows mm/dd/yyyy.
+   The visible control is a text field in Indian order; the element keeping the
+   original id becomes a hidden input carrying the ISO value, so everything
+   that already reads or writes that id keeps working unchanged.
+
+   The markup is built here rather than in each form's template so the two
+   forms cannot drift apart. */
+
+function dateIsoToIn(iso) {
+  if (!iso) return '';
+  const [y, m, d] = iso.split('-');
+  return d && m && y ? `${d}/${m}/${y}` : '';
+}
+
+function dateInToIso(text) {
+  const m = /^(\d{1,2})[/-](\d{1,2})[/-](\d{4})$/.exec((text || '').trim());
+  if (!m) return '';
+  const [d, mo, y] = [Number(m[1]), Number(m[2]), Number(m[3])];
+  const dt = new Date(y, mo - 1, d);
+  // Rejects 31/02 and friends, which Date would silently roll forward.
+  if (dt.getFullYear() !== y || dt.getMonth() !== mo - 1 || dt.getDate() !== d) return '';
+  const p = (n) => String(n).padStart(2, '0');
+  return `${y}-${p(mo)}-${p(d)}`;
+}
+
+/**
+ * Turn <input type="date" id="X"> into a dd/mm/yyyy field.
+ * The id moves to a hidden input holding the ISO value.
+ * Returns { set(iso), get() } or null when the element is absent.
+ */
+function initIndianDateField(id, initialIso) {
+  const original = document.getElementById(id);
+  if (!original || original.type === 'hidden') return null;
+
+  const wrap = document.createElement('span');
+  wrap.className = 'date-in-wrap ' + (original.className || '');
+  wrap.innerHTML =
+    '<input type="text" class="date-in-text" inputmode="numeric" placeholder="dd/mm/yyyy"' +
+    ' maxlength="10" autocomplete="off" aria-label="Date">' +
+    '<button type="button" class="date-in-btn" aria-label="Open date picker">' +
+    '<i class="fa-regular fa-calendar"></i></button>' +
+    '<input type="date" class="date-in-native" tabindex="-1" aria-label="Choose date">';
+
+  const hidden = document.createElement('input');
+  hidden.type = 'hidden';
+  hidden.id = id;
+  wrap.appendChild(hidden);
+
+  original.removeAttribute('id');
+  original.replaceWith(wrap);
+
+  const text = wrap.querySelector('.date-in-text');
+  const native = wrap.querySelector('.date-in-native');
+  const btn = wrap.querySelector('.date-in-btn');
+
+  const commit = () => {
+    const iso = dateInToIso(text.value);
+    hidden.value = iso;
+    // The picker is overlaid on the button and takes the tap itself, so it has
+    // to track what is typed or it would open on today instead.
+    if (iso) native.value = iso;
+  };
+
+  text.addEventListener('input', (e) => {
+    if (!(e.inputType && e.inputType.startsWith('delete'))) {
+      const digits = text.value.replace(/\D/g, '').slice(0, 8);
+      text.value = digits.length > 4
+        ? `${digits.slice(0, 2)}/${digits.slice(2, 4)}/${digits.slice(4)}`
+        : digits.length > 2 ? `${digits.slice(0, 2)}/${digits.slice(2)}` : digits;
+    }
+    commit();
+  });
+
+  native.addEventListener('change', () => {
+    if (native.value) { text.value = dateIsoToIn(native.value); commit(); }
+  });
+
+  // Keyboard only; pointer events land on the overlaid input.
+  btn.addEventListener('click', () => {
+    try { native.showPicker(); } catch (_) { native.click(); }
+  });
+
+  const api = {
+    get() { return hidden.value; },
+    set(iso) { text.value = dateIsoToIn(iso || ''); commit(); },
+  };
+  if (initialIso) api.set(initialIso);
+  return api;
+}
+
+/** Today as YYYY-MM-DD in local time (toISOString would shift across UTC). */
+function todayIso() {
+  const d = new Date();
+  const p = (n) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+}
+
 /**
  * POST a FormData with upload progress.  fetch() cannot report how much of the
  * body has gone out, so uploads go through XHR and drive a determinate bar.
@@ -2203,13 +2302,32 @@ function renderResults(list) {
 }
 
 // ------------- Open a case in Manage Case form -------------------------
-function openCaseInManage(year, month, caseName) {
-  // Activate the Manage Case card
-  const manageCard = document.getElementById('card-manage');
-  if (manageCard) manageCard.click();
+/** Resolve once `selector` exists, or with null once `timeoutMs` has passed. */
+function waitForElement(selector, timeoutMs = 4000) {
+  return new Promise((resolve) => {
+    const existing = document.querySelector(selector);
+    if (existing) return resolve(existing);
+    const started = Date.now();
+    const tick = () => {
+      const el = document.querySelector(selector);
+      if (el) return resolve(el);
+      if (Date.now() - started > timeoutMs) return resolve(null);
+      requestAnimationFrame(tick);
+    };
+    requestAnimationFrame(tick);
+  });
+}
 
-  // Wait for the form to render, then pre-select year/month/case
-  requestAnimationFrame(async () => {
+function openCaseInManage(year, month, caseName) {
+  const manageCard = document.getElementById('card-manage');
+  // A card click TOGGLES. When Manage Case was already the open form this
+  // closed it, so choosing a case from the search results appeared to do
+  // nothing at all and had to be repeated. Only click to open it.
+  if (manageCard && !manageCard.classList.contains('active')) manageCard.click();
+
+  // The form is built asynchronously, so wait for its fields to exist rather
+  // than assuming a single frame was long enough.
+  waitForElement('#mc-year').then(async () => {
     const yearSel  = document.getElementById('mc-year');
     const monthSel = document.getElementById('mc-month');
     const caseSel  = document.getElementById('mc-case');
@@ -2600,8 +2718,7 @@ function createCaseForm(){
   host.append(wrap);
 
   // defaults
-  const dateEl = $('#cc-date');
-  if (dateEl) dateEl.valueAsDate = new Date();
+  initIndianDateField('cc-date', todayIso());
 
   // "We're Representing" tab buttons
   const opHidden = $('#op');
@@ -2781,7 +2898,7 @@ function manageCaseForm(){
   host.append(wrap);
 
   // defaults
-  const mcDate = $('#mc-date'); if (mcDate) mcDate.valueAsDate = new Date();
+  initIndianDateField('mc-date', todayIso());
 
   // --- Populate Year / Month / Case from backend -----------------------
   const yearSel  = $('#mc-year');
