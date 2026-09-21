@@ -487,6 +487,36 @@ def sanitize_case_law_component(text: str, replacement: str = " ") -> str:
     return cleaned
 
 
+def _folder_component(raw: str) -> str:
+    """Flatten *raw* into a single OS-safe folder name.
+
+    Taxonomy subcategories can contain "/" (e.g. "Section 482 CrPC / Section 528
+    BNSS"); collapsing the separators keeps each one a single folder.  Shared by
+    the upload route and the directory-template route so the two can never
+    disagree about where a subcategory lives on disk.
+    """
+    return sanitize_case_law_component(
+        normalize_ws((raw or "").replace("/", " - ").replace("\\", " - "))
+    )
+
+
+def resolve_unique_destination(directory: Path, desired_filename: str) -> Path:
+    """Return a non-colliding path in *directory*, appending _1, _2, … as needed.
+
+    Deliberately distinct from :func:`ensure_unique_path` — this one runs the
+    name through ``secure_filename`` first and suffixes with an underscore,
+    which is how every uploaded case file is named.  Keep them separate.
+    """
+    safe_name = secure_filename(desired_filename) or "upload.bin"
+    dest = directory / safe_name
+    final_dest = dest
+    counter = 1
+    while final_dest.exists():
+        final_dest = directory / f"{dest.stem}_{counter}{dest.suffix}"
+        counter += 1
+    return final_dest
+
+
 def ensure_unique_path(path: Path) -> Path:
     """Append ' (1)', ' (2)', … to *path* until it no longer collides on disk."""
     if not path.exists():
@@ -2265,13 +2295,8 @@ def manage_case_upload():
     # Classification that influences filename
     domain      = normalize_ws(form.get("Domain"))        # Criminal / Civil / Commercial / Case Law
     subcategory = normalize_ws(form.get("Subcategory"))   # optional subfolder
-    # Taxonomy subcategories can contain "/" (e.g. "Section 482 CrPC / Section 528
-    # BNSS"); keep each subcategory a single folder by flattening path separators.
-    # The remaining Windows-illegal characters / reserved names are sanitized
-    # the same way case-law fragments are, so the folder works on any OS.
     if subcategory:
-        subcategory = normalize_ws(subcategory.replace("/", " - ").replace("\\", " - "))
-        subcategory = sanitize_case_law_component(subcategory)
+        subcategory = _folder_component(subcategory)
     main_type   = normalize_ws(form.get("Main Type"))     # OPTIONAL now
 
     if not domain:
@@ -2315,16 +2340,6 @@ def manage_case_upload():
         return re.sub(r"\s+", " ", base).strip()
 
     saved_paths = []
-
-    def resolve_unique_destination(directory: Path, desired_filename: str) -> Path:
-        safe_name = secure_filename(desired_filename) or "upload.bin"
-        dest = directory / safe_name
-        final_dest = dest
-        counter = 1
-        while final_dest.exists():
-            final_dest = directory / f"{dest.stem}_{counter}{dest.suffix}"
-            counter += 1
-        return final_dest
 
     # ---------- NEW: Case Law handling ----------
     if domain.lower() == "case law":
@@ -2394,11 +2409,6 @@ def manage_case_upload():
     # Regular categories (Criminal/Civil/Commercial).  v4.8: an upload may target
     #   Case / <Subcategory> / [<Misc proceeding>] / [<Standard sub-folder>]
     # each component sanitized to a single OS-safe folder and created on demand.
-    def _folder_component(raw: str) -> str:
-        return sanitize_case_law_component(
-            normalize_ws((raw or "").replace("/", " - ").replace("\\", " - "))
-        )
-
     proceeding = _folder_component(form.get("Proceeding"))   # optional misc-proceeding category
     subfolder = _folder_component(form.get("Subfolder"))      # optional standard sub-folder
     if subfolder and subfolder not in STANDARD_SUBDIRS:
