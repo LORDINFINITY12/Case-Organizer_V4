@@ -27,7 +27,7 @@ import time
 from functools import wraps
 from pathlib import Path
 import json
-from typing import Dict, Any, Iterable, List, Optional
+from typing import Dict, Any, Iterable, List, Optional, Tuple
 
 # ---- Flask / Werkzeug ---------------------------------------------------
 from flask import (
@@ -3394,6 +3394,129 @@ def api_dir_tree():
     except Exception as e:
         log.error("Directory listing failed: %s", e, exc_info=True)
         return jsonify({"dirs": [], "files": [], "error": "Unable to list directory."}), 500
+
+
+# ════════════════════════════════════════════════════════════════════
+# FILES PAGE
+# ════════════════════════════════════════════════════════════════════
+#
+# A Drive-like view over the case tree only — FS_ROOT/<YYYY>/<Mmm>/<case>/…
+# Case Law, Invoices, Letterheads, Vakalatnamas, Certificates and
+# Legal_Notices keep their own dedicated pages and are not reachable here.
+#
+# Every non-case top-level directory has a non-numeric name, so one rule —
+# the first path component is four digits — confines the whole feature.
+# ════════════════════════════════════════════════════════════════════
+
+_YEAR_DIR_RE = re.compile(r"\d{4}")
+
+
+class CaseTreeError(ValueError):
+    """A Files-page path that is outside the case tree or too shallow."""
+
+
+def _in_case_tree(parts: Iterable[str]) -> bool:
+    """True when *parts* (relative to FS_ROOT) sits under a 4-digit year dir."""
+    parts = tuple(parts)
+    return bool(parts) and bool(_YEAR_DIR_RE.fullmatch(parts[0]))
+
+
+def _case_tree_path(raw_rel: str, *, min_depth: int = 0) -> Tuple[Path, Tuple[str, ...]]:
+    """Resolve *raw_rel* under FS_ROOT, confined to the case tree.
+
+    Raises :class:`CaseTreeError` with a user-safe message for anything outside
+    the tree or shallower than *min_depth* components.
+
+    The year check runs on the RESOLVED path, not the raw string: ``_safe_path``
+    calls ``.resolve()``, so a symlink inside a case pointing at
+    ``FS_ROOT/Case Law`` would otherwise slip past a string comparison.
+    """
+    parts_in = [p for p in (raw_rel or "").replace("\\", "/").split("/") if p]
+    if any(p in {".", ".."} for p in parts_in):
+        raise CaseTreeError("Invalid path")
+    try:
+        target = _safe_path(FS_ROOT.joinpath(*parts_in) if parts_in else FS_ROOT, FS_ROOT)
+    except (ValueError, OSError):
+        raise CaseTreeError("Invalid path")
+
+    rel = target.relative_to(FS_ROOT.resolve())
+    parts = rel.parts
+    if parts and not _in_case_tree(parts):
+        raise CaseTreeError("Outside the case tree")
+    if len(parts) < min_depth:
+        raise CaseTreeError("Choose a case folder first")
+    return target, parts
+
+
+def _files_entry(entry: Path, rel_parts: Tuple[str, ...]) -> Dict[str, Any]:
+    """Describe one directory entry for the Files page."""
+    rel = "/".join(rel_parts)
+    try:
+        stat = entry.stat()
+        size, mtime = stat.st_size, int(stat.st_mtime)
+    except OSError:
+        size, mtime = 0, 0
+    if entry.is_dir():
+        return {"name": entry.name, "rel": rel, "kind": "dir", "mtime": mtime}
+    return {
+        "name": entry.name,
+        "rel": rel,
+        "kind": "file",
+        "size": size,
+        "mtime": mtime,
+        # /static-serve resolves its argument against the CWD, so it needs the
+        # absolute path. Every *mutating* endpoint takes `rel` only.
+        "abs": str(entry),
+        # Non-whitelisted files are still listed — a folder that looks empty
+        # invites deleting something that is not. They just cannot be replaced.
+        "viewable": allowed_file(entry.name),
+    }
+
+
+@app.get("/api/files/list")
+@require_login_api
+def api_files_list():
+    """List one level of the case tree for the Files page."""
+    raw = request.args.get("path", "")
+    try:
+        base, parts = _case_tree_path(raw)
+    except CaseTreeError as exc:
+        return jsonify({"ok": False, "msg": str(exc)}), 400
+
+    if not base.is_dir():
+        return jsonify({"ok": False, "msg": "Folder not found"}), 404
+
+    dirs: List[Dict[str, Any]] = []
+    files: List[Dict[str, Any]] = []
+    try:
+        for entry in sorted(base.iterdir(), key=lambda p: p.name.lower()):
+            if entry.name.startswith("."):
+                continue
+            child = parts + (entry.name,)
+            # At the root only year directories exist as far as this page is
+            # concerned, so Case Law and friends never even appear.
+            if not parts and not (entry.is_dir() and _YEAR_DIR_RE.fullmatch(entry.name)):
+                continue
+            if entry.is_dir():
+                dirs.append(_files_entry(entry, child))
+            elif entry.is_file():
+                files.append(_files_entry(entry, child))
+    except OSError as exc:
+        log.error("Files listing failed for %r: %s", raw, exc, exc_info=True)
+        return jsonify({"ok": False, "msg": "Unable to list that folder."}), 500
+
+    crumbs = [{"name": p, "rel": "/".join(parts[: i + 1])} for i, p in enumerate(parts)]
+    return jsonify({
+        "ok": True,
+        "path": "/".join(parts),
+        "parent": "/".join(parts[:-1]) if parts else None,
+        "depth": len(parts),
+        "crumbs": crumbs,
+        "dirs": dirs,
+        "files": files,
+        "can_delete": bool(g.current_user and g.current_user["role"] == "admin"),
+        "can_write": True,
+    })
 
 
 # ════════════════════════════════════════════════════════════════════

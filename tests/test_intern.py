@@ -97,3 +97,11 @@ def test_intern_cannot_create_directory_templates(intern_client):
     assert resp.status_code == 403
     assert resp.is_json
     assert resp.get_json()["ok"] is False
+
+
+def test_intern_cannot_browse_files(intern_client):
+    """The Files API is under /api/, so the intern guard returns JSON 403."""
+    resp = intern_client.get("/api/files/list")
+    assert resp.status_code == 403
+    assert resp.is_json
+    assert resp.get_json()["ok"] is False
