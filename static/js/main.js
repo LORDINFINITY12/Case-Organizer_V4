@@ -2019,10 +2019,13 @@ function initYearDropdown(wrapperId, hiddenInputId, startYear) {
 }
 
 // ------------- Results renderer (authoritative) ----------------
-function openConfirm(message) {
+// *title* defaults to the delete wording every existing caller relies on; pass
+// it for confirmations that are not deletions.
+function openConfirm(message, title = 'Confirm Delete') {
   return new Promise((resolve) => {
     const modal = document.getElementById('confirmModal');
     const text  = document.getElementById('confirmText');
+    const head  = document.getElementById('confirmTitle');
     const yes   = document.getElementById('confirmYes');
     const no    = document.getElementById('confirmNo');
     const x     = document.getElementById('confirmClose');
@@ -2034,6 +2037,7 @@ function openConfirm(message) {
     }
 
     if (text) text.textContent = message || 'Do you want to delete this file?';
+    if (head) head.textContent = title;
     modal.removeAttribute('hidden');
     modal.setAttribute('aria-hidden', 'false');
 
@@ -3470,7 +3474,8 @@ function manageCaseForm(){
 
       const where = [caseName, subcategory, proceeding].filter(Boolean).join(' / ');
       const ok = await openConfirm(
-        `Create the ${STANDARD_SUBDIRS.length} standard sub-folders under "${where}"? No files are uploaded.`
+        `Create the ${STANDARD_SUBDIRS.length} standard sub-folders under "${where}"? No files are uploaded.`,
+        'Create Directory Template'
       );
       if (!ok) return;
 
