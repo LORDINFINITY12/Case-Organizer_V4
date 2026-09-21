@@ -86,3 +86,14 @@ def test_regular_user_unaffected(client, test_user):
 def test_admin_unaffected(client, test_admin):
     _login_as(client, test_admin)
     assert client.get("/settings").status_code == 200
+
+
+def test_intern_cannot_create_directory_templates(intern_client):
+    """The template route is under /api/, so the intern guard returns JSON 403."""
+    resp = intern_client.post("/api/case-template", json={
+        "year": "2026", "month": "Jun", "case": "Alpha v. Beta",
+        "subcategory": "Anticipatory Bail",
+    }, headers={"X-CSRF-Token": "test-csrf-token"})
+    assert resp.status_code == 403
+    assert resp.is_json
+    assert resp.get_json()["ok"] is False

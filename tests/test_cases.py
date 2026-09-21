@@ -383,3 +383,133 @@ class TestChunkedUpload:
 
         assert not app_mod._chunk_path("rejected1234").exists(), \
             "spool survived a rejected upload"
+
+
+# ---------------------------------------------------------------------------
+# Route: /api/case-template — pre-create the standard sub-folders
+# ---------------------------------------------------------------------------
+class TestCaseTemplate:
+    CSRF = {"X-CSRF-Token": "test-csrf-token"}
+
+    def _case_dir(self, fsroot):
+        d = fsroot / "2026" / "Jun" / "Alpha v. Beta"
+        d.mkdir(parents=True, exist_ok=True)
+        return d
+
+    def _post(self, client, **payload):
+        return client.post("/api/case-template", json=payload, headers=self.CSRF)
+
+    def _base(self, client, fsroot, monkeypatch, **overrides):
+        import app as app_module
+        monkeypatch.setattr(app_module, "FS_ROOT", fsroot)
+        self._case_dir(fsroot)
+        payload = {"year": "2026", "month": "Jun", "case": "Alpha v. Beta",
+                   "subcategory": "Anticipatory Bail"}
+        payload.update(overrides)
+        return self._post(client, **payload)
+
+    def test_creates_every_standard_subdir(self, auth_client, tmp_path, monkeypatch):
+        from app import STANDARD_SUBDIRS
+        fsroot = tmp_path / "fs"
+        resp = self._base(auth_client, fsroot, monkeypatch)
+        assert resp.status_code == 200, resp.get_data(as_text=True)
+        body = resp.get_json()
+        assert body["ok"] is True
+        assert sorted(body["created"]) == sorted(STANDARD_SUBDIRS)
+        assert body["existed"] == []
+        base = fsroot / "2026" / "Jun" / "Alpha v. Beta" / "Anticipatory Bail"
+        for name in STANDARD_SUBDIRS:
+            assert (base / name).is_dir(), f"{name} not created"
+
+    def test_is_idempotent(self, auth_client, tmp_path, monkeypatch):
+        from app import STANDARD_SUBDIRS
+        fsroot = tmp_path / "fs"
+        self._base(auth_client, fsroot, monkeypatch)
+        resp = self._base(auth_client, fsroot, monkeypatch)
+        body = resp.get_json()
+        assert body["created"] == []
+        assert sorted(body["existed"]) == sorted(STANDARD_SUBDIRS)
+        base = fsroot / "2026" / "Jun" / "Alpha v. Beta" / "Anticipatory Bail"
+        # Nothing duplicated with a suffix.
+        assert sorted(p.name for p in base.iterdir()) == sorted(STANDARD_SUBDIRS)
+
+    def test_no_file_is_written(self, auth_client, tmp_path, monkeypatch):
+        fsroot = tmp_path / "fs"
+        self._base(auth_client, fsroot, monkeypatch)
+        case = fsroot / "2026" / "Jun" / "Alpha v. Beta"
+        assert [p for p in case.rglob("*") if p.is_file()] == []
+
+    def test_misc_proceeding_nests_one_level_deeper(self, auth_client, tmp_path, monkeypatch):
+        from app import STANDARD_SUBDIRS
+        fsroot = tmp_path / "fs"
+        resp = self._base(auth_client, fsroot, monkeypatch,
+                          subcategory="Writ Petition", proceeding="Interim Injunction")
+        assert resp.status_code == 200
+        base = (fsroot / "2026" / "Jun" / "Alpha v. Beta"
+                / "Writ Petition" / "Interim Injunction")
+        assert base.is_dir()
+        for name in STANDARD_SUBDIRS:
+            assert (base / name).is_dir()
+
+    def test_slash_subcategory_matches_upload_destination(self, auth_client, tmp_path, monkeypatch):
+        """The template and the uploader must agree on where a subcategory lives.
+
+        This is the regression the shared _folder_component exists to prevent:
+        if they drift, the template creates folders the upload never uses.
+        """
+        import app as app_module
+        fsroot = tmp_path / "fs"
+        subcat = "Section 482 CrPC / Section 528 BNSS"
+        resp = self._base(auth_client, fsroot, monkeypatch, subcategory=subcat)
+        assert resp.status_code == 200
+        case = fsroot / "2026" / "Jun" / "Alpha v. Beta"
+        flat = case / "Section 482 CrPC - Section 528 BNSS"
+        assert flat.is_dir()
+        assert not (case / "Section 482 CrPC").exists()
+
+        # Now upload with the identical subcategory and assert it lands inside.
+        monkeypatch.setattr(app_module, "FS_ROOT", fsroot)
+        up = auth_client.post("/manage-case/upload", data={
+            "Year": "2026", "Month": "Jun", "Case Name": "Alpha v. Beta",
+            "Domain": "Criminal", "Subcategory": subcat,
+            "Main Type": "", "Date": "2026-06-15",
+            "file": (io.BytesIO(b"%PDF-1.4\n%%EOF\n"), "doc.pdf"),
+        }, headers=self.CSRF, content_type="multipart/form-data")
+        assert up.status_code == 200, up.get_data(as_text=True)
+        assert list(flat.glob("*.pdf")), "upload did not land in the templated folder"
+
+    def test_traversal_year_rejected(self, auth_client, tmp_path, monkeypatch):
+        import app as app_module
+        fsroot = tmp_path / "fs"
+        monkeypatch.setattr(app_module, "FS_ROOT", fsroot)
+        self._case_dir(fsroot)
+        resp = self._post(auth_client, year="../..", month="Jun",
+                          case="Alpha v. Beta", subcategory="Bail")
+        assert resp.status_code == 400
+        assert not (tmp_path / "Bail").exists()
+        assert not (fsroot.parent / "Bail").exists()
+
+    def test_missing_case_directory_rejected(self, auth_client, tmp_path, monkeypatch):
+        import app as app_module
+        fsroot = tmp_path / "fs"
+        fsroot.mkdir(parents=True, exist_ok=True)
+        monkeypatch.setattr(app_module, "FS_ROOT", fsroot)
+        resp = self._post(auth_client, year="2026", month="Jun",
+                          case="Nope v. Nobody", subcategory="Bail")
+        assert resp.status_code == 400
+        assert "does not exist" in resp.get_json()["msg"]
+
+    def test_subcategory_required(self, auth_client, tmp_path, monkeypatch):
+        fsroot = tmp_path / "fs"
+        resp = self._base(auth_client, fsroot, monkeypatch, subcategory="")
+        assert resp.status_code == 400
+        assert resp.get_json()["ok"] is False
+        # The case root must not be littered with the nine folders.
+        case = fsroot / "2026" / "Jun" / "Alpha v. Beta"
+        assert list(case.iterdir()) == []
+
+    def test_base_returned_is_relative(self, auth_client, tmp_path, monkeypatch):
+        fsroot = tmp_path / "fs"
+        body = self._base(auth_client, fsroot, monkeypatch).get_json()
+        assert body["base"] == "2026/Jun/Alpha v. Beta/Anticipatory Bail"
+        assert not body["base"].startswith("/")

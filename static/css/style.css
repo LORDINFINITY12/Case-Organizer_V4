@@ -1059,6 +1059,11 @@ input, select, textarea {
    Note grouped on the bottom-right (invoice icon to the left of the note btn). */
 .manage-case-card .form-actions { display: flex; align-items: center; gap: 12px; }
 .manage-case-card .mc-actions-right { margin-left: auto; display: flex; align-items: center; gap: 12px; }
+/* Split button: Upload on the left, a caret opening the folder-template menu on
+   the right. The 1px gap keeps the halves separable against the shared fill. */
+.mc-go-split { display: inline-flex; align-items: stretch; }
+.mc-go-split #mc-go { border-radius: 12px 0 0 12px; }
+.mc-split-toggle { border-radius: 0 12px 12px 0; padding: 0 12px; margin-left: 1px; }
 /* Same height as the adjacent View/Edit Note button (35px), not the 42px search row. */
 .mc-icon-btn { width: 35px; height: 35px; padding: 0; font-size: 15px; }
 .mc-tab,

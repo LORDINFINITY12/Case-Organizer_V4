@@ -2457,6 +2457,81 @@ def manage_case_upload():
 
     return jsonify({"ok": True, "saved_as": saved_paths})
 
+
+# ---- Directory templates -------------------------------------------------
+
+@app.post("/api/case-template")
+@require_login_api
+def api_case_template():
+    """Pre-create the standard sub-folders under a case's subcategory.
+
+    Folders otherwise only appear as a side effect of uploading into them, so
+    a freshly opened case has no shape until the first file lands.  This lays
+    the whole structure out up front and creates nothing else — no file is
+    written.  Idempotent, so running it twice is harmless.
+
+    The path is built exactly as :func:`manage_case_upload` builds it, via the
+    shared :func:`_folder_component`, so an upload afterwards lands in these
+    folders rather than near-miss siblings.
+    """
+    data = request.get_json(silent=True) or {}
+    year = normalize_ws(data.get("year"))
+    month = normalize_ws(data.get("month"))
+    case_name = normalize_ws(data.get("case"))
+    if not (year and month and case_name):
+        return jsonify({"ok": False, "msg": "Year, Month, and Case Name are required."}), 400
+
+    # Validate each component before joining: this is what stops "../.." long
+    # before _safe_path would have to catch it.
+    for label, component in (("Year", year), ("Month", month), ("Case Name", case_name)):
+        err = validate_fs_component(component)
+        if err:
+            return jsonify({"ok": False, "msg": f"{label}: {err}"}), 400
+
+    try:
+        cdir = _safe_path(FS_ROOT / year / month / case_name, FS_ROOT)
+    except (ValueError, OSError):
+        return jsonify({"ok": False, "msg": "Invalid path"}), 400
+    if not cdir.is_dir():
+        return jsonify({"ok": False, "msg": "Case directory does not exist. Create the case first."}), 400
+
+    subcategory = _folder_component(data.get("subcategory"))
+    if not subcategory:
+        return jsonify({"ok": False, "msg": "Choose a subcategory first."}), 400
+    proceeding = _folder_component(data.get("proceeding"))
+
+    base = cdir / subcategory
+    if proceeding:
+        base = base / proceeding
+    try:
+        base = _safe_path(base, FS_ROOT)
+    except (ValueError, OSError):
+        return jsonify({"ok": False, "msg": "Invalid subcategory/proceeding."}), 400
+
+    created: List[str] = []
+    existed: List[str] = []
+    try:
+        base.mkdir(parents=True, exist_ok=True)
+        for name in STANDARD_SUBDIRS:
+            sub = _safe_path(base / name, FS_ROOT)
+            if sub.is_dir():
+                existed.append(name)
+            else:
+                sub.mkdir(exist_ok=True)
+                created.append(name)
+    except (OSError, ValueError) as exc:
+        log.error("Failed to create directory template: %s", exc, exc_info=True)
+        return jsonify({"ok": False, "msg": "Failed to create the folders."}), 500
+
+    return jsonify({
+        "ok": True,
+        # Relative, so the UI can show it verbatim without leaking the layout.
+        "base": base.relative_to(FS_ROOT.resolve()).as_posix(),
+        "created": created,
+        "existed": existed,
+    })
+
+
 # ---- Safe file serving (whitelist FS_ROOT) ------------------------------
 
 @app.get("/static-serve")

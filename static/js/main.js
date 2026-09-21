@@ -2888,7 +2888,10 @@ function manageCaseForm(){
     <div id="file-list" class="results"></div>
 
     <div class="form-actions">
-      <button id="mc-go" class="btn-primary" type="button">Upload & Categorize File(s)</button>
+      <div class="mc-go-split">
+        <button id="mc-go" class="btn-primary" type="button">Upload & Categorize File(s)</button>
+        <button id="mc-go-more" class="btn-primary mc-split-toggle" type="button" title="More actions" aria-haspopup="menu" aria-expanded="false"><i class="fa-solid fa-caret-down" aria-hidden="true"></i><span class="sr-only">More actions</span></button>
+      </div>
       <div class="mc-actions-right">
         <button id="mc-invoice" class="btn-secondary mc-icon-btn" type="button" title="Generate Invoice" aria-label="Generate Invoice" disabled><i class="fa-solid fa-file-invoice-dollar" aria-hidden="true"></i></button>
         <button id="create-note-btn" class="btn-secondary" type="button" disabled>View / Edit Note.json</button>
@@ -3419,6 +3422,79 @@ function manageCaseForm(){
       alert('Error: ' + (data.msg || 'Upload failed'));
     }
   });
+
+  // ---- Split-button menu: create the folder structure without uploading ----
+  // The menu is mounted on <body>, not inside the card: .case-action-menu is
+  // position:fixed, so nesting it here would clip it against the card's
+  // stacking context. Body-mounting also lets the global click/Esc closers
+  // dismiss it with no extra code.
+  const moreBtn = $('#mc-go-more');
+  if (moreBtn) {
+    const menu = el('div', 'case-action-menu');
+    const tplOpt = el('button', '');
+    tplOpt.type = 'button';
+    tplOpt.innerHTML = '<i class="fa-solid fa-folder-tree" aria-hidden="true"></i> Create Directory Template';
+    menu.appendChild(tplOpt);
+    document.body.appendChild(menu);
+
+    moreBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      document.querySelectorAll('.case-action-menu.open').forEach(m => { if (m !== menu) m.classList.remove('open'); });
+      const rect = moreBtn.getBoundingClientRect();
+      menu.style.transformOrigin = 'top left';
+      menu.style.top = (rect.bottom + 6) + 'px';
+      menu.style.left = Math.max(8, Math.min(rect.left, window.innerWidth - menu.offsetWidth - 8)) + 'px';
+      const open = menu.classList.toggle('open');
+      moreBtn.setAttribute('aria-expanded', open ? 'true' : 'false');
+    });
+
+    tplOpt.addEventListener('click', async () => {
+      menu.classList.remove('open');
+      moreBtn.setAttribute('aria-expanded', 'false');
+
+      const year = $('#mc-year')?.value || '';
+      const month = $('#mc-month')?.value || '';
+      const caseName = $('#mc-case')?.value || '';
+      if (!year || !month || !caseName) { alert('Select Year, Month, and Case first.'); return; }
+
+      if (!branchOf()) {
+        alert('Directory templates apply to Criminal, Civil and Commercial categories only.');
+        return;
+      }
+      const subcategory = $('#subcategory')?.value || '';
+      if (!subcategory) { alert('Choose a file subcategory first.'); return; }
+
+      const misc = activePTab() === 'misc';
+      const proceeding = misc ? ($('#misc-proceeding')?.value || '') : '';
+      if (misc && !proceeding) { alert('Choose a misc application first.'); return; }
+
+      const where = [caseName, subcategory, proceeding].filter(Boolean).join(' / ');
+      const ok = await openConfirm(
+        `Create the ${STANDARD_SUBDIRS.length} standard sub-folders under "${where}"? No files are uploaded.`
+      );
+      if (!ok) return;
+
+      moreBtn.disabled = true;
+      try {
+        const r = await fetch('/api/case-template', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': _csrfToken() },
+          body: JSON.stringify({ year, month, case: caseName, subcategory, proceeding }),
+        });
+        const data = await r.json();
+        if (data.ok) {
+          const extra = data.existed?.length ? `\nAlready present: ${data.existed.length}.` : '';
+          alert(`Created ${data.created.length} folder(s) under ${data.base}.${extra}`);
+        } else {
+          alert('Error: ' + (data.msg || 'Could not create the folders'));
+        }
+      } catch (err) {
+        alert(`Could not create the folders: ${err}`);
+      } finally {
+        moreBtn.disabled = false;
+      }
+    });
+  }
 
   renderSelected();
 }
