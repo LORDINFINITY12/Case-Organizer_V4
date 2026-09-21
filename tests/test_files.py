@@ -296,3 +296,106 @@ class TestDeleteScope:
         r = admin_client.post("/api/delete-item", json={
             "rel": f"{PLEADINGS}/petition.pdf", "scope": "cases"}, headers=CSRF)
         assert r.status_code == 200, r.get_data(as_text=True)
+
+
+class TestMove:
+    def test_moves_a_file_between_folders(self, auth_client, fsroot):
+        case = fsroot / "2026" / "Jun" / "Alpha v. Beta"
+        (case / "Anticipatory Bail" / "Research").mkdir(parents=True, exist_ok=True)
+        r = auth_client.post("/api/files/move", json={
+            "src": [f"{PLEADINGS}/petition.pdf"],
+            "dest": "2026/Jun/Alpha v. Beta/Anticipatory Bail/Research",
+        }, headers=CSRF)
+        assert r.status_code == 200, r.get_data(as_text=True)
+        assert (case / "Anticipatory Bail" / "Research" / "petition.pdf").is_file()
+        assert not (case / "Anticipatory Bail" / "Pleadings" / "petition.pdf").exists()
+
+    def test_folder_cannot_move_into_itself(self, auth_client, fsroot):
+        r = auth_client.post("/api/files/move", json={
+            "src": ["2026/Jun/Alpha v. Beta/Anticipatory Bail"],
+            "dest": PLEADINGS,
+        }, headers=CSRF)
+        assert r.status_code == 400
+        assert "inside itself" in r.get_json()["msg"]
+        assert (fsroot / "2026" / "Jun" / "Alpha v. Beta" / "Anticipatory Bail").is_dir()
+
+    def test_descendant_check_survives_a_symlink(self, auth_client, fsroot):
+        """The check compares resolved paths, so a link cannot smuggle it past."""
+        bail = fsroot / "2026" / "Jun" / "Alpha v. Beta" / "Anticipatory Bail"
+        (bail / "link").symlink_to(bail / "Pleadings", target_is_directory=True)
+        r = auth_client.post("/api/files/move", json={
+            "src": ["2026/Jun/Alpha v. Beta/Anticipatory Bail"],
+            "dest": "2026/Jun/Alpha v. Beta/Anticipatory Bail/link",
+        }, headers=CSRF)
+        assert r.status_code == 400
+        assert bail.is_dir()
+
+    def test_name_collision_reported_not_overwritten(self, auth_client, fsroot):
+        case = fsroot / "2026" / "Jun" / "Alpha v. Beta"
+        research = case / "Anticipatory Bail" / "Research"
+        research.mkdir(parents=True, exist_ok=True)
+        (research / "petition.pdf").write_bytes(b"%PDF-1.4\nMINE\n%%EOF\n")
+        r = auth_client.post("/api/files/move", json={
+            "src": [f"{PLEADINGS}/petition.pdf"],
+            "dest": "2026/Jun/Alpha v. Beta/Anticipatory Bail/Research",
+        }, headers=CSRF)
+        assert r.status_code == 409
+        assert b"MINE" in (research / "petition.pdf").read_bytes()
+        assert (case / "Anticipatory Bail" / "Pleadings" / "petition.pdf").is_file()
+
+    def test_case_folder_cannot_be_moved(self, auth_client, fsroot):
+        r = auth_client.post("/api/files/move", json={
+            "src": ["2026/Jun/Alpha v. Beta"], "dest": PLEADINGS}, headers=CSRF)
+        assert r.status_code in (400, 200)
+        assert (fsroot / "2026" / "Jun" / "Alpha v. Beta").is_dir()
+
+    def test_destination_outside_tree_refused(self, auth_client, fsroot):
+        r = auth_client.post("/api/files/move", json={
+            "src": [f"{PLEADINGS}/petition.pdf"], "dest": "Case Law"}, headers=CSRF)
+        assert r.status_code == 400
+
+
+class TestZip:
+    def test_folder_archive_preserves_structure(self, auth_client, fsroot):
+        import io, zipfile
+        bail = fsroot / "2026" / "Jun" / "Alpha v. Beta" / "Anticipatory Bail"
+        (bail / "Research").mkdir(parents=True, exist_ok=True)
+        # Same filename in two sub-folders: a flat archive would lose one.
+        (bail / "Research" / "petition.pdf").write_bytes(b"%PDF-1.4\nRESEARCH\n%%EOF\n")
+        r = auth_client.get("/api/files/zip", query_string={
+            "path": "2026/Jun/Alpha v. Beta/Anticipatory Bail"})
+        assert r.status_code == 200, r.get_data(as_text=True)
+        names = zipfile.ZipFile(io.BytesIO(r.get_data())).namelist()
+        assert "Anticipatory Bail/Pleadings/petition.pdf" in names
+        assert "Anticipatory Bail/Research/petition.pdf" in names
+        assert len(names) == 2, "identically-named files collapsed into one"
+
+    def test_symlinks_are_skipped(self, auth_client, fsroot):
+        import io, zipfile
+        bail = fsroot / "2026" / "Jun" / "Alpha v. Beta" / "Anticipatory Bail"
+        (bail / "escape.pdf").symlink_to(fsroot / "Case Law" / "secret.pdf")
+        r = auth_client.get("/api/files/zip", query_string={
+            "path": "2026/Jun/Alpha v. Beta/Anticipatory Bail"})
+        assert r.status_code == 200
+        names = zipfile.ZipFile(io.BytesIO(r.get_data())).namelist()
+        assert not any("escape" in n for n in names)
+
+    def test_outside_the_tree_refused(self, auth_client, fsroot):
+        r = auth_client.get("/api/files/zip", query_string={"path": "Case Law"})
+        assert r.status_code == 400
+
+    def test_oversize_selection_is_413(self, auth_client, fsroot, monkeypatch):
+        from services import pdf_tools
+        monkeypatch.setattr(pdf_tools, "MAX_ZIP_BYTES", 4)
+        r = auth_client.get("/api/files/zip", query_string={
+            "path": "2026/Jun/Alpha v. Beta/Anticipatory Bail"})
+        assert r.status_code == 413
+        assert "limit" in r.get_json()["msg"]
+
+    def test_spool_file_is_cleaned_up(self, auth_client, fsroot):
+        import app as app_module
+        before = set(app_module.UPLOAD_SPOOL_DIR.glob("files-*.zip"))
+        auth_client.get("/api/files/zip", query_string={
+            "path": "2026/Jun/Alpha v. Beta/Anticipatory Bail"})
+        after = set(app_module.UPLOAD_SPOOL_DIR.glob("files-*.zip"))
+        assert after == before, "an archive spool survived the response"

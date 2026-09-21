@@ -3716,6 +3716,130 @@ def api_files_replace():
     return jsonify({"ok": True, "rel": "/".join(parts)})
 
 
+@app.post("/api/files/move")
+@require_login_api
+def api_files_move():
+    """Move files or folders to another folder in the same case tree.
+
+    Per-item results rather than an all-or-nothing batch: a name collision on
+    one file should not silently abandon the rest of a multi-select drag.
+    """
+    data = request.get_json(silent=True) or {}
+    sources = data.get("src") or []
+    if isinstance(sources, str):
+        sources = [sources]
+    if not sources:
+        return jsonify({"ok": False, "msg": "Nothing to move."}), 400
+
+    try:
+        dest, dest_parts = _case_tree_path((data.get("dest") or "").strip(), min_depth=3)
+    except CaseTreeError as exc:
+        return jsonify({"ok": False, "msg": str(exc)}), 400
+    if not dest.is_dir():
+        return jsonify({"ok": False, "msg": "Destination folder not found"}), 404
+
+    moved: List[Dict[str, str]] = []
+    conflicts: List[str] = []
+    failed: List[str] = []
+    for raw in sources:
+        try:
+            source, parts = _case_tree_path((raw or "").strip(), min_depth=4)
+        except CaseTreeError:
+            failed.append(raw)
+            continue
+        if not source.exists():
+            failed.append(raw)
+            continue
+        if source.parent == dest:
+            continue  # already there; a no-op drag, not an error
+        # Compare RESOLVED paths: a symlink could otherwise smuggle a folder
+        # into its own subtree, and shutil.move would recurse forever.
+        if source == dest or dest.is_relative_to(source):
+            return jsonify({"ok": False,
+                            "msg": "A folder cannot be moved inside itself."}), 400
+        target = dest / source.name
+        if target.exists():
+            conflicts.append(source.name)
+            continue
+        try:
+            shutil.move(str(source), str(target))
+        except OSError as exc:
+            log.error("Move failed for %r: %s", raw, exc, exc_info=True)
+            failed.append(raw)
+            continue
+        moved.append({"from": "/".join(parts),
+                      "to": "/".join(dest_parts + (source.name,))})
+
+    ok = bool(moved) or not (conflicts or failed)
+    payload = {"ok": ok, "moved": moved, "conflicts": conflicts, "failed": failed}
+    if conflicts and not moved:
+        payload["msg"] = "Already in that folder: " + ", ".join(conflicts)
+        return jsonify(payload), 409
+    return jsonify(payload)
+
+
+@app.get("/api/files/zip")
+@require_login_api
+def api_files_zip():
+    """Download a folder, or a selection, as one ZIP.
+
+    ``path`` zips a single folder; repeated ``rel`` parameters zip a selection.
+    """
+    rels = [r for r in request.args.getlist("rel") if r.strip()]
+    single = (request.args.get("path") or "").strip()
+    if not rels and not single:
+        return jsonify({"ok": False, "msg": "Nothing to download."}), 400
+
+    try:
+        if single:
+            root, parts = _case_tree_path(single, min_depth=3)
+            roots = [root]
+            base = root.parent
+            archive_name = root.name
+        else:
+            roots = []
+            parts = ()
+            for r in rels:
+                target, parts = _case_tree_path(r, min_depth=4)
+                roots.append(target)
+            base = roots[0].parent
+            archive_name = base.name if len(roots) > 1 else roots[0].stem
+    except CaseTreeError as exc:
+        return jsonify({"ok": False, "msg": str(exc)}), 400
+
+    missing = [p for p in roots if not p.exists()]
+    if missing:
+        return jsonify({"ok": False, "msg": "Not found"}), 404
+
+    # Imported here, not at module scope: pdf_tools pulls in the optional PDF
+    # dependencies, and the app is meant to start without them.
+    from services import pdf_tools
+
+    zip_path = UPLOAD_SPOOL_DIR / f"files-{secrets.token_hex(8)}.zip"
+
+    @after_this_request
+    def _drop_archive(response):
+        with suppress(OSError):
+            zip_path.unlink()
+        return response
+
+    try:
+        count = pdf_tools.zip_tree(roots, zip_path, base)
+    except pdf_tools.ZipTooLargeError as exc:
+        return jsonify({"ok": False, "msg": str(exc)}), 413
+    except ValueError as exc:
+        return jsonify({"ok": False, "msg": str(exc)}), 400
+    except OSError as exc:
+        log.error("Archive build failed: %s", exc, exc_info=True)
+        return jsonify({"ok": False, "msg": "Could not build the archive."}), 500
+
+    # A folder download is a bulk export of client files; leave a trail.
+    log.info("Archive of %d file(s) downloaded by %s: %s",
+             count, g.current_user["email"], "/".join(parts))
+    safe = secure_filename(archive_name) or "files"
+    return send_file(zip_path, as_attachment=True, download_name=f"{safe}.zip")
+
+
 # ════════════════════════════════════════════════════════════════════
 # CASE LAW
 # ════════════════════════════════════════════════════════════════════

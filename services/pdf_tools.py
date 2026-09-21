@@ -1190,3 +1190,56 @@ def zip_paths(paths: list[Path], zip_path: Path) -> None:
             if not path.exists():
                 continue
             zipf.write(path, arcname=path.name)
+
+
+class ZipTooLargeError(ValueError):
+    """The selection is larger than :data:`MAX_ZIP_BYTES`."""
+
+    def __init__(self, total: int) -> None:
+        self.total = total
+        super().__init__(
+            f"Selection is {total / (1024 * 1024):.0f} MB; the archive limit is "
+            f"{MAX_ZIP_BYTES // (1024 * 1024)} MB. Select fewer items."
+        )
+
+
+def zip_tree(roots: list[Path], zip_path: Path, base: Path) -> int:
+    """Archive *roots* (files or directories) preserving paths relative to *base*.
+
+    Distinct from :func:`zip_paths`, which flattens everything to ``path.name``.
+    A case folder zipped flat would lose its structure and silently drop one of
+    two identically-named files living in different sub-folders, so the Files
+    page needs the relative form.
+
+    Symlinks are skipped: following one could pull in a file from outside the
+    tree the caller validated.  Returns the number of files written.
+    """
+    members: list[tuple[Path, str]] = []
+    total = 0
+    for root in roots:
+        if root.is_symlink():
+            continue
+        if root.is_file():
+            candidates = [root]
+        else:
+            candidates = [p for p in sorted(root.rglob("*")) if p.is_file()]
+        for path in candidates:
+            if path.is_symlink():
+                continue
+            try:
+                total += path.stat().st_size
+                arcname = path.relative_to(base).as_posix()
+            except (OSError, ValueError):
+                continue
+            members.append((path, arcname))
+
+    if not members:
+        raise ValueError("Nothing to archive.")
+    if total > MAX_ZIP_BYTES:
+        raise ZipTooLargeError(total)
+
+    zip_path.parent.mkdir(parents=True, exist_ok=True)
+    with zipfile.ZipFile(zip_path, "w", compression=zipfile.ZIP_DEFLATED) as zipf:
+        for path, arcname in members:
+            zipf.write(path, arcname=arcname)
+    return len(members)
