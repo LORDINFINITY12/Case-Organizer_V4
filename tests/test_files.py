@@ -399,3 +399,16 @@ class TestZip:
             "path": "2026/Jun/Alpha v. Beta/Anticipatory Bail"})
         after = set(app_module.UPLOAD_SPOOL_DIR.glob("files-*.zip"))
         assert after == before, "an archive spool survived the response"
+
+
+class TestFilesPage:
+    def test_page_renders_with_its_scripts(self, auth_client, fsroot):
+        body = auth_client.get("/files").get_data(as_text=True)
+        assert 'id="files-body"' in body
+        # main.js must load first: files.js reuses its helpers.
+        assert body.index("js/main.js") < body.index("js/files.js")
+        # openConfirm silently degrades to window.confirm without this block.
+        assert 'id="confirmModal"' in body
+
+    def test_menu_entry_present(self, auth_client, fsroot):
+        assert 'href="/files"' in auth_client.get("/").get_data(as_text=True)

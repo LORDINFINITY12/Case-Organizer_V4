@@ -105,3 +105,13 @@ def test_intern_cannot_browse_files(intern_client):
     assert resp.status_code == 403
     assert resp.is_json
     assert resp.get_json()["ok"] is False
+
+
+def test_intern_cannot_open_files_page(intern_client):
+    resp = intern_client.get("/files")
+    assert resp.status_code == 302
+    assert resp.headers["Location"].endswith("/")
+
+
+def test_intern_menu_has_no_files_entry(intern_client):
+    assert 'href="/files"' not in intern_client.get("/").get_data(as_text=True)

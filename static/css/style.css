@@ -5094,6 +5094,12 @@ input[type="number"].year-input {
        takes over. Moving files is offered through the row menu instead. */
     .files-dropzone { display: none; }
     .files-fab { display: block; }
+    /* Clear the bottom bar, matching the offset body.m-has-bottombar uses. */
+    body.m-has-bottombar .files-fab {
+        bottom: calc(62px + 16px + env(safe-area-inset-bottom, 0px));
+    }
+    /* The bar is z-index 60; the FAB has to sit above it, not behind. */
+    .files-fab { z-index: 61; }
 
     .files-toolbar { gap: 8px; }
     .files-tools { width: 100%; }
@@ -5101,14 +5107,35 @@ input[type="number"].year-input {
     .files-sort { flex: 1 1 auto; }
     #files-new-folder, #files-upload-btn { flex: 1 1 auto; }
 
-    /* Only the last two crumbs stay; the rest collapse to an ellipsis. */
+    /* Crumbs scroll sideways at full width rather than each shrinking to an
+       unreadable stub. */
     .files-crumbs { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
     .files-crumbs::-webkit-scrollbar { display: none; }
+    .files-crumb { flex: 0 0 auto; max-width: 150px; }
+
+    /* .result-item wraps every child onto its own line on a phone, which makes
+       a file list enormously tall. Lay the row out explicitly instead: name and
+       meta stacked on the left, the actions button pinned right. */
+    .files-body.view-list .files-row {
+        display: grid;
+        grid-template-columns: 1fr auto;
+        grid-template-areas: "name actions" "meta actions";
+        align-items: center;
+        row-gap: 2px;
+        min-height: 44px;
+    }
+    .files-body.view-list .files-row > .name { grid-area: name; }
+    .files-body.view-list .files-row > .files-meta { grid-area: meta; }
+    .files-body.view-list .files-row > .icon-row { grid-area: actions; }
 
     /* Comfortable touch targets. */
     .files-row { min-height: 44px; }
     .files-row .icon-btn { min-width: 44px; min-height: 44px; }
-    .files-check { width: 20px; height: 20px; }
+    /* A global mobile rule gives inputs a 48px min-height for touch; a
+       checkbox inside a list row must opt out or every row is 90px tall. */
+    .files-row .files-check {
+        width: 20px; height: 20px; min-height: 20px; min-width: 20px;
+    }
 
     .files-body.view-grid { grid-template-columns: repeat(2, 1fr); }
     .files-thumb { height: 96px; }
