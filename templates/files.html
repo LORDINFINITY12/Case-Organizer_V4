@@ -59,53 +59,115 @@
       </form>
     </header>
 
-    <main class="home enter-animate files-page">
+    <main class="files-page">
       {% include "_flash.html" %}
 
-      <section class="form-card files-card" aria-label="Files">
-        <div class="files-toolbar">
-          <nav class="files-crumbs" id="files-crumbs" aria-label="Breadcrumb"></nav>
-          <div class="files-tools">
-            <input type="search" id="files-filter" class="files-filter"
-                   placeholder="Filter this folder…" aria-label="Filter this folder" />
-            <div class="files-view-toggle" role="group" aria-label="View mode">
-              <button type="button" class="icon-btn" data-view="list" title="List view" aria-label="List view"><i class="fa-solid fa-list" aria-hidden="true"></i></button>
-              <button type="button" class="icon-btn" data-view="grid" title="Grid view" aria-label="Grid view"><i class="fa-solid fa-table-cells-large" aria-hidden="true"></i></button>
-              <button type="button" class="icon-btn" data-view="tree" title="Tree view" aria-label="Tree view"><i class="fa-solid fa-folder-tree" aria-hidden="true"></i></button>
+      <div class="files-shell">
+        <!-- ── Sidebar ─────────────────────────────────────────────── -->
+        <aside class="files-side" aria-label="Files navigation">
+          <div class="files-new-wrap">
+            <button type="button" id="files-new" class="files-new" aria-haspopup="menu" aria-expanded="false">
+              <i class="fa-solid fa-plus" aria-hidden="true"></i><span>New</span>
+            </button>
+          </div>
+
+          <nav class="files-nav" aria-label="Sections">
+            <button type="button" class="files-navitem active" data-nav="all">
+              <i class="fa-solid fa-folder" aria-hidden="true"></i><span>All cases</span>
+            </button>
+            <button type="button" class="files-navitem" data-nav="recent">
+              <i class="fa-regular fa-clock" aria-hidden="true"></i><span>Recent</span>
+            </button>
+            <button type="button" class="files-navitem" data-nav="starred">
+              <i class="fa-regular fa-star" aria-hidden="true"></i><span>Starred</span>
+            </button>
+          </nav>
+
+          <div class="files-side-sep"></div>
+          <div class="files-side-label">Years</div>
+          <nav class="files-years" id="files-years" aria-label="Years"></nav>
+
+          <div class="files-side-foot">
+            <div class="files-storage-bar"><span id="files-storage-fill"></span></div>
+            <div class="files-storage-text" id="files-storage-text">&nbsp;</div>
+          </div>
+        </aside>
+
+        <!-- ── Content ─────────────────────────────────────────────── -->
+        <section class="files-main" aria-label="Files">
+          <div class="files-head">
+            <nav class="files-crumbs" id="files-crumbs" aria-label="Breadcrumb"></nav>
+            <div class="files-head-right">
+              <button type="button" id="files-view-list" class="files-iconbtn active" title="List view" aria-label="List view"><i class="fa-solid fa-list" aria-hidden="true"></i></button>
+              <button type="button" id="files-view-grid" class="files-iconbtn" title="Grid view" aria-label="Grid view"><i class="fa-solid fa-table-cells-large" aria-hidden="true"></i></button>
+              <button type="button" id="files-info-toggle" class="files-iconbtn" title="Details" aria-label="Details"><i class="fa-solid fa-circle-info" aria-hidden="true"></i></button>
             </div>
-            <select id="files-sort" class="files-sort" aria-label="Sort by">
+          </div>
+
+          <div class="files-chips" id="files-chips">
+            <div class="files-chip-wrap"><select id="files-chip-type" aria-label="Type">
+              <option value="">Type</option>
+              <option value="folder">Folders</option>
+              <option value="pdf">PDFs</option>
+              <option value="docx">Documents</option>
+              <option value="image">Images</option>
+            </select></div>
+            <div class="files-chip-wrap"><select id="files-chip-modified" aria-label="Modified">
+              <option value="">Modified</option>
+              <option value="7">Last 7 days</option>
+              <option value="30">Last 30 days</option>
+              <option value="365">This year</option>
+            </select></div>
+            <div class="files-chip-wrap"><select id="files-chip-sort" aria-label="Sort by">
               <option value="name">Name</option>
-              <option value="modified">Modified</option>
-              <option value="size">Size</option>
-              <option value="type">Type</option>
-            </select>
-            <button type="button" id="files-sort-dir" class="icon-btn" title="Reverse order" aria-label="Reverse order"><i class="fa-solid fa-arrow-down-a-z" aria-hidden="true"></i></button>
-            <button type="button" id="files-new-folder" class="btn-secondary" disabled>New folder</button>
-            <button type="button" id="files-upload-btn" class="btn-primary" disabled>Upload</button>
+              <option value="modified">Last modified</option>
+              <option value="size">File size</option>
+              <option value="type">File type</option>
+            </select></div>
+            <input type="search" id="files-filter" class="files-filter" placeholder="Search in this folder" aria-label="Search in this folder" />
+            <button type="button" id="files-chips-clear" class="files-chip-clear" hidden>Clear filters</button>
           </div>
-        </div>
 
-        <div class="files-selbar" id="files-selbar" hidden>
-          <span id="files-selcount">0 selected</span>
-          <div class="files-selactions">
-            <button type="button" id="files-sel-download" class="btn-secondary">Download ZIP</button>
-            <button type="button" id="files-sel-move" class="btn-secondary">Move to…</button>
-            <button type="button" id="files-sel-delete" class="btn-secondary danger" hidden>Delete</button>
-            <button type="button" id="files-sel-clear" class="btn-ghost">Clear</button>
+          <div class="files-selbar" id="files-selbar" hidden>
+            <span id="files-selcount">0 selected</span>
+            <div class="files-selactions">
+              <button type="button" id="files-sel-download" class="files-iconbtn" title="Download as ZIP" aria-label="Download as ZIP"><i class="fa-solid fa-download" aria-hidden="true"></i></button>
+              <button type="button" id="files-sel-move" class="files-iconbtn" title="Move to" aria-label="Move to"><i class="fa-solid fa-folder-open" aria-hidden="true"></i></button>
+              <button type="button" id="files-sel-delete" class="files-iconbtn danger" title="Delete" aria-label="Delete" hidden><i class="fa-solid fa-trash" aria-hidden="true"></i></button>
+              <button type="button" id="files-sel-clear" class="files-iconbtn" title="Clear selection" aria-label="Clear selection"><i class="fa-solid fa-xmark" aria-hidden="true"></i></button>
+            </div>
           </div>
-        </div>
 
-        <div class="dropzone files-dropzone" id="files-drop" tabindex="0">
-          Drag &amp; drop files here, or use Upload
-        </div>
-        <input type="file" id="files-input" hidden multiple />
-        <input type="file" id="files-replace-input" hidden />
+          <div class="files-table" id="files-table">
+            <div class="files-thead" id="files-thead">
+              <span class="files-col-check"><input type="checkbox" id="files-check-all" aria-label="Select all" /></span>
+              <button type="button" class="files-th" data-sort="name">Name <i class="fa-solid fa-arrow-up" aria-hidden="true"></i></button>
+              <button type="button" class="files-th files-col-owner" data-sort="owner">Owner</button>
+              <button type="button" class="files-th files-col-mod" data-sort="modified">Date modified <i class="fa-solid fa-arrow-up" aria-hidden="true"></i></button>
+              <button type="button" class="files-th files-col-size" data-sort="size">File size <i class="fa-solid fa-arrow-up" aria-hidden="true"></i></button>
+              <span class="files-col-actions"></span>
+            </div>
+            <div id="files-body" class="files-body" aria-live="polite"></div>
+          </div>
 
-        <div id="files-body" class="files-body results" aria-live="polite"></div>
-        <p class="files-summary" id="files-summary"></p>
-      </section>
+          <div class="files-dropveil" id="files-dropveil" hidden>
+            <div><i class="fa-solid fa-cloud-arrow-up" aria-hidden="true"></i><p>Drop files to upload here</p></div>
+          </div>
+        </section>
 
-      <button type="button" id="files-fab" class="files-fab" aria-label="Upload files" title="Upload files">
+        <!-- ── Details panel ───────────────────────────────────────── -->
+        <aside class="files-info" id="files-info" hidden aria-label="Details">
+          <div class="files-info-head">
+            <h3 id="files-info-title">Details</h3>
+            <button type="button" id="files-info-close" class="files-iconbtn" aria-label="Close details"><i class="fa-solid fa-xmark" aria-hidden="true"></i></button>
+          </div>
+          <div id="files-info-body" class="files-info-body"></div>
+        </aside>
+      </div>
+
+      <input type="file" id="files-input" hidden multiple />
+      <input type="file" id="files-replace-input" hidden />
+      <button type="button" id="files-fab" class="files-fab" aria-label="Upload files" title="Upload files" hidden>
         <i class="fa-solid fa-plus" aria-hidden="true"></i>
       </button>
     </main>
@@ -116,7 +178,7 @@
     <div class="modal-content">
       <div class="modal-head">
         <h3 id="confirmTitle">Confirm Delete</h3>
-        <button class="btn-ghost" id="confirmClose" aria-label="Close">✕</button>
+        <button class="btn-ghost" id="confirmClose" aria-label="Close">&#10005;</button>
       </div>
       <div id="confirmText" style="padding: 6px 2px;">Do you want to delete this file?</div>
       <div class="modal-actions">

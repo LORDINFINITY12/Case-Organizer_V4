@@ -4999,144 +4999,475 @@ input[type="number"].year-input {
     }
 }
 
+
 /* ═══════════════════════════════════════════════════════════════════
-   Files page — Drive-like view over the case tree
-   Rows reuse .result-item / .icon-row / .icon-btn / .case-action-menu,
-   so only the genuinely new pieces live here.
+   Files — Drive-style manager over the case tree.
+   Full-bleed: no .home max-width column and no .form-card, because the
+   page is a workspace, not a form. Controls reuse the app's own
+   .ll-dropdown (via convertAllSelectsToLLD) and .case-action-menu.
    ═══════════════════════════════════════════════════════════════════ */
-.files-card { display: flex; flex-direction: column; gap: 12px; }
-
-.files-toolbar {
-    display: flex; flex-wrap: wrap; align-items: center;
-    gap: 10px; justify-content: space-between;
+.files-page {
+    padding: 0;
+    height: calc(100vh - 58px);          /* below the topbar */
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
 }
-.files-tools { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-.files-filter { min-width: 190px; }
-.files-sort { min-width: 130px; }
+.files-shell {
+    flex: 1;
+    min-height: 0;
+    display: grid;
+    grid-template-columns: 232px minmax(0, 1fr);
+    gap: 0;
+}
+.files-shell:has(.files-info:not([hidden])) {
+    grid-template-columns: 232px minmax(0, 1fr) 300px;
+}
 
-.files-crumbs { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; min-width: 0; }
+/* ---- sidebar ---------------------------------------------------------- */
+.files-side {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 14px 10px;
+    border-right: 1px solid var(--input-border, #e6e8ef);
+    min-height: 0;
+    overflow-y: auto;
+}
+.files-new-wrap { padding: 0 4px 12px; }
+.files-new {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 20px 12px 16px;
+    border: 1px solid var(--input-border, #e6e8ef);
+    border-radius: 16px;
+    background: var(--card);
+    color: var(--text);
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+    transition: box-shadow 0.15s ease, background 0.15s ease;
+}
+.files-new:hover { box-shadow: 0 2px 8px rgba(0, 0, 0, 0.18); }
+.files-new i { color: var(--accent); font-size: 16px; }
+
+.files-navitem {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    width: 100%;
+    padding: 9px 14px;
+    border: none;
+    border-radius: 999px;
+    background: none;
+    color: var(--text);
+    font-size: 14px;
+    text-align: left;
+    cursor: pointer;
+}
+.files-navitem i { width: 18px; text-align: center; color: var(--muted, #6b7280); }
+.files-navitem:hover { background: var(--input-bg, #f3f4f6); }
+.files-navitem.active {
+    background: color-mix(in srgb, var(--accent) 22%, transparent);
+    font-weight: 600;
+}
+.files-navitem.active i { color: var(--accent); }
+.files-navitem.sub { padding-left: 18px; font-size: 13px; }
+
+.files-side-sep {
+    height: 1px;
+    background: var(--input-border, #e6e8ef);
+    margin: 10px 8px;
+}
+.files-side-label {
+    padding: 0 14px 6px;
+    font-size: 11px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--muted, #9ca3af);
+}
+.files-years { display: flex; flex-direction: column; gap: 2px; }
+.files-side-foot { margin-top: auto; padding: 14px 14px 4px; }
+.files-storage-bar {
+    height: 4px;
+    border-radius: 999px;
+    background: var(--input-bg, #e6e8ef);
+    overflow: hidden;
+}
+.files-storage-bar span { display: block; height: 100%; background: var(--accent); }
+.files-storage-text { margin-top: 8px; font-size: 12px; color: var(--muted, #6b7280); }
+
+/* ---- content ---------------------------------------------------------- */
+.files-main {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    min-height: 0;
+    padding: 14px 18px 0;
+}
+.files-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    min-height: 40px;
+}
+.files-head-right { display: flex; gap: 4px; }
+
+.files-crumbs {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    min-width: 0;
+    overflow-x: auto;
+    scrollbar-width: none;
+}
+.files-crumbs::-webkit-scrollbar { display: none; }
 .files-crumb {
-    background: none; border: none; cursor: pointer; padding: 4px 8px;
-    border-radius: 8px; color: var(--accent); font-size: 0.92rem;
-    max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    flex: 0 0 auto;
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 6px 10px;
+    border-radius: 8px;
+    color: var(--muted, #6b7280);
+    font-size: 1.05rem;
+    max-width: 260px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 .files-crumb:hover { background: var(--input-bg, #f3f4f6); }
+.files-crumb.current { color: var(--text); font-weight: 600; font-size: 1.25rem; }
 .files-crumb.dragover { background: var(--accent); color: #fff; }
-.files-crumb-sep { color: var(--muted, #9ca3af); }
+.files-crumb-sep { font-size: 10px; color: var(--muted, #9ca3af); flex: 0 0 auto; }
 
-.files-view-toggle { display: inline-flex; gap: 4px; }
-.files-view-toggle .icon-btn.active { border-color: var(--accent); color: var(--accent); }
-
-.files-meta {
-    font-size: 0.8rem; color: var(--muted, #6b7280);
-    font-variant-numeric: tabular-nums; white-space: nowrap; flex-shrink: 0;
+/* Shared square icon button — matches .icon-btn metrics used elsewhere. */
+.files-iconbtn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    border: none;
+    border-radius: 50%;
+    background: none;
+    color: var(--muted, #6b7280);
+    cursor: pointer;
+    font-size: 14px;
 }
-.files-row .name { display: flex; align-items: center; gap: 8px; min-width: 0; }
-.files-name-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.files-row.selected { outline: 2px solid var(--accent); outline-offset: -2px; }
-.files-row.dragover { background: var(--accent); color: #fff; }
-.files-check { accent-color: var(--accent); cursor: pointer; flex-shrink: 0; }
+.files-iconbtn:hover { background: var(--input-bg, #f3f4f6); color: var(--text); }
+.files-iconbtn.active { background: color-mix(in srgb, var(--accent) 22%, transparent); color: var(--accent); }
+.files-iconbtn.danger { color: #ef4444; }
 
-.files-empty, .files-summary {
-    color: var(--muted, #6b7280); font-size: 0.88rem; padding: 10px 2px; margin: 0;
+/* ---- filter chips ----------------------------------------------------- */
+.files-chips {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    padding: 12px 0;
 }
+/* The LLD wrapper is what actually renders; give it the chip shape. */
+.files-chip-wrap .ll-dropdown { min-width: 0; }
+.files-chip-wrap .ll-dropdown-trigger {
+    padding: 7px 14px;
+    border-radius: 999px;
+    font-size: 13px;
+}
+.files-filter {
+    flex: 0 1 260px;
+    padding: 10px 12px;
+    border-radius: 12px;
+    border: 1px solid var(--input-border, #e6e8ef);
+    background: var(--input-bg, #fbfcff);
+    color: var(--text);
+}
+.files-chip-clear {
+    border: none;
+    background: none;
+    color: var(--accent);
+    cursor: pointer;
+    font-size: 13px;
+    padding: 7px 10px;
+    border-radius: 999px;
+}
+.files-chip-clear:hover { background: var(--input-bg, #f3f4f6); }
 
+/* ---- selection bar ---------------------------------------------------- */
 .files-selbar {
-    display: flex; align-items: center; justify-content: space-between;
-    gap: 10px; flex-wrap: wrap; padding: 8px 12px; border-radius: 10px;
-    background: var(--input-bg, #f3f4f6);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 6px 12px;
+    margin-bottom: 8px;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--accent) 16%, transparent);
+    font-size: 13px;
+    font-weight: 600;
 }
-.files-selactions { display: flex; gap: 8px; flex-wrap: wrap; }
-.files-selactions .danger { color: #ef4444; }
-/* An explicit display: beats the UA rule for [hidden], so restate it — the
-   same reason .user-menu-panel[hidden] exists earlier in this file. */
 .files-selbar[hidden] { display: none; }
+.files-selactions { display: flex; gap: 2px; }
 .files-selactions button[hidden] { display: none; }
 
-.files-dropzone.is-disabled { opacity: 0.55; cursor: not-allowed; }
+/* ---- table ------------------------------------------------------------ */
+.files-table {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    position: relative;
+}
+.files-table.is-loading { opacity: 0.55; pointer-events: none; }
 
-/* Grid view: the same rows, re-laid-out as tiles. */
-.files-body.view-grid {
-    display: grid; gap: 12px;
-    grid-template-columns: repeat(auto-fill, minmax(168px, 1fr));
+.files-thead,
+.files-row {
+    display: grid;
+    grid-template-columns: 34px minmax(0, 1fr) 120px 150px 110px 48px;
+    align-items: center;
+    gap: 8px;
 }
-.files-body.view-grid .files-row {
-    flex-direction: column; align-items: stretch; text-align: left; gap: 8px;
+.files-thead {
+    padding: 0 8px 6px;
+    border-bottom: 1px solid var(--input-border, #e6e8ef);
 }
-.files-body.view-grid .files-meta { white-space: normal; }
+.files-th {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    border: none;
+    background: none;
+    cursor: pointer;
+    color: var(--muted, #6b7280);
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    padding: 6px 4px;
+    border-radius: 6px;
+    text-align: left;
+}
+.files-th:hover { background: var(--input-bg, #f3f4f6); color: var(--text); }
+.files-th.sorted { color: var(--text); }
+.files-th i { font-size: 10px; opacity: 0; transition: opacity 0.12s ease; }
+/* Rank badge when more than one sort key is active. */
+.files-th[data-rank]:not([data-rank=""])::after {
+    content: attr(data-rank);
+    font-size: 9px;
+    line-height: 1;
+    padding: 2px 4px;
+    border-radius: 4px;
+    background: var(--accent);
+    color: #fff;
+}
+
+.files-body {
+    flex: 1;
+    min-height: 240px;           /* reserves height so an empty folder cannot collapse the pane */
+    overflow-y: auto;
+    padding: 4px 0 24px;
+}
+.files-row {
+    padding: 4px 8px;
+    border-radius: 10px;
+    min-height: 44px;
+    cursor: default;
+    border: 1px solid transparent;
+}
+.files-row:hover { background: var(--input-bg, #f3f4f6); }
+.files-row.selected { background: color-mix(in srgb, var(--accent) 20%, transparent); }
+.files-row.dragover { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 14%, transparent); }
+.files-row.is-dir { cursor: pointer; }
+.files-row:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+
+.files-col-name {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-width: 0;
+    font-size: 14px;
+}
+.files-name-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.files-col-owner,
+.files-col-mod,
+.files-col-size {
+    font-size: 13px;
+    color: var(--muted, #6b7280);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.files-col-actions { display: flex; justify-content: flex-end; }
+.files-col-check { display: flex; justify-content: center; }
+.files-check { accent-color: var(--accent); cursor: pointer; }
+.files-star { color: #f5b301; font-size: 11px; flex: 0 0 auto; }
+
+/* Drive-ish icon tints */
+.tint-folder { color: #8ab4f8; }
+.tint-pdf    { color: #ea4335; }
+.tint-doc    { color: #4285f4; }
+.tint-img    { color: #34a853; }
+.tint-zip    { color: #f9ab00; }
+.tint-other  { color: var(--muted, #9ca3af); }
+
+/* ---- grid view -------------------------------------------------------- */
+.files-table.view-grid .files-thead { display: none; }
+.files-table.view-grid .files-body {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(196px, 1fr));
+    gap: 12px;
+    align-content: start;
+}
+.files-table.view-grid .files-row {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 10px;
+    border: 1px solid var(--input-border, #e6e8ef);
+    background: var(--card);
+}
+.files-table.view-grid .files-col-owner,
+.files-table.view-grid .files-col-mod,
+.files-table.view-grid .files-col-size,
+.files-table.view-grid .files-col-check { display: none; }
+.files-table.view-grid .files-col-name { flex-direction: column; align-items: stretch; gap: 8px; }
+.files-table.view-grid .files-col-actions { position: absolute; top: 8px; right: 8px; }
+.files-table.view-grid .files-row { position: relative; }
 .files-thumb {
-    display: flex; align-items: center; justify-content: center;
-    height: 118px; border-radius: 8px; overflow: hidden;
-    background: var(--input-bg, #f3f4f6); font-size: 30px; color: var(--muted, #9ca3af);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 120px;
+    border-radius: 8px;
+    overflow: hidden;
+    background: var(--input-bg, #f3f4f6);
+    font-size: 32px;
 }
 .files-thumb img { width: 100%; height: 100%; object-fit: cover; }
-
-/* Tree view */
-.files-tree { display: flex; flex-direction: column; }
-.files-tree-node {
-    display: flex; align-items: center; gap: 6px;
-    padding: 5px 8px; border-radius: 8px; cursor: pointer; font-size: 0.9rem;
+.files-tile-name {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    min-width: 0;
 }
-.files-tree-node:hover { background: var(--input-bg, #f3f4f6); }
-.files-tree-caret { width: 12px; font-size: 11px; color: var(--muted, #9ca3af); }
+.files-tile-name span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
-/* Upload FAB — phones only; desktop has the dropzone and the Upload button. */
-.files-fab[hidden] { display: none !important; }
+/* ---- empty state ------------------------------------------------------ */
+.files-empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    min-height: 240px;
+    color: var(--muted, #9ca3af);
+    text-align: center;
+}
+.files-empty i { font-size: 44px; opacity: 0.55; }
+.files-empty p { margin: 0; font-size: 14px; }
+.files-empty-sub { font-size: 12.5px; opacity: 0.8; }
+
+/* ---- details panel ---------------------------------------------------- */
+.files-info {
+    border-left: 1px solid var(--input-border, #e6e8ef);
+    padding: 14px 16px;
+    overflow-y: auto;
+    min-height: 0;
+}
+.files-info[hidden] { display: none; }
+.files-info-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.files-info-head h3 {
+    margin: 0;
+    font-size: 15px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.files-info-icon { display: flex; justify-content: center; padding: 22px 0; font-size: 56px; }
+.files-info-body dl { display: grid; grid-template-columns: 96px 1fr; gap: 8px 10px; margin: 0; font-size: 13px; }
+.files-info-body dt { color: var(--muted, #6b7280); }
+.files-info-body dd { margin: 0; overflow-wrap: anywhere; }
+.files-info-hint { color: var(--muted, #9ca3af); font-size: 13px; }
+
+/* ---- drop veil -------------------------------------------------------- */
+.files-dropveil {
+    position: fixed;
+    inset: 58px 0 0 0;
+    z-index: 55;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: color-mix(in srgb, var(--accent) 16%, transparent);
+    backdrop-filter: blur(2px);
+    border: 3px dashed var(--accent);
+    color: var(--text);
+    font-size: 18px;
+    pointer-events: none;
+}
+.files-dropveil[hidden] { display: none; }
+.files-dropveil div { text-align: center; }
+.files-dropveil i { font-size: 46px; color: var(--accent); }
+
+/* ---- upload FAB (phones only) ----------------------------------------- */
 .files-fab {
-    position: fixed; right: 18px; bottom: 18px; z-index: 60;
-    width: 54px; height: 54px; border-radius: 50%; border: none;
-    background: var(--accent); color: #fff; font-size: 20px; cursor: pointer;
-    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.25); display: none;
+    position: fixed;
+    right: 18px;
+    bottom: 18px;
+    z-index: 61;
+    width: 54px;
+    height: 54px;
+    border-radius: 50%;
+    border: none;
+    background: var(--accent);
+    color: #fff;
+    font-size: 20px;
+    cursor: pointer;
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.25);
+    display: none;
 }
+.files-fab[hidden] { display: none !important; }
 
+/* ---- dark theme ------------------------------------------------------- */
+:root[data-theme="dark"] .files-side,
+:root[data-theme="dark"] .files-info { border-color: #2a3040; }
+:root[data-theme="dark"] .files-thead { border-bottom-color: #2a3040; }
+:root[data-theme="dark"] .files-table.view-grid .files-row { border-color: #2a3040; }
+:root[data-theme="dark"] .files-new { border-color: #2a3040; }
+
+/* ---- phones ----------------------------------------------------------- */
+@media (max-width: 900px) {
+    .files-shell,
+    .files-shell:has(.files-info:not([hidden])) { grid-template-columns: minmax(0, 1fr); }
+    .files-side { display: none; }
+    .files-info { position: fixed; inset: 58px 0 0 auto; width: min(320px, 90vw); background: var(--card); z-index: 56; }
+    .files-thead,
+    .files-row { grid-template-columns: 34px minmax(0, 1fr) 110px 48px; }
+    .files-col-owner,
+    .files-col-size { display: none; }
+}
 @media (max-width: 640px) {
-    /* Drag-and-drop is unreliable on touch, so the dropzone goes and the FAB
-       takes over. Moving files is offered through the row menu instead. */
-    .files-dropzone { display: none; }
+    .files-page { height: auto; overflow: visible; }
+    .files-main { padding: 10px 12px 0; }
     .files-fab { display: block; }
-    /* Clear the bottom bar, matching the offset body.m-has-bottombar uses. */
-    body.m-has-bottombar .files-fab {
-        bottom: calc(62px + 16px + env(safe-area-inset-bottom, 0px));
-    }
-    /* The bar is z-index 60; the FAB has to sit above it, not behind. */
-    .files-fab { z-index: 61; }
-
-    .files-toolbar { gap: 8px; }
-    .files-tools { width: 100%; }
-    .files-filter { flex: 1 1 100%; min-width: 0; }
-    .files-sort { flex: 1 1 auto; }
-    #files-new-folder, #files-upload-btn { flex: 1 1 auto; }
-
-    /* Crumbs scroll sideways at full width rather than each shrinking to an
-       unreadable stub. */
-    .files-crumbs { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
-    .files-crumbs::-webkit-scrollbar { display: none; }
-    .files-crumb { flex: 0 0 auto; max-width: 150px; }
-
-    /* .result-item wraps every child onto its own line on a phone, which makes
-       a file list enormously tall. Lay the row out explicitly instead: name and
-       meta stacked on the left, the actions button pinned right. */
-    .files-body.view-list .files-row {
-        display: grid;
-        grid-template-columns: 1fr auto;
-        grid-template-areas: "name actions" "meta actions";
-        align-items: center;
+    body.m-has-bottombar .files-fab { bottom: calc(62px + 16px + env(safe-area-inset-bottom, 0px)); }
+    .files-dropveil { display: none !important; }
+    .files-chips > * { flex: 1 1 auto; }
+    .files-filter { flex: 1 1 100%; }
+    .files-thead { display: none; }
+    .files-row {
+        grid-template-columns: 34px minmax(0, 1fr) 48px;
+        grid-template-areas: "check name actions" ". meta actions";
         row-gap: 2px;
-        min-height: 44px;
     }
-    .files-body.view-list .files-row > .name { grid-area: name; }
-    .files-body.view-list .files-row > .files-meta { grid-area: meta; }
-    .files-body.view-list .files-row > .icon-row { grid-area: actions; }
-
-    /* Comfortable touch targets. */
-    .files-row { min-height: 44px; }
-    .files-row .icon-btn { min-width: 44px; min-height: 44px; }
-    /* A global mobile rule gives inputs a 48px min-height for touch; a
-       checkbox inside a list row must opt out or every row is 90px tall. */
-    .files-row .files-check {
-        width: 20px; height: 20px; min-height: 20px; min-width: 20px;
-    }
-
-    .files-body.view-grid { grid-template-columns: repeat(2, 1fr); }
+    .files-col-check { grid-area: check; }
+    .files-col-name { grid-area: name; }
+    .files-col-mod { grid-area: meta; font-size: 12px; }
+    .files-col-actions { grid-area: actions; }
+    .files-row .files-check { width: 20px; height: 20px; min-height: 20px; min-width: 20px; }
+    .files-table.view-grid .files-body { grid-template-columns: repeat(2, 1fr); }
     .files-thumb { height: 96px; }
 }
