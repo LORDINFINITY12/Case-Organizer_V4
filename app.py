@@ -10,6 +10,7 @@
 from __future__ import annotations
 
 # ---- Standard library ----------------------------------------------------
+import hashlib
 import logging
 import os
 import re
@@ -2986,6 +2987,17 @@ def calendar_page():
     )
 
 
+@app.get("/files")
+@require_login
+def files_page():
+    """Drive-like file manager over the case tree.
+
+    Interns never reach this: the endpoint is absent from
+    ``_INTERN_ALLOWED_ENDPOINTS``, so the guard redirects them home.
+    """
+    return render_template("files.html", standard_subdirs=list(STANDARD_SUBDIRS))
+
+
 @app.get("/api/calendar/events")
 @require_login_api
 def api_calendar_month():
@@ -3838,6 +3850,48 @@ def api_files_zip():
              count, g.current_user["email"], "/".join(parts))
     safe = secure_filename(archive_name) or "files"
     return send_file(zip_path, as_attachment=True, download_name=f"{safe}.zip")
+
+
+# Grid-view thumbnails are cached OUTSIDE FS_ROOT. The letterhead/vakalatnama
+# caches live in a ".thumbs" folder beside their source, which is fine there —
+# but a ".thumbs" directory inside a case would show up in the case's own
+# structure and in this very listing.
+_FILES_THUMB_DIR = UPLOAD_SPOOL_DIR.parent / "files-thumbs"
+_FILES_THUMB_WIDTH = 320
+
+
+@app.get("/api/files/thumb")
+@require_login_api
+def api_files_thumb():
+    """Cached thumbnail for a PDF or image in the case tree."""
+    try:
+        target, parts = _case_tree_path((request.args.get("rel") or "").strip(), min_depth=4)
+    except CaseTreeError as exc:
+        return jsonify({"ok": False, "msg": str(exc)}), 400
+    if not target.is_file() or target.is_symlink():
+        return jsonify({"ok": False, "msg": "Not found"}), 404
+
+    ext = target.suffix.lower().lstrip(".")
+    kind = "pdf" if ext == "pdf" else "image" if ext in {"png", "jpg", "jpeg"} else None
+    if kind is None:
+        return jsonify({"ok": False, "msg": "No preview for that type"}), 415
+
+    # Key on path + mtime, so replacing a file invalidates its thumbnail.
+    # The upstream helper keys on a DB row id, which these entries do not have.
+    try:
+        stamp = int(target.stat().st_mtime)
+    except OSError:
+        return jsonify({"ok": False, "msg": "Not found"}), 404
+    key = hashlib.sha256(f"{'/'.join(parts)}:{stamp}".encode()).hexdigest()[:32]
+
+    thumb = _get_or_create_thumbnail(target, _FILES_THUMB_DIR, key, kind,
+                                     width=_FILES_THUMB_WIDTH)
+    if not thumb:
+        return jsonify({"ok": False, "msg": "Preview unavailable"}), 415
+    resp = send_file(thumb, mimetype="image/png", conditional=True)
+    resp.cache_control.private = True
+    resp.cache_control.max_age = STATIC_MAX_AGE
+    return resp
 
 
 # ════════════════════════════════════════════════════════════════════

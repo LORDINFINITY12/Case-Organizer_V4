@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="color-scheme" content="light dark">
+  <script nonce="{{ csp_nonce }}">
+      (function () {
+          try {
+              const KEY = 'caseOrg.theme';
+              const saved = localStorage.getItem(KEY);
+              const wantsDark = saved ? (saved === 'dark')
+                  : (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
+              const defaultDark = true;
+              const useDark = saved ? (saved === 'dark') : defaultDark || wantsDark;
+              if (useDark) document.documentElement.setAttribute('data-theme', 'dark');
+          } catch (e) {}
+      })();
+  </script>
+  <title>Case Organizer – Files</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" />
+  <link rel="stylesheet" href="{{ static_url('css/style.css') }}" />
+  <link rel="icon" type="image/png" href="{{ url_for('static', filename='img/Case_Organizer_logo.png') }}" />
+  <meta name="csrf-token" content="{{ csrf_token }}">
+  {% include '_pwa_head.html' %}
+</head>
+<body data-role="{{ current_user.role if current_user else '' }}">
+  <div class="app-shell">
+    <header class="topbar">
+      <a href="{{ url_for('home') }}" class="brand">Case Organizer</a>
+      <div class="spacer"></div>
+      {% if current_user %}
+        <div class="user" data-user-menu>
+          <span class="user-menu-toggle"
+                role="button"
+                tabindex="0"
+                data-user-menu-toggle
+                aria-haspopup="menu"
+                aria-expanded="false"
+                aria-label="Toggle account menu"
+                title="Account menu">
+            <span class="user-email-display">{{ current_user.email }}</span>
+            <i class="fa-solid fa-chevron-down" aria-hidden="true"></i>
+          </span>
+          <div class="user-menu-panel" data-user-menu-panel role="menu" hidden>
+            {% include "_user_menu.html" %}
+          </div>
+        </div>
+      {% endif %}
+      <button id="theme-toggle" class="theme-toggle" title="Toggle theme" aria-label="Toggle theme">
+        <i class="fa-solid fa-moon"></i>
+      </button>
+      <form method="post" action="{{ url_for('logout') }}" class="logout-form">
+        <input type="hidden" name="_csrf_token" value="{{ csrf_token }}">
+        <button type="submit" class="logout" title="Logout">
+          <i class="fa-solid fa-right-from-bracket"></i>
+        </button>
+      </form>
+    </header>
+
+    <main class="home enter-animate files-page">
+      {% include "_flash.html" %}
+
+      <section class="form-card files-card" aria-label="Files">
+        <div class="files-toolbar">
+          <nav class="files-crumbs" id="files-crumbs" aria-label="Breadcrumb"></nav>
+          <div class="files-tools">
+            <input type="search" id="files-filter" class="files-filter"
+                   placeholder="Filter this folder…" aria-label="Filter this folder" />
+            <div class="files-view-toggle" role="group" aria-label="View mode">
+              <button type="button" class="icon-btn" data-view="list" title="List view" aria-label="List view"><i class="fa-solid fa-list" aria-hidden="true"></i></button>
+              <button type="button" class="icon-btn" data-view="grid" title="Grid view" aria-label="Grid view"><i class="fa-solid fa-table-cells-large" aria-hidden="true"></i></button>
+              <button type="button" class="icon-btn" data-view="tree" title="Tree view" aria-label="Tree view"><i class="fa-solid fa-folder-tree" aria-hidden="true"></i></button>
+            </div>
+            <select id="files-sort" class="files-sort" aria-label="Sort by">
+              <option value="name">Name</option>
+              <option value="modified">Modified</option>
+              <option value="size">Size</option>
+              <option value="type">Type</option>
+            </select>
+            <button type="button" id="files-sort-dir" class="icon-btn" title="Reverse order" aria-label="Reverse order"><i class="fa-solid fa-arrow-down-a-z" aria-hidden="true"></i></button>
+            <button type="button" id="files-new-folder" class="btn-secondary" disabled>New folder</button>
+            <button type="button" id="files-upload-btn" class="btn-primary" disabled>Upload</button>
+          </div>
+        </div>
+
+        <div class="files-selbar" id="files-selbar" hidden>
+          <span id="files-selcount">0 selected</span>
+          <div class="files-selactions">
+            <button type="button" id="files-sel-download" class="btn-secondary">Download ZIP</button>
+            <button type="button" id="files-sel-move" class="btn-secondary">Move to…</button>
+            <button type="button" id="files-sel-delete" class="btn-secondary danger" hidden>Delete</button>
+            <button type="button" id="files-sel-clear" class="btn-ghost">Clear</button>
+          </div>
+        </div>
+
+        <div class="dropzone files-dropzone" id="files-drop" tabindex="0">
+          Drag &amp; drop files here, or use Upload
+        </div>
+        <input type="file" id="files-input" hidden multiple />
+        <input type="file" id="files-replace-input" hidden />
+
+        <div id="files-body" class="files-body results" aria-live="polite"></div>
+        <p class="files-summary" id="files-summary"></p>
+      </section>
+
+      <button type="button" id="files-fab" class="files-fab" aria-label="Upload files" title="Upload files">
+        <i class="fa-solid fa-plus" aria-hidden="true"></i>
+      </button>
+    </main>
+  </div>
+
+  <!-- openConfirm() degrades to window.confirm without this block. -->
+  <div class="modal" id="confirmModal" hidden aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="confirmTitle">
+    <div class="modal-content">
+      <div class="modal-head">
+        <h3 id="confirmTitle">Confirm Delete</h3>
+        <button class="btn-ghost" id="confirmClose" aria-label="Close">✕</button>
+      </div>
+      <div id="confirmText" style="padding: 6px 2px;">Do you want to delete this file?</div>
+      <div class="modal-actions">
+        <button id="confirmYes" class="btn-primary">Yes</button>
+        <button id="confirmNo" class="btn-ghost">No</button>
+      </div>
+    </div>
+  </div>
+
+  <script nonce="{{ csp_nonce }}">
+    window.CaseOrg = Object.assign(window.CaseOrg || {}, {
+      isAdmin: {{ (current_user and current_user.role == 'admin') | tojson }},
+      role: {{ (current_user.role if current_user else '') | tojson }},
+      standardSubdirs: {{ standard_subdirs | tojson }}
+    });
+  </script>
+  <script src="{{ static_url('js/main.js') }}"></script>
+  <script src="{{ static_url('js/files.js') }}"></script>
+</body>
+</html>

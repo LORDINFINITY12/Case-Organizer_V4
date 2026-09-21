@@ -4998,3 +4998,118 @@ input[type="number"].year-input {
         justify-content: center;
     }
 }
+
+/* ═══════════════════════════════════════════════════════════════════
+   Files page — Drive-like view over the case tree
+   Rows reuse .result-item / .icon-row / .icon-btn / .case-action-menu,
+   so only the genuinely new pieces live here.
+   ═══════════════════════════════════════════════════════════════════ */
+.files-card { display: flex; flex-direction: column; gap: 12px; }
+
+.files-toolbar {
+    display: flex; flex-wrap: wrap; align-items: center;
+    gap: 10px; justify-content: space-between;
+}
+.files-tools { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.files-filter { min-width: 190px; }
+.files-sort { min-width: 130px; }
+
+.files-crumbs { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; min-width: 0; }
+.files-crumb {
+    background: none; border: none; cursor: pointer; padding: 4px 8px;
+    border-radius: 8px; color: var(--accent); font-size: 0.92rem;
+    max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.files-crumb:hover { background: var(--input-bg, #f3f4f6); }
+.files-crumb.dragover { background: var(--accent); color: #fff; }
+.files-crumb-sep { color: var(--muted, #9ca3af); }
+
+.files-view-toggle { display: inline-flex; gap: 4px; }
+.files-view-toggle .icon-btn.active { border-color: var(--accent); color: var(--accent); }
+
+.files-meta {
+    font-size: 0.8rem; color: var(--muted, #6b7280);
+    font-variant-numeric: tabular-nums; white-space: nowrap; flex-shrink: 0;
+}
+.files-row .name { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.files-name-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.files-row.selected { outline: 2px solid var(--accent); outline-offset: -2px; }
+.files-row.dragover { background: var(--accent); color: #fff; }
+.files-check { accent-color: var(--accent); cursor: pointer; flex-shrink: 0; }
+
+.files-empty, .files-summary {
+    color: var(--muted, #6b7280); font-size: 0.88rem; padding: 10px 2px; margin: 0;
+}
+
+.files-selbar {
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 10px; flex-wrap: wrap; padding: 8px 12px; border-radius: 10px;
+    background: var(--input-bg, #f3f4f6);
+}
+.files-selactions { display: flex; gap: 8px; flex-wrap: wrap; }
+.files-selactions .danger { color: #ef4444; }
+/* An explicit display: beats the UA rule for [hidden], so restate it — the
+   same reason .user-menu-panel[hidden] exists earlier in this file. */
+.files-selbar[hidden] { display: none; }
+.files-selactions button[hidden] { display: none; }
+
+.files-dropzone.is-disabled { opacity: 0.55; cursor: not-allowed; }
+
+/* Grid view: the same rows, re-laid-out as tiles. */
+.files-body.view-grid {
+    display: grid; gap: 12px;
+    grid-template-columns: repeat(auto-fill, minmax(168px, 1fr));
+}
+.files-body.view-grid .files-row {
+    flex-direction: column; align-items: stretch; text-align: left; gap: 8px;
+}
+.files-body.view-grid .files-meta { white-space: normal; }
+.files-thumb {
+    display: flex; align-items: center; justify-content: center;
+    height: 118px; border-radius: 8px; overflow: hidden;
+    background: var(--input-bg, #f3f4f6); font-size: 30px; color: var(--muted, #9ca3af);
+}
+.files-thumb img { width: 100%; height: 100%; object-fit: cover; }
+
+/* Tree view */
+.files-tree { display: flex; flex-direction: column; }
+.files-tree-node {
+    display: flex; align-items: center; gap: 6px;
+    padding: 5px 8px; border-radius: 8px; cursor: pointer; font-size: 0.9rem;
+}
+.files-tree-node:hover { background: var(--input-bg, #f3f4f6); }
+.files-tree-caret { width: 12px; font-size: 11px; color: var(--muted, #9ca3af); }
+
+/* Upload FAB — phones only; desktop has the dropzone and the Upload button. */
+.files-fab[hidden] { display: none !important; }
+.files-fab {
+    position: fixed; right: 18px; bottom: 18px; z-index: 60;
+    width: 54px; height: 54px; border-radius: 50%; border: none;
+    background: var(--accent); color: #fff; font-size: 20px; cursor: pointer;
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.25); display: none;
+}
+
+@media (max-width: 640px) {
+    /* Drag-and-drop is unreliable on touch, so the dropzone goes and the FAB
+       takes over. Moving files is offered through the row menu instead. */
+    .files-dropzone { display: none; }
+    .files-fab { display: block; }
+
+    .files-toolbar { gap: 8px; }
+    .files-tools { width: 100%; }
+    .files-filter { flex: 1 1 100%; min-width: 0; }
+    .files-sort { flex: 1 1 auto; }
+    #files-new-folder, #files-upload-btn { flex: 1 1 auto; }
+
+    /* Only the last two crumbs stay; the rest collapse to an ellipsis. */
+    .files-crumbs { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
+    .files-crumbs::-webkit-scrollbar { display: none; }
+
+    /* Comfortable touch targets. */
+    .files-row { min-height: 44px; }
+    .files-row .icon-btn { min-width: 44px; min-height: 44px; }
+    .files-check { width: 20px; height: 20px; }
+
+    .files-body.view-grid { grid-template-columns: repeat(2, 1fr); }
+    .files-thumb { height: 96px; }
+}
