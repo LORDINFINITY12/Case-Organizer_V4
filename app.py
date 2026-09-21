@@ -2817,6 +2817,12 @@ def api_delete_item():
         if depth < 3:
             return jsonify({"ok": False, "msg": "Cannot delete top-level directories"}), 403
 
+        # Opt-in scope narrowing for the Files page, which must never reach
+        # outside the case tree. Existing callers omit it and are unaffected —
+        # the search page deletes case-law files through this same route.
+        if (data.get("scope") or "") == "cases" and not _in_case_tree(rel.parts):
+            return jsonify({"ok": False, "msg": "Outside the case tree"}), 403
+
         if not target.exists():
             return jsonify({"ok": False, "msg": "Not found"}), 404
 
@@ -3517,6 +3523,197 @@ def api_files_list():
         "can_delete": bool(g.current_user and g.current_user["role"] == "admin"),
         "can_write": True,
     })
+
+
+@app.post("/api/rename-item")
+@require_login_api
+def api_rename_item():
+    """Rename a file or folder *inside* a case.
+
+    Case directories themselves (depth 3) are not handled here: renaming one
+    has to cascade calendar events, which is what the admin-only
+    ``/api/rename-case`` exists to do.  Nothing at depth >= 4 is ever
+    referenced by a calendar event, so there is deliberately no cascade in
+    this route — do not "fix" that by adding one.
+    """
+    data = request.get_json(silent=True) or {}
+    rel_raw = (data.get("rel") or data.get("path") or "").strip()
+    new_name = normalize_ws(data.get("new_name"))
+    if not rel_raw or not new_name:
+        return jsonify({"ok": False, "msg": "Missing 'rel' or 'new_name'"}), 400
+
+    try:
+        _, parts = _case_tree_path(rel_raw)
+    except CaseTreeError as exc:
+        return jsonify({"ok": False, "msg": str(exc)}), 400
+    if len(parts) == 3:
+        return jsonify({"ok": False, "msg": "Use the case rename action for case folders."}), 403
+    try:
+        source, parts = _case_tree_path(rel_raw, min_depth=4)
+    except CaseTreeError as exc:
+        return jsonify({"ok": False, "msg": str(exc)}), 400
+
+    if not source.exists():
+        return jsonify({"ok": False, "msg": "Not found"}), 404
+
+    err = validate_fs_component(new_name)
+    if err:
+        return jsonify({"ok": False, "msg": err}), 400
+
+    # Keep the extension: changing it could mask a blocked type behind an
+    # allowed one, which is what allowed_file() exists to prevent.
+    if source.is_file() and Path(new_name).suffix.lower() != source.suffix.lower():
+        return jsonify({"ok": False, "msg": "The file extension cannot be changed."}), 400
+
+    target = source.parent / new_name
+    try:
+        target = _safe_path(target, FS_ROOT)
+    except (ValueError, OSError):
+        return jsonify({"ok": False, "msg": "Invalid name"}), 400
+    if target.exists():
+        return jsonify({"ok": False, "msg": "Something with that name is already here."}), 409
+
+    try:
+        source.rename(target)
+    except OSError as exc:
+        log.error("Rename failed for %r: %s", rel_raw, exc, exc_info=True)
+        return jsonify({"ok": False, "msg": "Rename failed."}), 500
+
+    return jsonify({"ok": True, "rel": "/".join(parts[:-1] + (new_name,))})
+
+
+@app.post("/api/files/new-folder")
+@require_login_api
+def api_files_new_folder():
+    """Create one of the standard sub-folders inside a case.
+
+    Only the standard names are accepted, so the Files page cannot introduce
+    arbitrary directories that the uploader would never produce.
+    """
+    data = request.get_json(silent=True) or {}
+    name = normalize_ws(data.get("name"))
+    if name not in STANDARD_SUBDIRS:
+        return jsonify({"ok": False, "msg": "Choose one of the standard sub-folders."}), 400
+
+    try:
+        base, parts = _case_tree_path((data.get("rel") or "").strip(), min_depth=3)
+    except CaseTreeError as exc:
+        return jsonify({"ok": False, "msg": str(exc)}), 400
+    if not base.is_dir():
+        return jsonify({"ok": False, "msg": "Folder not found"}), 404
+
+    try:
+        target = _safe_path(base / name, FS_ROOT)
+        target.mkdir(exist_ok=True)
+    except (ValueError, OSError) as exc:
+        log.error("New folder failed in %r: %s", parts, exc, exc_info=True)
+        return jsonify({"ok": False, "msg": "Could not create that folder."}), 500
+
+    return jsonify({"ok": True, "rel": "/".join(parts + (name,))})
+
+
+@app.post("/api/files/upload")
+@require_login_api
+def api_files_upload():
+    """Upload into a folder chosen in the Files page.
+
+    ``naming`` picks between the server's convention and the file's own name:
+
+    * ``standard`` (the default) — ``{stem} - {Case Name}.{ext}``, identical to
+      what a Primary Documents upload produces today.
+    * ``original`` — the filename as given, sanitised only.
+
+    The default is the convention, so the careless path is the correct one.
+    """
+    try:
+        base, parts = _case_tree_path((request.form.get("rel") or "").strip(), min_depth=3)
+    except CaseTreeError as exc:
+        return jsonify({"ok": False, "msg": str(exc)}), 400
+    if not base.is_dir():
+        return jsonify({"ok": False, "msg": "Folder not found"}), 404
+
+    files = request.files.getlist("file") + _assembled_uploads(request.form)
+    if request.form.get("chunked"):
+        @after_this_request
+        def _drop_spools(response):
+            _discard_assembled(request.form)
+            return response
+    if not files:
+        return jsonify({"ok": False, "msg": "No files provided."}), 400
+
+    naming = (request.form.get("naming") or "standard").strip().lower()
+    case_name = parts[2]
+    saved: List[str] = []
+    skipped: List[str] = []
+    for f in files:
+        if not f or not f.filename:
+            continue
+        if validate_upload(f):
+            skipped.append(f.filename)
+            continue
+        ext = f.filename.rsplit(".", 1)[1].lower()
+        if naming == "original":
+            new_name = f.filename
+        else:
+            stem = re.sub(r"\s+", " ", Path(secure_filename(f.filename)).stem).strip()
+            new_name = f"{stem} - {case_name}.{ext}"
+        dest = resolve_unique_destination(base, new_name)
+        try:
+            f.save(dest)
+        except OSError as exc:
+            log.error("Files upload failed into %r: %s", parts, exc, exc_info=True)
+            return jsonify({"ok": False, "msg": "Failed to save the uploaded file."}), 500
+        saved.append(dest.name)
+
+    if not saved:
+        return jsonify({"ok": False, "msg": "No files were saved (unsupported type?)",
+                        "skipped": skipped}), 400
+    return jsonify({"ok": True, "saved": saved, "skipped": skipped})
+
+
+@app.post("/api/files/replace")
+@require_login_api
+def api_files_replace():
+    """Overwrite one existing file in place, keeping its name.
+
+    Every other write path refuses to overwrite; this is the single explicit
+    exception, which is why it is its own route rather than a flag on upload.
+    """
+    try:
+        target, parts = _case_tree_path((request.form.get("rel") or "").strip(), min_depth=4)
+    except CaseTreeError as exc:
+        return jsonify({"ok": False, "msg": str(exc)}), 400
+    if not target.is_file() or target.is_symlink():
+        return jsonify({"ok": False, "msg": "Not found"}), 404
+
+    uploads = [f for f in request.files.getlist("file") if f and f.filename]
+    if len(uploads) != 1:
+        return jsonify({"ok": False, "msg": "Choose exactly one replacement file."}), 400
+    f = uploads[0]
+
+    err = validate_upload(f)
+    if err:
+        return jsonify({"ok": False, "msg": err}), 400
+    if Path(f.filename).suffix.lower() != target.suffix.lower():
+        return jsonify({"ok": False,
+                        "msg": f"The replacement must be a {target.suffix} file."}), 400
+
+    # Write beside the original, then swap atomically. Never unlink first: a
+    # failed save after the unlink would destroy the only copy.
+    tmp = target.with_name(f"{target.name}.tmp-{secrets.token_hex(6)}")
+    try:
+        f.save(tmp)
+        os.replace(tmp, target)
+    except OSError as exc:
+        log.error("Replace failed for %r: %s", parts, exc, exc_info=True)
+        return jsonify({"ok": False, "msg": "Could not replace that file."}), 500
+    finally:
+        with suppress(OSError):
+            if tmp.exists():
+                tmp.unlink()
+
+    log.info("File replaced by %s: %s", g.current_user["email"], "/".join(parts))
+    return jsonify({"ok": True, "rel": "/".join(parts)})
 
 
 # ════════════════════════════════════════════════════════════════════
