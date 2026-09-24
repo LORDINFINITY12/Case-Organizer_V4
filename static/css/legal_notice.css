@@ -78,6 +78,9 @@
   min-width: 0;
 }
 .ln-field.ln-col-2 { grid-column: 1 / -1; }
+/* display:flex above beats the UA rule for [hidden], so restate it —
+   otherwise a conditionally-shown field is always visible. */
+.ln-field[hidden] { display: none; }
 .ln-field > span {
   font-size: 0.85rem;
   font-weight: 600;

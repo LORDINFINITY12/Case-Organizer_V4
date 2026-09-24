@@ -1,3 +1,29 @@
+case-organizer (4.9.4) stable; urgency=medium
+
+  * Legal notices could lose their entire recipient block. The proforma block
+    was given a fixed 40 mm of height, but ReportLab silently discards a
+    paragraph that does not fit its frame - no error, no warning. With wide
+    side margins the recipient text wraps onto more lines than 40 mm holds, so
+    the notice generated with the addressee, the address and the notice number
+    simply absent. The block is now measured by laying the real text out at the
+    real column width, so it can never be shorter than its own contents.
+  * Notices that are not A4 portrait are refused instead of being stamped
+    wrong. The letterhead is measured against A4 and merged at its native size,
+    so any other page size put the artwork off the top edge and dragged the
+    recipient block up with it. The upload now explains what to change in Word
+    rather than producing a cut-off notice.
+  * A recipient addressed in a position or capacity can carry the name of their
+    organisation, set between their designation and the postal address.
+  * The proforma block can be set in Times New Roman at 10, 12 or 14 point, and
+    its side margins picked from Normal, Narrow, Moderate or Wide. Side margins
+    apply only to the recipient block and the notice number; the top and bottom
+    remain governed by the letterhead artwork.
+  * The recommended first-page margin now follows the block it has to clear,
+    growing with the font size, the chosen side margins and the organisation
+    line, with a little clearance so text does not sit on the boundary.
+
+ -- Swaraj Aggarwal <swaraj1010746160@gmail.com>  Thu, 24 Sep 2026 15:27:31 +0530
+
 case-organizer (4.9.3) stable; urgency=medium
 
   * Large uploads work again. The chunked upload added in 4.9.1 had never

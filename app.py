@@ -27,7 +27,7 @@ import time
 from functools import wraps
 from pathlib import Path
 import json
-from typing import Dict, Any, Iterable, List, Optional
+from typing import Dict, Any, Iterable, List, Optional, Tuple
 
 # ---- Flask / Werkzeug ---------------------------------------------------
 from flask import (
@@ -5465,7 +5465,31 @@ _LH_CONTENT_THRESHOLD = 235
 # Legal-notice proforma geometry (mm). Single source of truth shared by the PDF
 # generator and the on-page margin guidance so the two can never drift apart.
 _LN_BAND_GAP_MM = 6.0       # gap between the letterhead header and the proforma
-_LN_BAND_HEIGHT_MM = 40.0   # height of the proforma (recipient / notice) block
+_LN_BAND_HEIGHT_MM = 40.0   # legacy fixed height; see _ln_band_height_mm()
+
+# The proforma block is set in Times New Roman at one of three sizes. Leading
+# is 4/3 of the point size, matching the 12pt/16pt pairing the block has always
+# used, so changing size scales the block instead of crowding it.
+_LN_FONT_SIZES = (10, 12, 14)
+_LN_DEFAULT_FONT_SIZE = 12
+_LN_LEADING_FACTOR = 4.0 / 3.0
+_LN_BAND_PAD_MM = 6.0       # breathing room under the last recipient line
+# Added to the *advice* only, never to the geometry: landing text exactly
+# on the computed boundary looks cramped, so the recommendation sits a
+# whisker below it.
+_LN_FIRST_PAGE_CLEARANCE_MM = 2.0
+
+# Side margins for the proforma block only (recipient on the left, notice
+# number and date on the right). Top and bottom are governed by the letterhead
+# artwork and are deliberately untouched by this choice.
+_LN_SIDE_MARGINS = {
+    "normal":   {"label": "Normal",   "left_cm": 2.54, "right_cm": 2.54},
+    "narrow":   {"label": "Narrow",   "left_cm": 1.27, "right_cm": 1.27},
+    "moderate": {"label": "Moderate", "left_cm": 1.91, "right_cm": 1.91},
+    "wide":     {"label": "Wide",     "left_cm": 5.08, "right_cm": 5.08},
+}
+_LN_DEFAULT_SIDE_MARGIN = "moderate"
+_PT_PER_MM = 72.0 / 25.4
 
 
 def _measure_letterhead_margins(letterhead_id, pad_mm: float = 2.0) -> Optional[Dict[str, float]]:
@@ -5542,6 +5566,109 @@ def _measure_letterhead_margins(letterhead_id, pad_mm: float = 2.0) -> Optional[
     }
 
 
+# A4 at 72 dpi, with a tolerance that absorbs the rounding Word and
+# LibreOffice apply when they export (they land within a point or two).
+_A4_PT = (595.276, 841.890)
+_A4_TOLERANCE_PT = 6.0
+
+
+def _assert_a4(page_w: float, page_h: float) -> None:
+    """Raise ValueError unless the page is A4 portrait within tolerance.
+
+    The letterhead is measured against A4 and stamped at its native size, so
+    anything else puts the artwork off the top edge and drags the recipient
+    block with it.  Refusing here gives the user an actionable message instead
+    of a silently cut-off notice.
+    """
+    exp_w, exp_h = _A4_PT
+    if (abs(page_w - exp_w) <= _A4_TOLERANCE_PT
+            and abs(page_h - exp_h) <= _A4_TOLERANCE_PT):
+        return
+    got = f"{page_w / _PT_PER_MM:.0f} x {page_h / _PT_PER_MM:.0f} mm"
+    if abs(page_w - exp_h) <= _A4_TOLERANCE_PT and abs(page_h - exp_w) <= _A4_TOLERANCE_PT:
+        raise ValueError(
+            "The notice is in landscape. Export it as A4 portrait (210 x 297 mm) "
+            "and upload again."
+        )
+    raise ValueError(
+        f"The notice must be A4 portrait (210 x 297 mm); this PDF is {got}. "
+        "In Word set Layout \u2192 Size \u2192 A4 before exporting."
+    )
+
+
+def _ln_font_size(value: Any) -> int:
+    """Coerce a requested proforma font size to one of the allowed sizes."""
+    try:
+        size = int(float(value))
+    except (TypeError, ValueError):
+        return _LN_DEFAULT_FONT_SIZE
+    return size if size in _LN_FONT_SIZES else _LN_DEFAULT_FONT_SIZE
+
+
+def _ln_side_margin_key(value: Any) -> str:
+    """Coerce a requested side-margin preset to a known key."""
+    key = (str(value or "")).strip().lower()
+    return key if key in _LN_SIDE_MARGINS else _LN_DEFAULT_SIDE_MARGIN
+
+
+def _ln_side_margin(value: Any) -> Dict[str, float]:
+    """Resolve a side-margin preset key to its measurements."""
+    return _LN_SIDE_MARGINS[_ln_side_margin_key(value)]
+
+
+def _ln_block_html(notice: Dict[str, Any]) -> Tuple[str, str]:
+    """The left (recipient) and right (number/date) paragraph markup."""
+    left = "<br/>".join(_legal_notice_recipient_lines(notice))
+    right_lines = []
+    num = (notice.get("notice_number") or "").strip()
+    date = (notice.get("notice_date") or "").strip()
+    if num:
+        right_lines.append(f"<b>Notice No:</b> {safe_text(num)}")
+    if date:
+        right_lines.append(f"<b>Date:</b> {safe_text(date)}")
+    return left, ("<br/>".join(right_lines) if right_lines else "&nbsp;")
+
+
+def _ln_band_height_mm(notice: Optional[Dict[str, Any]] = None,
+                       font_size: int = _LN_DEFAULT_FONT_SIZE,
+                       side_margin: Any = _LN_DEFAULT_SIDE_MARGIN) -> float:
+    """Height the proforma block needs, in mm — measured, not estimated.
+
+    The block is laid out at the real column widths for the chosen side
+    margins and font size, and the taller of the two columns wins.  This has
+    to be exact: ReportLab's ``Frame.addFromList`` silently drops a paragraph
+    that does not fit, so a block one line too short loses the entire
+    recipient address without any error.  Wide margins wrap the text onto more
+    lines, which is precisely when an estimate would be wrong.
+    """
+    notice = notice or {}
+    font_size = _ln_font_size(font_size)
+    sides = _ln_side_margin(side_margin)
+    try:
+        from reportlab.lib.units import mm as _mm
+        from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
+        from reportlab.platypus import Paragraph
+    except ImportError:
+        lines = max(len(_legal_notice_recipient_lines(notice)), 2)
+        return (lines * font_size * _LN_LEADING_FACTOR) / _PT_PER_MM + _LN_BAND_PAD_MM
+
+    page_w = _A4_PT[0]
+    content_w = page_w - (sides["left_cm"] + sides["right_cm"]) * 10 * _mm
+    left_w = content_w * 0.62
+    right_w = content_w - left_w
+
+    style = ParagraphStyle(
+        "LNMeasure", parent=getSampleStyleSheet()["Normal"],
+        fontName=_register_times_new_roman(),
+        fontSize=font_size, leading=font_size * _LN_LEADING_FACTOR,
+    )
+    left_html, right_html = _ln_block_html(notice)
+    # A generous availHeight: we want the natural wrapped height, not a clip.
+    _, left_h = Paragraph(left_html, style).wrap(max(left_w - 6, 1), 10_000)
+    _, right_h = Paragraph(right_html, style).wrap(max(right_w - 6, 1), 10_000)
+    return max(left_h, right_h) / _PT_PER_MM + _LN_BAND_PAD_MM
+
+
 def _letterhead_margin_guidance(letterhead_id) -> Optional[Dict[str, float]]:
     """Display-ready margin recommendations (cm, rounded *up* to 0.1 cm) for a
     letterhead, derived from its measured artwork. Returns None when the
@@ -5559,11 +5686,22 @@ def _letterhead_margin_guidance(letterhead_id) -> Optional[Dict[str, float]]:
     def _ceil_cm(mm: float) -> float:
         return math.ceil(mm) / 10.0  # round up to the next 0.1 cm (never under)
 
-    first_mm = m["top_margin_mm"] + _LN_BAND_GAP_MM + _LN_BAND_HEIGHT_MM
+    band_mm = _ln_band_height_mm(None, _LN_DEFAULT_FONT_SIZE, _LN_DEFAULT_SIDE_MARGIN)
+    first_mm = (m["top_margin_mm"] + _LN_BAND_GAP_MM + band_mm
+                + _LN_FIRST_PAGE_CLEARANCE_MM)
     return {
         "top_cm": _ceil_cm(m["top_margin_mm"]),
         "bottom_cm": _ceil_cm(m["bottom_margin_mm"]),
         "first_page_cm": _ceil_cm(first_mm),
+        # Raw millimetres plus the block's own metrics, so the form can
+        # recompute the first-page margin as the user changes font size or
+        # adds an organisation line, without a round trip per keystroke.
+        "top_margin_mm": m["top_margin_mm"],
+        "bottom_margin_mm": m["bottom_margin_mm"],
+        "band_gap_mm": _LN_BAND_GAP_MM,
+        "band_pad_mm": _LN_BAND_PAD_MM,
+        "leading_factor": _LN_LEADING_FACTOR,
+        "pt_per_mm": _PT_PER_MM,
     }
 
 
@@ -6660,6 +6798,12 @@ def _legal_notice_recipient_lines(notice: Dict[str, Any]) -> List[str]:
     ).strip()
     if relation:
         content_lines.append(_esc(relation))
+    # An organisation sits between the person's capacity and the postal
+    # address: "Associate Director, ..." then "Agoda Company Pte. Ltd." then
+    # the street lines.
+    organisation = (notice.get("organisation") or "").strip()
+    if organisation:
+        content_lines.append(_esc(organisation))
     for key in ("address_line1", "address_line2"):
         val = (notice.get(key) or "").strip()
         if val:
@@ -6698,9 +6842,18 @@ def generate_legal_notice_pdf(uploaded_bytes: bytes, notice: Dict[str, Any]) -> 
     first_page = reader.pages[0]
     page_w = float(first_page.mediabox.width)
     page_h = float(first_page.mediabox.height)
+    # The letterhead is measured against A4 and stamped at its own size, so a
+    # non-A4 notice would put the artwork off the top of the page and drag the
+    # proforma block with it. Refuse rather than produce a cut-off notice.
+    _assert_a4(page_w, page_h)
+
+    font_size = _ln_font_size(notice.get("font_size"))
+    leading = font_size * _LN_LEADING_FACTOR
+    sides = _ln_side_margin(notice.get("side_margin"))
 
     # ── Header-band geometry (points) ──────────────────────────────
-    side_margin = 18 * mm
+    left_margin = sides["left_cm"] * 10 * mm
+    right_margin = sides["right_cm"] * 10 * mm
     # Reserve exactly as much top space as the selected letterhead's header
     # actually occupies (measured from the artwork), so the proforma block sits
     # just below it. Fall back to 38.1 mm only when no letterhead is measurable
@@ -6711,9 +6864,9 @@ def generate_legal_notice_pdf(uploaded_bytes: bytes, notice: Dict[str, Any]) -> 
     else:
         letterhead_reserve = 38.1 * mm     # space the printed letterhead occupies
     band_gap = _LN_BAND_GAP_MM * mm    # gap between letterhead and the band
-    band_height = _LN_BAND_HEIGHT_MM * mm
+    band_height = _ln_band_height_mm(notice, font_size, notice.get("side_margin")) * mm
     band_top = page_h - letterhead_reserve - band_gap
-    content_w = page_w - (2 * side_margin)
+    content_w = page_w - left_margin - right_margin
     left_w = content_w * 0.62
     right_w = content_w - left_w
 
@@ -6721,38 +6874,30 @@ def generate_legal_notice_pdf(uploaded_bytes: bytes, notice: Dict[str, Any]) -> 
     styles = getSampleStyleSheet()
     left_style = ParagraphStyle(
         "LNLeft", parent=styles["Normal"],
-        fontName=proforma_font, fontSize=12, leading=16, alignment=TA_LEFT,
+        fontName=proforma_font, fontSize=font_size, leading=leading, alignment=TA_LEFT,
     )
     right_style = ParagraphStyle(
         "LNRight", parent=styles["Normal"],
-        fontName=proforma_font, fontSize=12, leading=16, alignment=TA_RIGHT,
+        fontName=proforma_font, fontSize=font_size, leading=leading, alignment=TA_RIGHT,
     )
 
     def _esc(v: Any) -> str:
         v = (str(v or "")).strip()
         return safe_text(v) if v else ""
 
-    left_html = "<br/>".join(_legal_notice_recipient_lines(notice))
-
-    # Right — notice number + date
-    right_lines = []
-    num = (notice.get("notice_number") or "").strip()
-    date = (notice.get("notice_date") or "").strip()
-    if num:
-        right_lines.append(f"<b>Notice No:</b> {_esc(num)}")
-    if date:
-        right_lines.append(f"<b>Date:</b> {_esc(date)}")
-    right_html = "<br/>".join(right_lines) if right_lines else "&nbsp;"
+    # The same markup the height measurement used, so the block can never be
+    # sized against different text than it renders.
+    left_html, right_html = _ln_block_html(notice)
 
     overlay_buf = BytesIO()
     c = _rl_canvas.Canvas(overlay_buf, pagesize=(page_w, page_h))
     left_frame = Frame(
-        side_margin, band_top - band_height, left_w, band_height,
+        left_margin, band_top - band_height, left_w, band_height,
         leftPadding=0, rightPadding=6, topPadding=0, bottomPadding=0,
     )
     left_frame.addFromList([Paragraph(left_html, left_style)], c)
     right_frame = Frame(
-        side_margin + left_w, band_top - band_height, right_w, band_height,
+        left_margin + left_w, band_top - band_height, right_w, band_height,
         leftPadding=6, rightPadding=0, topPadding=0, bottomPadding=0,
     )
     right_frame.addFromList([Paragraph(right_html, right_style)], c)
@@ -6772,6 +6917,59 @@ def generate_legal_notice_pdf(uploaded_bytes: bytes, notice: Dict[str, Any]) -> 
     # Letterhead behind every page
     letterhead_path = _resolve_letterhead_path(notice.get("letterhead_id"))
     return _apply_letterhead_to_pdf(merged, letterhead_path)
+
+
+# ---- POST /api/legal-notices/margins — live margin guidance --------------
+@app.post("/api/legal-notices/margins")
+@require_login_api
+def api_legal_notice_margins():
+    """Recommended margins for the notice as it is currently filled in.
+
+    The first-page figure depends on the recipient block's real height, which
+    changes with the font size, the side-margin preset and whether an
+    organisation line is present — so it is measured here rather than guessed
+    in the browser.
+    """
+    data = request.get_json(silent=True) or {}
+    font_size = _ln_font_size(data.get("font_size"))
+    side_key = _ln_side_margin_key(data.get("side_margin"))
+    notice = {
+        "recipient_name": (data.get("recipient_name") or "").strip(),
+        "relation_type": (data.get("relation_type") or "").strip(),
+        "relation_value": (data.get("relation_value") or "").strip(),
+        "organisation": (data.get("organisation") or "").strip(),
+        "address_line1": (data.get("address_line1") or "").strip(),
+        "address_line2": (data.get("address_line2") or "").strip(),
+        "contact": (data.get("contact") or "").strip(),
+        "notice_number": (data.get("notice_number") or "").strip(),
+        "notice_date": (data.get("notice_date") or "").strip(),
+    }
+    band_mm = _ln_band_height_mm(notice, font_size, side_key)
+    measured = _measure_letterhead_margins(data.get("letterhead_id"))
+
+    import math
+
+    def _ceil_cm(value_mm: float) -> float:
+        return math.ceil(value_mm) / 10.0
+
+    sides = _LN_SIDE_MARGINS[side_key]
+    payload = {
+        "ok": True,
+        "band_cm": _ceil_cm(band_mm),
+        "left_cm": sides["left_cm"],
+        "right_cm": sides["right_cm"],
+        "font_size": font_size,
+        "side_margin": side_key,
+    }
+    if measured:
+        payload.update({
+            "top_cm": _ceil_cm(measured["top_margin_mm"]),
+            "bottom_cm": _ceil_cm(measured["bottom_margin_mm"]),
+            "first_page_cm": _ceil_cm(
+                measured["top_margin_mm"] + _LN_BAND_GAP_MM + band_mm
+                + _LN_FIRST_PAGE_CLEARANCE_MM),
+        })
+    return jsonify(payload)
 
 
 # ---- GET /legal-notice — render the legal notice form --------------------
@@ -6831,9 +7029,12 @@ def legal_notice_save():
         "recipient_name": recipient_name,
         "relation_type": normalize_ws(request.form.get("relation_type") or "")[:60],
         "relation_value": normalize_ws(request.form.get("relation_value") or "")[:180],
+        "organisation": normalize_ws(request.form.get("organisation") or "")[:200],
         "address_line1": normalize_ws(request.form.get("address_line1") or "")[:200],
         "address_line2": normalize_ws(request.form.get("address_line2") or "")[:200],
         "contact": normalize_ws(request.form.get("contact") or "")[:120],
+        "font_size": _ln_font_size(request.form.get("font_size")),
+        "side_margin": _ln_side_margin_key(request.form.get("side_margin")),
         "letterhead_id": letterhead_id,
     }
 

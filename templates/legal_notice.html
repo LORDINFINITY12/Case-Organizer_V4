@@ -105,6 +105,13 @@
               <input type="text" id="ln-relation-value" placeholder="e.g., Mr. Ram Kumar OR Managing Director" maxlength="180" />
             </label>
 
+            <!-- Shown only for an organisation capacity: the company sits
+                 between the person's designation and the postal address. -->
+            <label class="ln-field ln-col-2" id="ln-org-field" hidden>
+              <span>Organisation name <em class="ln-req">*</em></span>
+              <input type="text" id="ln-organisation" placeholder="e.g., Agoda Company Pte. Ltd." maxlength="200" />
+            </label>
+
             <label class="ln-field">
               <span>Address line 1</span>
               <input type="text" id="ln-address1" placeholder="House / street / locality" maxlength="200" />
@@ -117,6 +124,24 @@
             <label class="ln-field ln-col-2">
               <span>Contact info <span class="ln-optional">(optional)</span></span>
               <input type="text" id="ln-contact" placeholder="Phone / email" maxlength="120" />
+            </label>
+
+            <label class="ln-field">
+              <span>Font size <span class="ln-optional">(Times New Roman)</span></span>
+              <select id="ln-font-size">
+                <option value="10">Size 10</option>
+                <option value="12" selected>Size 12</option>
+                <option value="14">Size 14</option>
+              </select>
+            </label>
+            <label class="ln-field">
+              <span>Side margins <span class="ln-optional">(recipient &amp; notice block)</span></span>
+              <select id="ln-side-margin">
+                <option value="normal">Normal — 2.54 cm both</option>
+                <option value="narrow">Narrow — 1.27 cm both</option>
+                <option value="moderate" selected>Moderate — 1.91 cm both</option>
+                <option value="wide">Wide — 5.08 cm both</option>
+              </select>
             </label>
 
             <label class="ln-field">

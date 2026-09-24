@@ -16,6 +16,10 @@ document.addEventListener('DOMContentLoaded', () => {
   // ── Field references ─────────────────────────────────────────
   const recipientEl = document.getElementById('ln-recipient-name');
   const relTypeEl = document.getElementById('ln-relation-type');
+  const orgFieldEl = document.getElementById('ln-org-field');
+  const orgEl = document.getElementById('ln-organisation');
+  const fontSizeEl = document.getElementById('ln-font-size');
+  const sideMarginEl = document.getElementById('ln-side-margin');
   const relValueEl = document.getElementById('ln-relation-value');
   const addr1El = document.getElementById('ln-address1');
   const addr2El = document.getElementById('ln-address2');
@@ -101,10 +105,67 @@ document.addEventListener('DOMContentLoaded', () => {
     return (Math.round(v * 10) / 10).toFixed(1).replace(/\.0$/, '');
   }
 
+  // An organisation only makes sense when the recipient is being addressed in
+  // a position or capacity — that is when a company name belongs above the
+  // postal address.
+  function isOrgCapacity() {
+    return (relTypeEl?.value || '') === 'Position/Capacity';
+  }
+
+  function syncOrgField() {
+    if (!orgFieldEl) return;
+    const show = isOrgCapacity();
+    orgFieldEl.hidden = !show;
+    if (!show && orgEl) orgEl.value = '';
+    scheduleMarginRefresh();
+  }
+
+  // The first-page margin depends on the block's real height, which changes
+  // with the font size, the side margins and the organisation line. The server
+  // measures it rather than the browser guessing.
+  let marginTimer = null;
+  let liveMargins = null;
+  function scheduleMarginRefresh() {
+    clearTimeout(marginTimer);
+    marginTimer = setTimeout(refreshMargins, 250);
+  }
+
+  async function refreshMargins() {
+    try {
+      const r = await fetch('/api/legal-notices/margins', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': _lnCsrfToken() },
+        body: JSON.stringify({
+          letterhead_id: selectedLetterheadId,
+          font_size: fontSizeEl?.value || '12',
+          side_margin: sideMarginEl?.value || 'moderate',
+          recipient_name: document.getElementById('ln-recipient-name')?.value || '',
+          relation_type: relTypeEl?.value || '',
+          relation_value: relValueEl?.value || '',
+          organisation: isOrgCapacity() ? (orgEl?.value || '') : '',
+          address_line1: addr1El?.value || '',
+          address_line2: addr2El?.value || '',
+          contact: contactEl?.value || '',
+          notice_number: numberEl?.value || '',
+          notice_date: document.getElementById('ln-date')?.value || '',
+        }),
+      });
+      const data = await r.json();
+      liveMargins = data && data.ok ? data : null;
+    } catch (e) {
+      liveMargins = null;
+    }
+    applyMarginGuidance(selectedLetterheadId);
+  }
+
   // Render exact margin guidance for the currently-selected letterhead.
   function applyMarginGuidance(id) {
     if (!marginsBox) return;
-    const m = (id === null || id === undefined) ? null : letterheadMargins[id];
+    const cached = (id === null || id === undefined) ? null : letterheadMargins[id];
+    // Live figures reflect the form as it stands; the cached ones are the
+    // letterhead's defaults at 12 pt with no organisation line.
+    const m = (liveMargins && typeof liveMargins.first_page_cm === 'number')
+      ? liveMargins : cached;
     if (m && typeof m.top_cm === 'number') {
       marginsBox.className = 'ln-margins ln-margins-exact';
       marginsBox.innerHTML =
@@ -112,6 +173,9 @@ document.addEventListener('DOMContentLoaded', () => {
         + '<ul>'
         + `<li><strong>Every page</strong> — top <strong>${fmtCm(m.top_cm)}&nbsp;cm</strong>, bottom <strong>${fmtCm(m.bottom_cm)}&nbsp;cm</strong></li>`
         + `<li><strong>First page</strong> — top <strong>${fmtCm(m.first_page_cm)}&nbsp;cm</strong> (room for the recipient block &amp; notice number)</li>`
+        + (typeof m.left_cm === 'number'
+            ? `<li><strong>Recipient block</strong> — left <strong>${fmtCm(m.left_cm)}&nbsp;cm</strong>, right <strong>${fmtCm(m.right_cm)}&nbsp;cm</strong> (this block only)</li>`
+            : '')
         + '</ul>';
     } else if (id !== null && id !== undefined) {
       // A letterhead is selected but could not be measured automatically.
@@ -238,6 +302,9 @@ document.addEventListener('DOMContentLoaded', () => {
     fd.append('recipient_name', recipientName);
     fd.append('relation_type', relTypeEl?.value || '');
     fd.append('relation_value', relValueEl?.value || '');
+    fd.append('organisation', isOrgCapacity() ? (orgEl?.value || '') : '');
+    fd.append('font_size', fontSizeEl?.value || '12');
+    fd.append('side_margin', sideMarginEl?.value || 'moderate');
     fd.append('address_line1', addr1El?.value || '');
     fd.append('address_line2', addr2El?.value || '');
     fd.append('contact', contactEl?.value || '');
@@ -440,6 +507,16 @@ document.addEventListener('DOMContentLoaded', () => {
       nameResults.innerHTML = `<div class="result-item">Search failed: ${_lnEscHtml(err.message || String(err))}</div>`;
     }
   }
+  // Organisation visibility, and live margin guidance as the block changes.
+  relTypeEl?.addEventListener('change', syncOrgField);
+  orgEl?.addEventListener('input', scheduleMarginRefresh);
+  fontSizeEl?.addEventListener('change', scheduleMarginRefresh);
+  sideMarginEl?.addEventListener('change', scheduleMarginRefresh);
+  [relValueEl, addr1El, addr2El, contactEl,
+   document.getElementById('ln-recipient-name')].forEach(
+    (elm) => elm?.addEventListener('input', scheduleMarginRefresh));
+  syncOrgField();
+
   nameBtn?.addEventListener('click', performNameSearch);
   nameInput?.addEventListener('keydown', (e) => {
     if (e.key === 'Enter') { e.preventDefault(); performNameSearch(); }

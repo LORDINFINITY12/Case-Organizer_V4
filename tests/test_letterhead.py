@@ -283,7 +283,9 @@ class TestMarginMeasurement:
                                                   monkeypatch):
         import math
         from app import (_measure_letterhead_margins, _letterhead_margin_guidance,
-                         _LN_BAND_GAP_MM, _LN_BAND_HEIGHT_MM)
+                         _LN_BAND_GAP_MM, _ln_band_height_mm,
+                         _LN_DEFAULT_FONT_SIZE, _LN_DEFAULT_SIDE_MARGIN,
+                         _LN_FIRST_PAGE_CLEARANCE_MM)
 
         lid = _store_letterhead(db, tmp_path / "fs", monkeypatch,
                                 _make_letterhead_png)
@@ -294,7 +296,10 @@ class TestMarginMeasurement:
         # cm values are the mm measurements rounded *up* to 0.1 cm — never under.
         assert g["top_cm"] == math.ceil(m["top_margin_mm"]) / 10.0
         assert g["bottom_cm"] == math.ceil(m["bottom_margin_mm"]) / 10.0
-        extra = _LN_BAND_GAP_MM + _LN_BAND_HEIGHT_MM
+        # The proforma block is measured, not a fixed constant: it grows with
+        # the font size, the side margins and an organisation line.
+        band = _ln_band_height_mm(None, _LN_DEFAULT_FONT_SIZE, _LN_DEFAULT_SIDE_MARGIN)
+        extra = _LN_BAND_GAP_MM + band + _LN_FIRST_PAGE_CLEARANCE_MM
         assert g["first_page_cm"] == math.ceil(m["top_margin_mm"] + extra) / 10.0
         # First page must always reserve more room than an ordinary page.
         assert g["first_page_cm"] > g["top_cm"]
@@ -336,3 +341,97 @@ class TestLetterheadsApi:
     def test_listing_requires_login(self, client, test_admin):
         resp = client.get("/api/letterheads")
         assert resp.status_code == 401
+
+
+# ---------------------------------------------------------------------------
+# Legal notice: A4 gate, organisation line, font size, side margins
+# ---------------------------------------------------------------------------
+class TestLegalNoticeGeometry:
+    def _a4_pdf(self, size=None):
+        import io
+        from reportlab.pdfgen import canvas
+        from reportlab.lib.pagesizes import A4
+        buf = io.BytesIO()
+        c = canvas.Canvas(buf, pagesize=size or A4)
+        c.drawString(72, 400, "Body of the notice.")
+        c.showPage(); c.save()
+        return buf.getvalue()
+
+    def _notice(self, **over):
+        n = {
+            "recipient_name": "Mr. Benny Philip",
+            "relation_type": "Position/Capacity",
+            "relation_value": "Associate Director, Customer Experience & Grievance Officer, India",
+            "organisation": "Agoda Company Pte. Ltd.",
+            "address_line1": "36 Robinson Road, #20-01 City House",
+            "address_line2": "Singapore 068877",
+            "notice_number": "5/LN/26", "notice_date": "24-09-2026",
+        }
+        n.update(over)
+        return n
+
+    def test_organisation_sits_between_capacity_and_address(self, app):
+        from app import _legal_notice_recipient_lines
+        lines = _legal_notice_recipient_lines(self._notice())
+        org_i = next(i for i, l in enumerate(lines) if "Agoda" in l)
+        cap_i = next(i for i, l in enumerate(lines) if "Associate Director" in l)
+        adr_i = next(i for i, l in enumerate(lines) if "Robinson" in l)
+        assert cap_i < org_i < adr_i
+
+    def test_organisation_omitted_when_absent(self, app):
+        from app import _legal_notice_recipient_lines
+        lines = _legal_notice_recipient_lines(self._notice(organisation=""))
+        assert not any("Agoda" in l for l in lines)
+
+    @pytest.mark.parametrize("bad", ["letter", "landscape"])
+    def test_non_a4_is_refused(self, app, bad):
+        from reportlab.lib.pagesizes import LETTER, A4, landscape
+        from app import generate_legal_notice_pdf
+        size = LETTER if bad == "letter" else landscape(A4)
+        with pytest.raises(ValueError) as exc:
+            generate_legal_notice_pdf(self._a4_pdf(size), self._notice())
+        assert "A4" in str(exc.value)
+
+    def test_a4_is_accepted(self, app):
+        from app import generate_legal_notice_pdf
+        out = generate_legal_notice_pdf(self._a4_pdf(), self._notice())
+        assert out.getvalue().startswith(b"%PDF")
+
+    @pytest.mark.parametrize("side", ["normal", "narrow", "moderate", "wide"])
+    @pytest.mark.parametrize("size", [10, 12, 14])
+    def test_every_combination_keeps_the_whole_block(self, app, side, size):
+        """ReportLab silently drops a paragraph that does not fit its frame, so
+        a band even slightly too short loses the recipient address with no
+        error. Wide margins wrap onto more lines and are the real test."""
+        from pypdf import PdfReader
+        from app import generate_legal_notice_pdf
+        n = self._notice(side_margin=side, font_size=size)
+        text = PdfReader(generate_legal_notice_pdf(self._a4_pdf(), n)).pages[0].extract_text() or ""
+        for needle in ("Benny", "Agoda", "Singapore", "5/LN/26", "24-09-2026"):
+            assert needle in text, f"{needle!r} missing at {side}/{size}pt"
+
+    def test_band_grows_with_font_size_and_organisation(self, app):
+        from app import _ln_band_height_mm
+        base = _ln_band_height_mm(self._notice(organisation=""), 12, "moderate")
+        with_org = _ln_band_height_mm(self._notice(), 12, "moderate")
+        bigger = _ln_band_height_mm(self._notice(), 14, "moderate")
+        assert with_org > base
+        assert bigger > with_org
+
+    def test_unknown_preset_and_size_fall_back(self, app):
+        from app import _ln_side_margin, _ln_font_size
+        assert _ln_side_margin("nonsense")["label"] == "Moderate"
+        assert _ln_font_size(13) == 12
+        assert _ln_font_size("14") == 14
+
+    def test_margins_endpoint_reflects_the_form(self, auth_client, app):
+        headers = {"X-CSRF-Token": "test-csrf-token"}
+        small = auth_client.post("/api/legal-notices/margins",
+                                 json={**self._notice(), "font_size": 10,
+                                       "side_margin": "moderate"}, headers=headers).get_json()
+        large = auth_client.post("/api/legal-notices/margins",
+                                 json={**self._notice(), "font_size": 14,
+                                       "side_margin": "wide"}, headers=headers).get_json()
+        assert small["ok"] and large["ok"]
+        assert large["band_cm"] > small["band_cm"]
+        assert large["left_cm"] == 5.08 and small["left_cm"] == 1.91
