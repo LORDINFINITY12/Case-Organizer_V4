@@ -15,7 +15,8 @@ case-organizer (4.10) stable; urgency=medium
     details for editing, their documents to view, download or remove, and
     uploads to add or replace them. Replacing a CV or cover letter writes the
     new file before the old one is removed, so a failed upload never loses the
-    document already on file.
+    document already on file. Admins can delete an applicant outright, which
+    removes their record and their folder of documents.
   * Applicant documents are stored under Interns/ in the storage folder,
     beside Certificates and Letterheads, one folder per applicant. The case
     search only looks at year folders, so they never appear among case files.

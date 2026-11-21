@@ -227,3 +227,61 @@ class TestAccess:
 def test_schema_is_v12(db):
     row = db.execute("SELECT value FROM app_meta WHERE key = 'schema_version'").fetchone()
     assert row["value"] == "12"
+
+
+@pytest.fixture()
+def admin_client(client, test_admin):
+    from services.users import create_session
+    token = create_session(test_admin.id, user_agent="pytest", ip_address="127.0.0.1")
+    with client.session_transaction() as sess:
+        sess["session_token"] = token
+        sess["user_id"] = test_admin.id
+        sess["user_role"] = test_admin.role
+        sess["user_email"] = test_admin.email
+        sess["_csrf_token"] = "test-csrf-token"
+    return client
+
+
+class TestDelete:
+    def _one(self, client):
+        _create(client, cv=(_pdf(), "cv.pdf"), lor=[(_pdf(), "l1.pdf"), (_pdf(), "l2.pdf")])
+        return _list(client)["applicants"][0]
+
+    def test_admin_deletes_applicant_documents_and_folder(self, admin_client, fsroot, db):
+        a = self._one(admin_client)
+        folder = next((fsroot / "Interns").iterdir())
+        r = admin_client.post(f"/api/interns/{a['id']}/delete", headers=CSRF)
+        assert r.status_code == 200, r.get_data(as_text=True)
+        assert _list(admin_client)["applicants"] == []
+        assert not folder.exists()
+        left = db.execute("SELECT COUNT(*) AS n FROM intern_documents").fetchone()["n"]
+        assert left == 0
+        # Interns/ itself survives — only the applicant's own folder goes.
+        assert (fsroot / "Interns").is_dir()
+
+    def test_staff_cannot_delete(self, auth_client, fsroot):
+        a = self._one(auth_client)
+        r = auth_client.post(f"/api/interns/{a['id']}/delete", headers=CSRF)
+        assert r.status_code == 403
+        assert len(_list(auth_client)["applicants"]) == 1
+
+    def test_unknown_applicant_is_404(self, admin_client, fsroot):
+        assert admin_client.post("/api/interns/999/delete", headers=CSRF).status_code == 404
+
+    def test_tampered_folder_outside_interns_is_left_alone(self, admin_client, fsroot, db):
+        a = self._one(admin_client)
+        case = fsroot / "2026" / "Jun" / "Alpha v. Beta"
+        case.mkdir(parents=True)
+        (case / "Note.json").write_text("{}")
+        db.execute("UPDATE intern_applicants SET folder = ? WHERE id = ?",
+                   ("2026/Jun/Alpha v. Beta", a["id"]))
+        db.commit()
+        admin_client.post(f"/api/interns/{a['id']}/delete", headers=CSRF)
+        assert (case / "Note.json").is_file(), "deleting an applicant removed a case folder"
+
+    def test_interns_folder_itself_is_never_removed(self, admin_client, fsroot, db):
+        a = self._one(admin_client)
+        db.execute("UPDATE intern_applicants SET folder = 'Interns' WHERE id = ?", (a["id"],))
+        db.commit()
+        admin_client.post(f"/api/interns/{a['id']}/delete", headers=CSRF)
+        assert (fsroot / "Interns").is_dir()

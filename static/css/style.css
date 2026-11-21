@@ -5037,3 +5037,5 @@ input[type="number"].year-input {
     padding-top: 12px;
     border-top: 1px solid var(--input-border, #e6e8ef);
 }
+/* Kept apart from the status moves so it is not clicked by mistake. */
+.intern-status-actions .intern-delete { margin-left: auto; }

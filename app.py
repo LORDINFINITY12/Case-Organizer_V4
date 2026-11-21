@@ -6759,6 +6759,42 @@ def api_interns_delete_document(doc_id: int):
     return jsonify({"ok": True})
 
 
+# ---- POST /api/interns/<id>/delete — remove an applicant entirely --------
+@app.post("/api/interns/<int:applicant_id>/delete")
+@require_admin_api
+def api_interns_delete(applicant_id: int):
+    """Delete an applicant, their records and their folder of documents.
+
+    Admin-only, like deletion on the Files page: staff can edit, upload and
+    remove individual documents, but removing a whole applicant is final.
+    """
+    conn = get_app_db()
+    applicant = _intern_row(conn, applicant_id)
+    if not applicant:
+        return jsonify({"ok": False, "msg": "Applicant not found."}), 404
+
+    # Resolve the folder before touching the database, and only ever remove
+    # it if it really sits inside Interns/ — a tampered path is left alone.
+    folder: Optional[Path] = None
+    if applicant["folder"]:
+        try:
+            candidate = _safe_path(FS_ROOT / applicant["folder"], FS_ROOT)
+            _safe_path(candidate, _interns_dir())
+            if candidate != _interns_dir().resolve():
+                folder = candidate
+        except (ValueError, OSError):
+            folder = None
+
+    conn.execute("DELETE FROM intern_documents WHERE applicant_id = ?", (applicant_id,))
+    conn.execute("DELETE FROM intern_applicants WHERE id = ?", (applicant_id,))
+    conn.commit()
+    if folder is not None and folder.is_dir():
+        shutil.rmtree(folder, ignore_errors=True)
+    log.info("Intern applicant %s (%s) deleted by %s",
+             applicant_id, applicant["name"], g.current_user["email"])
+    return jsonify({"ok": True})
+
+
 # ---- GET /api/interns/documents/<id> — view or download a document -------
 @app.get("/api/interns/documents/<int:doc_id>")
 @require_login_api

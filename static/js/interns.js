@@ -326,6 +326,26 @@
       });
       actions.append(b);
     });
+
+    // Admins only — the server enforces it too; this just hides a button
+    // that would be refused.
+    if (CASEORG_IS_ADMIN) {
+      const del = el('button', 'btn-danger intern-delete');
+      del.type = 'button';
+      del.textContent = 'Delete Applicant';
+      del.addEventListener('click', async () => {
+        const n = a.documents.length;
+        const docs = n ? ` and ${n === 1 ? 'their document' : `all ${n} of their documents`}` : '';
+        const ok = await openConfirm(`Delete ${a.name}${docs}? This cannot be undone.`);
+        if (!ok) return;
+        del.disabled = true;
+        const data = await postJSON(`/api/interns/${a.id}/delete`);
+        if (!data.ok) { alert('Error: ' + (data.msg || 'Could not delete the applicant.')); del.disabled = false; return; }
+        openRows.delete(a.id);
+        await refresh();
+      });
+      actions.append(del);
+    }
     return box;
   }
 
