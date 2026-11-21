@@ -5107,6 +5107,13 @@ input[type="number"].year-input {
     white-space: nowrap;
 }
 .doc-viewer-actions { display: flex; align-items: center; gap: 8px; flex: none; }
+/* Download and Close are the same .icon-btn, held to one square size. */
+.doc-viewer-actions .icon-btn {
+    width: 36px;
+    height: 36px;
+    padding: 0;
+    font-size: 14px;
+}
 .doc-viewer-body {
     min-height: 0;
     border-radius: 10px;
