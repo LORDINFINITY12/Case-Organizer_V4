@@ -22,8 +22,11 @@ case-organizer (4.10) stable; urgency=medium
     the upload button becomes Upload Brief, or Replace Existing Brief when
     there already is one. A brief is one PDF, kept as Brief.pdf beside the
     case's Note.json; replacing it overwrites the previous one. A new Brief
-    button at the bottom right of Manage Case opens it. The Note is
-    unchanged, and its button now reads View / Edit Note.
+    button at the bottom right of Manage Case opens it. A brief can also be
+    attached while creating a case, from the matching button at the bottom
+    right of Create Case; it is filed as soon as the case exists, and if it
+    fails the case is still created. The Note is unchanged, and its button
+    now reads View / Edit Note.
   * Search results and folder browsing can preview files without leaving the
     page: PDFs and images open in a pop-up viewer, the same one the Interns
     page uses for applicant documents.

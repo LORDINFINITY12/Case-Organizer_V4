@@ -2802,12 +2802,52 @@ function createCaseForm(){
     </div>
     <div class="form-actions">
       <button id="cc-go" class="btn-primary" type="button">Create Case & Save Note</button>
+      <div class="cc-actions-right">
+        <button id="cc-brief" class="btn-secondary mc-icon-btn" type="button" title="Attach brief (PDF)" aria-label="Attach brief (PDF)"><i class="fa-solid fa-file-contract" aria-hidden="true"></i></button>
+      </div>
     </div>
+    <input type="file" id="cc-brief-file" accept=".pdf" hidden />
+    <div id="cc-brief-note" class="cc-brief-note" hidden></div>
   `;
   host.append(wrap);
 
   // defaults
   initIndianDateField('cc-date', todayIso());
+
+  // ---- Optional brief, attached now and filed once the case exists ----
+  let ccBrief = null;
+  const ccBriefBtn = $('#cc-brief');
+  const ccBriefFile = $('#cc-brief-file');
+  const ccBriefNote = $('#cc-brief-note');
+  function setCcBrief(file) {
+    ccBrief = file;
+    if (ccBriefFile) ccBriefFile.value = '';
+    ccBriefBtn?.classList.toggle('is-attached', Boolean(file));
+    if (ccBriefBtn) {
+      const label = file ? `Brief attached: ${file.name}` : 'Attach brief (PDF)';
+      ccBriefBtn.title = label;
+      ccBriefBtn.setAttribute('aria-label', label);
+    }
+    if (!ccBriefNote) return;
+    ccBriefNote.hidden = !file;
+    ccBriefNote.innerHTML = '';
+    if (!file) return;
+    const label = el('span');
+    label.textContent = `Brief: ${file.name}`;
+    const rm = el('button', 'btn-ghost');
+    rm.type = 'button';
+    rm.textContent = '✕';
+    rm.setAttribute('aria-label', 'Remove attached brief');
+    rm.addEventListener('click', () => setCcBrief(null));
+    ccBriefNote.append(label, rm);
+  }
+  ccBriefBtn?.addEventListener('click', () => ccBriefFile?.click());
+  ccBriefFile?.addEventListener('change', () => {
+    const f = ccBriefFile.files && ccBriefFile.files[0];
+    if (!f) return;
+    if (!/\.pdf$/i.test(f.name)) { alert('The brief must be a PDF.'); ccBriefFile.value = ''; return; }
+    setCcBrief(f);
+  });
 
   // "We're Representing" tab buttons
   const opHidden = $('#op');
@@ -2912,7 +2952,34 @@ function createCaseForm(){
 
     const r = await fetch('/create-case', { method: 'POST', headers: { 'X-CSRF-Token': _csrfToken() }, body: fd });
     const data = await r.json().catch(()=>({ok:false,msg:'Bad JSON'}));
-    alert(data.ok ? 'Case created at: ' + data.path : ('Error: ' + (data.msg || 'Failed')));
+    if (!data.ok) { alert('Error: ' + (data.msg || 'Failed')); return; }
+    if (!ccBrief) { alert('Case created at: ' + data.path); return; }
+
+    // The case exists now; file the attached brief into it exactly as
+    // Manage Case -> Brief does. A failure here does not undo the case.
+    const bfd = new FormData();
+    bfd.set('Year', data.year);
+    bfd.set('Month', data.month);
+    bfd.set('Case Name', data.case);
+    bfd.set('Domain', 'Brief');
+    bfd.append('file', ccBrief);
+    let msg = '';
+    try {
+      await offloadLargeFiles(bfd, 'file', [ccBrief], () => {});
+      const br = await uploadWithProgress('/manage-case/upload', bfd, () => {});
+      const bd = br.data || {};
+      if (br.ok && bd.ok) {
+        msg = 'Brief attached.';
+        setCcBrief(null);
+      } else {
+        msg = `The brief could not be attached: ${bd.msg || `HTTP ${br.status}`}.\n` +
+              'Attach it from Manage Case → File Category → Brief.';
+      }
+    } catch (err) {
+      msg = `The brief could not be attached: ${err.message || err}.\n` +
+            'Attach it from Manage Case → File Category → Brief.';
+    }
+    alert('Case created at: ' + data.path + '\n\n' + msg);
   });
 }
 

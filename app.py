@@ -2129,7 +2129,10 @@ def create_case():
     note_text = make_note_json(payload)
     (cdir / "Note.json").write_text(note_text, encoding="utf-8")
 
-    return jsonify({"ok": True, "path": str(cdir)})
+    # year/month/case let the form file follow-up uploads (a brief attached
+    # at creation) into the case it just made, without parsing the path.
+    return jsonify({"ok": True, "path": str(cdir),
+                    "year": str(year), "month": month, "case": case_name})
 
 
 # ---- Manage Case (Upload, Copy & Rename) --------------------------------

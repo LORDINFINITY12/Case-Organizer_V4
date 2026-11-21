@@ -133,3 +133,25 @@ def test_interns_cannot_reach_briefs(client, db, case_dir):
 def test_home_page_has_the_shared_viewer(auth_client, case_dir):
     body = auth_client.get("/").get_data(as_text=True)
     assert 'id="docViewer"' in body and 'id="docViewerBody"' in body
+
+
+def test_create_case_returns_where_it_filed_the_case(auth_client, tmp_path, monkeypatch):
+    """The form files a brief attached at creation using these, so they must
+    name the case that was actually created."""
+    import app as app_module
+    root = tmp_path / "fs2"
+    root.mkdir()
+    monkeypatch.setattr(app_module, "FS_ROOT", root)
+    r = auth_client.post("/create-case", data={
+        "Petitioner Name": "Gamma", "Respondent Name": "Delta", "Date": "2026-11-21",
+        "Our Party": "Petitioner", "Case Category": "Civil"}, headers=CSRF)
+    body = r.get_json()
+    assert body["ok"] is True
+    assert (body["year"], body["month"], body["case"]) == ("2026", "Nov", "Gamma v. Delta")
+
+    up = auth_client.post("/manage-case/upload", data={
+        "Year": body["year"], "Month": body["month"], "Case Name": body["case"],
+        "Domain": "Brief", "file": (_pdf(), "brief.pdf")},
+        headers=CSRF, content_type="multipart/form-data")
+    assert up.get_json()["ok"] is True
+    assert (root / "2026" / "Nov" / "Gamma v. Delta" / "Brief.pdf").is_file()

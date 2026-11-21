@@ -5140,3 +5140,29 @@ input[type="number"].year-input {
 /* Manage Case -> Brief: the current brief (or its absence) above the drop zone. */
 .mc-brief-host { margin: 12px 0; }
 .mc-brief-empty { color: var(--muted, #6b7280); }
+
+/* Create Case: optional brief, attached before the case exists. The square
+   button sits bottom-right like Manage Case's (whose cluster rules are scoped
+   to .manage-case-card, hence its own wrapper here). */
+.cc-actions-right { margin-left: auto; display: flex; align-items: center; gap: 12px; }
+.mc-icon-btn.is-attached {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #fff;
+}
+.cc-brief-note {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 8px;
+    margin-top: 8px;
+    font-size: 0.9rem;
+    color: var(--muted, #6b7280);
+}
+.cc-brief-note[hidden] { display: none; }
+.cc-brief-note .btn-ghost { padding: 2px 8px; }
+
+@media (max-width: 640px) {
+    .cc-actions-right { display: flex !important; justify-content: flex-end; }
+    .cc-actions-right > .mc-icon-btn { width: 48px !important; height: 48px !important; flex: 0 0 48px; }
+}
