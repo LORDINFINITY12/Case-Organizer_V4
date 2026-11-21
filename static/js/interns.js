@@ -326,20 +326,20 @@
       name: `im-name-${a.id}`, date: `im-date-${a.id}`, email: `im-email-${a.id}`,
       phone: `im-phone-${a.id}`, college: `im-college-${a.id}`,
     };
-    // Every section is a header row — title left, its action right — over
-    // its content, so a button always sits level with what it acts on.
+    // Each section reads in the order it is used: its title, then what you
+    // fill in or drop, then the button that acts on it — never above it.
     box.innerHTML = `
       <div class="intern-section">
-        <div class="intern-section-head">
-          <div class="intern-doc-title">Details</div>
-          <button type="button" class="btn-secondary" data-act="save">Save Details</button>
-        </div>
+        <div class="intern-doc-title">Details</div>
         <div class="form-grid">
           <input type="text" id="${ids.name}" placeholder="Applicant Name *" maxlength="180" />
           <input type="date" id="${ids.date}" />
           <input type="email" id="${ids.email}" placeholder="Email (optional)" maxlength="200" />
           <input type="text" id="${ids.phone}" placeholder="Phone (optional)" maxlength="60" />
           <input type="text" id="${ids.college}" class="full-span" placeholder="College / University (optional)" maxlength="200" />
+        </div>
+        <div class="form-actions">
+          <button type="button" class="btn-secondary" data-act="save">Save Details</button>
         </div>
       </div>
       <div class="intern-doc-grid"></div>
@@ -419,11 +419,9 @@
     // CV and Cover Letter sit side by side; LORs span both columns — the
     // same shape as the details grid above (two fields, then a full row).
     const group = el('div', `intern-doc-group intern-section${kind === 'lor' ? ' full-span' : ''}`);
-    const head = el('div', 'intern-section-head');
     const title = el('div', 'intern-doc-title');
     title.textContent = DOC_LABELS[kind];
-    head.append(title);
-    group.append(head);
+    group.append(title);
 
     const have = a.documents.filter((d) => d.kind === kind);
     const list = el('div', 'results');
@@ -448,8 +446,9 @@
       }
       const del = el('button', 'icon-btn');
       del.type = 'button';
-      del.title = 'Remove';
-      del.innerHTML = '<i class="fa-solid fa-trash"></i><span class="sr-only">Remove</span>';
+      // "Delete" is what the app's red delete-icon rule keys on.
+      del.title = 'Delete';
+      del.innerHTML = '<i class="fa-solid fa-trash"></i><span class="sr-only">Delete</span>';
       del.addEventListener('click', async () => {
         const ok = await openConfirm(`Remove “${d.name}”? The file is deleted and cannot be recovered.`);
         if (!ok) return;
@@ -495,8 +494,9 @@
         upload.disabled = false;
       }
     });
-    head.append(upload);
-    group.append(drop.node);
+    const actions = el('div', 'form-actions');
+    actions.append(upload);
+    group.append(drop.node, actions);
     return group;
   }
 

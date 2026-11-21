@@ -5030,9 +5030,10 @@ input[type="number"].year-input {
 }
 .intern-new-docs { margin-top: 12px; }
 
-/* An applicant's expanded details sit directly under their row. Sections are
-   further apart (20px) than the parts inside one (8px), so each heading
-   reads as belonging to what is below it. */
+/* An applicant's expanded details sit directly under their row. Each
+   section runs title -> inputs -> its button, and sections are further apart
+   (20px) than the parts inside one (8px), so a button reads as closing its
+   own section rather than opening the next. */
 .intern-detail {
     display: grid;
     gap: 20px;
@@ -5057,15 +5058,6 @@ input[type="number"].year-input {
     justify-content: center;
 }
 
-/* Title left, its action right, on one line and one height. */
-.intern-section-head {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 12px;
-    min-height: 38px;
-}
-.intern-section-head > button { flex: none; }
 .intern-doc-title { font-weight: 600; font-size: 0.95rem; }
 
 .intern-detail .form-actions { margin-top: 0; flex-wrap: wrap; }
