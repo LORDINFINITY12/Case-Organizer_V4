@@ -17,6 +17,16 @@ case-organizer (4.10) stable; urgency=medium
     new file before the old one is removed, so a failed upload never loses the
     document already on file. Admins can delete an applicant outright, which
     removes their record and their folder of documents.
+  * Each case can hold a brief. In Manage Case, choose File Category -> Brief:
+    the case's current brief is shown with preview, download and delete, and
+    the upload button becomes Upload Brief, or Replace Existing Brief when
+    there already is one. A brief is one PDF, kept as Brief.pdf beside the
+    case's Note.json; replacing it overwrites the previous one. A new Brief
+    button at the bottom right of Manage Case opens it. The Note is
+    unchanged, and its button now reads View / Edit Note.
+  * Search results and folder browsing can preview files without leaving the
+    page: PDFs and images open in a pop-up viewer, the same one the Interns
+    page uses for applicant documents.
   * Applicant documents are stored under Interns/ in the storage folder,
     beside Certificates and Letterheads, one folder per applicant. The case
     search only looks at year folders, so they never appear among case files.

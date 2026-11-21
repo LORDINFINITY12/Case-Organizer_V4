@@ -1,0 +1,14 @@
+{# Shared document viewer: openDocViewer() in main.js fills and opens it.
+   Used for search results, case briefs and Interns documents. #}
+<div class="modal" id="docViewer" hidden aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="docViewerTitle">
+  <div class="modal-content doc-viewer">
+    <div class="modal-head">
+      <h3 id="docViewerTitle">Document</h3>
+      <div class="doc-viewer-actions">
+        <a class="icon-btn" id="docViewerDownload" href="#" title="Download"><i class="fa-solid fa-download" aria-hidden="true"></i><span class="sr-only">Download</span></a>
+        <button class="btn-ghost" id="docViewerClose" type="button" aria-label="Close">&#10005;</button>
+      </div>
+    </div>
+    <div class="doc-viewer-body" id="docViewerBody"></div>
+  </div>
+</div>

@@ -6,7 +6,8 @@
  * under them is a plain link to the certificate generator.
  *
  * Loaded after main.js, which supplies $, el, escapeHtml, setActive,
- * initIndianDateField, dateIsoToIn, todayIso, openConfirm and _csrfToken.
+ * initIndianDateField, dateIsoToIn, todayIso, openConfirm, openDocViewer and
+ * _csrfToken.
  */
 (function () {
   const newCard = document.getElementById('card-intern-new');
@@ -94,66 +95,6 @@
     });
     return { node, files: () => picked.slice(), clear: () => { picked = []; render(); } };
   }
-
-  // ---- Document viewer ---------------------------------------------------
-  // A pop-up over the page, never a new tab. PDFs show in a frame and images
-  // as images; a Word file cannot be rendered by a browser, so it says so and
-  // offers the download rather than silently downloading.
-  const viewerModal = document.getElementById('internViewer');
-  const viewerBody = document.getElementById('internViewerBody');
-  const viewerTitle = document.getElementById('internViewerTitle');
-  const viewerDownload = document.getElementById('internViewerDownload');
-  let viewerReturnFocus = null;
-
-  function openViewer(doc, opener) {
-    if (!viewerModal) return;
-    const src = `/api/interns/documents/${doc.id}`;
-    const ext = (doc.name.split('.').pop() || '').toLowerCase();
-    viewerTitle.textContent = doc.name;
-    viewerDownload.href = `${src}?download=1`;
-    viewerBody.innerHTML = '';
-
-    if (ext === 'pdf') {
-      const frame = el('iframe');
-      frame.src = src;
-      frame.title = doc.name;
-      viewerBody.append(frame);
-    } else if (['png', 'jpg', 'jpeg'].includes(ext)) {
-      const img = el('img');
-      img.src = src;
-      img.alt = doc.name;
-      viewerBody.append(img);
-    } else {
-      const note = el('div', 'intern-viewer-note');
-      note.innerHTML =
-        '<i class="fa-solid fa-file-word" aria-hidden="true"></i>' +
-        '<p>Word documents can’t be shown in the browser.</p>';
-      const dl = el('a', 'btn-secondary');
-      dl.href = `${src}?download=1`;
-      dl.textContent = 'Download to open';
-      note.append(dl);
-      viewerBody.append(note);
-    }
-
-    viewerReturnFocus = opener || null;
-    viewerModal.removeAttribute('hidden');
-    viewerModal.setAttribute('aria-hidden', 'false');
-    document.getElementById('internViewerClose')?.focus();
-  }
-
-  function closeViewer() {
-    if (!viewerModal || viewerModal.hasAttribute('hidden')) return;
-    viewerModal.setAttribute('hidden', '');
-    viewerModal.setAttribute('aria-hidden', 'true');
-    viewerBody.innerHTML = '';   // unloads the frame
-    viewerReturnFocus?.focus();
-    viewerReturnFocus = null;
-  }
-
-  document.getElementById('internViewerClose')?.addEventListener('click', closeViewer);
-  // A click on the dimmed backdrop — not inside the window — closes it.
-  viewerModal?.addEventListener('click', (e) => { if (e.target === viewerModal) closeViewer(); });
-  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeViewer(); });
 
   // ---- New Internship Applicant -----------------------------------------
   function newApplicantForm() {
@@ -437,7 +378,12 @@
         view.type = 'button';
         view.title = 'Preview';
         view.innerHTML = '<i class="fa-solid fa-eye"></i><span class="sr-only">Preview</span>';
-        view.addEventListener('click', () => openViewer(d, view));
+        view.addEventListener('click', () => openDocViewer({
+          src: `/api/interns/documents/${d.id}`,
+          name: d.name,
+          downloadHref: `/api/interns/documents/${d.id}?download=1`,
+          opener: view,
+        }));
         const dl = el('a', 'icon-btn');
         dl.href = `/api/interns/documents/${d.id}?download=1`;
         dl.title = 'Download';

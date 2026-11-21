@@ -2326,6 +2326,35 @@ def manage_case_upload():
             counter += 1
         return final_dest
 
+    # ---------- Brief: one PDF per case, Brief.pdf beside Note.json ----------
+    # A fixed name, like Note.json's, so the case's brief is always findable.
+    # Uploading again overwrites it; the write goes to a temp file first and is
+    # swapped in atomically, so a failed upload never leaves half a brief.
+    if domain.lower() == "brief":
+        picked = [f for f in files if f and f.filename]
+        if len(picked) != 1:
+            return jsonify({"ok": False, "msg": "Choose one PDF for the brief."}), 400
+        brief = picked[0]
+        if not brief.filename.lower().endswith(".pdf"):
+            return jsonify({"ok": False, "msg": "The brief must be a PDF."}), 400
+        upload_err = validate_upload(brief)
+        if upload_err:
+            return jsonify({"ok": False, "msg": upload_err}), 400
+        dest = cdir / CASE_BRIEF_NAME
+        existed = dest.is_file()
+        tmp = cdir / f".{CASE_BRIEF_NAME}.upload-{secrets.token_hex(6)}"
+        try:
+            brief.save(tmp)
+            os.replace(tmp, dest)
+        except OSError as exc:
+            log.error("Failed to save case brief: %s", exc, exc_info=True)
+            return jsonify({"ok": False, "msg": "Failed to save the brief."}), 500
+        finally:
+            with suppress(OSError):
+                if tmp.exists():
+                    tmp.unlink()
+        return jsonify({"ok": True, "saved_as": [str(dest)], "replaced": existed})
+
     # ---------- NEW: Case Law handling ----------
     if domain.lower() == "case law":
         target_dir = cdir / "Case Laws"
@@ -2446,6 +2475,84 @@ def manage_case_upload():
         return jsonify({"ok": False, "msg": "No files were saved (unsupported type?)"}), 400
 
     return jsonify({"ok": True, "saved_as": saved_paths})
+
+# ---- Case briefs ----------------------------------------------------------
+# Each case may hold one brief, a PDF at <case>/Brief.pdf beside Note.json.
+# It is uploaded, replaced and deleted from Manage Case (File Category ->
+# Brief) and previewed from the Brief button there.  The Note is untouched.
+CASE_BRIEF_NAME = "Brief.pdf"
+
+
+def _case_brief_dir(year: Any, month: Any, case: Any) -> Path:
+    """The validated directory of an existing case; raises ValueError."""
+    year, month, case = (normalize_ws(v) for v in (year, month, case))
+    for label, component in (("Year", year), ("Month", month), ("Case", case)):
+        err = validate_fs_component(component)
+        if err:
+            raise ValueError(f"{label}: {err}")
+    if not re.fullmatch(r"\d{4}", year):
+        raise ValueError("Invalid year")
+    cdir = _safe_path(FS_ROOT / year / month / case, FS_ROOT)
+    if not cdir.is_dir():
+        raise ValueError("Case not found")
+    return cdir
+
+
+@app.get("/api/case-brief")
+@require_login_api
+def api_case_brief_status():
+    args = request.args
+    try:
+        cdir = _case_brief_dir(args.get("year"), args.get("month"), args.get("case"))
+    except (ValueError, OSError) as exc:
+        return jsonify({"ok": False, "msg": str(exc)}), 400
+    path = cdir / CASE_BRIEF_NAME
+    if not path.is_file():
+        return jsonify({"ok": True, "exists": False})
+    stat = path.stat()
+    return jsonify({"ok": True, "exists": True, "size": stat.st_size,
+                    "mtime": int(stat.st_mtime), "name": f"Brief - {cdir.name}.pdf"})
+
+
+@app.get("/api/case-brief/file")
+@require_login_api
+def api_case_brief_file():
+    args = request.args
+    try:
+        cdir = _case_brief_dir(args.get("year"), args.get("month"), args.get("case"))
+    except (ValueError, OSError):
+        return jsonify({"ok": False, "msg": "Case not found."}), 404
+    path = cdir / CASE_BRIEF_NAME
+    if not path.is_file():
+        return jsonify({"ok": False, "msg": "This case has no brief."}), 404
+    download = args.get("download") in {"1", "true", "yes"}
+    resp = send_file(path, mimetype="application/pdf", as_attachment=download,
+                     download_name=f"Brief - {cdir.name}.pdf", conditional=True)
+    # Replacing a brief keeps its name, so make the browser revalidate rather
+    # than show the previous version from cache.
+    resp.cache_control.no_cache = True
+    return resp
+
+
+@app.post("/api/case-brief/delete")
+@require_login_api
+def api_case_brief_delete():
+    data = request.get_json(silent=True) or {}
+    try:
+        cdir = _case_brief_dir(data.get("year"), data.get("month"), data.get("case"))
+    except (ValueError, OSError) as exc:
+        return jsonify({"ok": False, "msg": str(exc)}), 400
+    path = cdir / CASE_BRIEF_NAME
+    if not path.is_file():
+        return jsonify({"ok": False, "msg": "This case has no brief."}), 404
+    try:
+        path.unlink()
+    except OSError as exc:
+        log.error("Failed to delete case brief: %s", exc, exc_info=True)
+        return jsonify({"ok": False, "msg": "Could not delete the brief."}), 500
+    log.info("Brief deleted for %s by %s", cdir.name, g.current_user["email"])
+    return jsonify({"ok": True})
+
 
 # ---- Safe file serving (whitelist FS_ROOT) ------------------------------
 

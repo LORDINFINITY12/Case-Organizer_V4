@@ -290,7 +290,7 @@ class TestDelete:
 class TestViewer:
     def test_page_has_the_viewer_modal(self, auth_client, fsroot):
         body = auth_client.get("/interns").get_data(as_text=True)
-        assert 'id="internViewer"' in body and 'id="internViewerBody"' in body
+        assert 'id="docViewer"' in body and 'id="docViewerBody"' in body
 
     def test_documents_serve_inline_for_the_viewer(self, auth_client, fsroot):
         """The viewer frames the document, so it must not come back as an

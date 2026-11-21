@@ -2019,10 +2019,82 @@ function initYearDropdown(wrapperId, hiddenInputId, startYear) {
 }
 
 // ------------- Results renderer (authoritative) ----------------
-function openConfirm(message) {
+// ---------- Document viewer (shared pop-up) ----------
+// One viewer for every in-app preview: search results, case briefs and the
+// Interns documents. PDFs show in a frame and images as images; a Word file
+// cannot be rendered by a browser, so it says so and offers the download
+// instead of quietly downloading. Markup: templates/_doc_viewer.html.
+let _docViewerReturnFocus = null;
+
+function closeDocViewer() {
+  const modal = document.getElementById('docViewer');
+  if (!modal || modal.hasAttribute('hidden')) return;
+  modal.setAttribute('hidden', '');
+  modal.setAttribute('aria-hidden', 'true');
+  const body = document.getElementById('docViewerBody');
+  if (body) body.innerHTML = '';   // unloads the frame
+  if (_docViewerReturnFocus && typeof _docViewerReturnFocus.focus === 'function') {
+    _docViewerReturnFocus.focus();
+  }
+  _docViewerReturnFocus = null;
+}
+
+function openDocViewer({ src, name, downloadHref, opener } = {}) {
+  const modal = document.getElementById('docViewer');
+  if (!modal || !src) return;
+  const body = document.getElementById('docViewerBody');
+  const title = document.getElementById('docViewerTitle');
+  const dl = document.getElementById('docViewerDownload');
+  const ext = ((name || '').split('.').pop() || '').toLowerCase();
+  title.textContent = name || 'Document';
+  dl.href = downloadHref || src;
+  body.innerHTML = '';
+
+  if (ext === 'pdf') {
+    const frame = document.createElement('iframe');
+    frame.src = src;
+    frame.title = name || 'Document';
+    body.appendChild(frame);
+  } else if (['png', 'jpg', 'jpeg'].includes(ext)) {
+    const img = document.createElement('img');
+    img.src = src;
+    img.alt = name || '';
+    body.appendChild(img);
+  } else {
+    const note = document.createElement('div');
+    note.className = 'doc-viewer-note';
+    const word = ext === 'docx' || ext === 'doc';
+    note.innerHTML =
+      `<i class="fa-solid ${word ? 'fa-file-word' : 'fa-file'}" aria-hidden="true"></i>` +
+      `<p>${word ? 'Word documents' : 'This file type'} can’t be shown in the browser.</p>`;
+    const a = document.createElement('a');
+    a.className = 'btn-secondary';
+    a.href = downloadHref || src;
+    a.textContent = 'Download to open';
+    note.appendChild(a);
+    body.appendChild(note);
+  }
+
+  if (!modal.dataset.bound) {
+    document.getElementById('docViewerClose')?.addEventListener('click', closeDocViewer);
+    // A click on the dimmed backdrop — not inside the window — closes it.
+    modal.addEventListener('click', (e) => { if (e.target === modal) closeDocViewer(); });
+    document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeDocViewer(); });
+    modal.dataset.bound = '1';
+  }
+  _docViewerReturnFocus = opener || null;
+  modal.removeAttribute('hidden');
+  modal.setAttribute('aria-hidden', 'false');
+  document.getElementById('docViewerClose')?.focus();
+}
+
+// *title* defaults to the delete wording every existing caller relies on; pass
+// it for confirmations that are not deletions.
+function openConfirm(message, title = 'Confirm Delete') {
   return new Promise((resolve) => {
     const modal = document.getElementById('confirmModal');
     const text  = document.getElementById('confirmText');
+    const head  = document.getElementById('confirmTitle');
     const yes   = document.getElementById('confirmYes');
     const no    = document.getElementById('confirmNo');
     const x     = document.getElementById('confirmClose');
@@ -2034,6 +2106,7 @@ function openConfirm(message) {
     }
 
     if (text) text.textContent = message || 'Do you want to delete this file?';
+    if (head) head.textContent = title;
     modal.removeAttribute('hidden');
     modal.setAttribute('aria-hidden', 'false');
 
@@ -2120,6 +2193,22 @@ function buildResultItem(rec) {
   // actions area
   const actions = document.createElement('div');
   actions.className = 'icon-row';
+
+  // Preview, first in the row: opens the shared viewer over the page. On a
+  // phone, long-press acts on the first icon, so it previews rather than
+  // downloads.
+  const pv = document.createElement('button');
+  pv.type = 'button';
+  pv.className = 'icon-btn';
+  pv.setAttribute('title', 'Preview');
+  pv.innerHTML = `<i class="fa-solid fa-eye" aria-hidden="true"></i><span class="sr-only">Preview</span>`;
+  pv.addEventListener('click', () => openDocViewer({
+    src: `/static-serve?path=${encodeURIComponent(rec.path)}`,
+    name: rec.file,
+    downloadHref: `/static-serve?path=${encodeURIComponent(rec.path)}&download=1`,
+    opener: pv,
+  }));
+  actions.appendChild(pv);
 
   // Download button
   const dl = document.createElement('a');
@@ -2858,7 +2947,7 @@ function manageCaseForm(){
       <div class="form-grid mc-classify">
         <select id="domain">
           <option value="">File Category</option>
-          <option>Criminal</option><option>Civil</option><option>Commercial</option><option>Case Law</option><option>Invoices</option><option>Legal Notices</option>
+          <option>Criminal</option><option>Civil</option><option>Commercial</option><option>Case Law</option><option>Invoices</option><option>Legal Notices</option><option>Brief</option>
         </select>
         <div id="subcategory-host"></div>
       </div>
@@ -2883,6 +2972,7 @@ function manageCaseForm(){
       </div>
     </div>
 
+    <div id="mc-brief-host" class="results mc-brief-host" hidden></div>
     <div class="dropzone" id="drop" tabindex="0">Drag & drop files here or click to select</div>
     <input type="file" id="file" hidden accept=".pdf,.docx,.txt,.png,.jpg,.jpeg,.json" multiple />
     <div id="file-list" class="results"></div>
@@ -2891,7 +2981,8 @@ function manageCaseForm(){
       <button id="mc-go" class="btn-primary" type="button">Upload & Categorize File(s)</button>
       <div class="mc-actions-right">
         <button id="mc-invoice" class="btn-secondary mc-icon-btn" type="button" title="Generate Invoice" aria-label="Generate Invoice" disabled><i class="fa-solid fa-file-invoice-dollar" aria-hidden="true"></i></button>
-        <button id="create-note-btn" class="btn-secondary" type="button" disabled>View / Edit Note.json</button>
+        <button id="create-note-btn" class="btn-secondary" type="button" disabled>View / Edit Note</button>
+        <button id="mc-brief" class="btn-secondary mc-icon-btn" type="button" title="View Brief" aria-label="View Brief" disabled><i class="fa-solid fa-file-contract" aria-hidden="true"></i></button>
       </div>
     </div>
   `;
@@ -2906,6 +2997,108 @@ function manageCaseForm(){
   const caseSel  = $('#mc-case');
   const noteBtn  = $('#create-note-btn');
   const invoiceBtn = $('#mc-invoice');
+
+  // ---- Case brief: Brief.pdf beside Note.json -------------------------
+  // Managed through File Category -> Brief: the current brief shows above
+  // the drop zone with preview / download / delete, and the main button
+  // becomes Upload Brief or Replace Existing Brief. The square Brief button
+  // bottom-right previews it. The Note is untouched.
+  const briefBtn = $('#mc-brief');
+  const briefHost = $('#mc-brief-host');
+  const goBtn = $('#mc-go');
+  const briefState = { exists: false, size: 0, name: '' };
+  let briefSeq = 0;
+  const isBriefMode = () => ($('#domain')?.value || '') === 'Brief';
+  const caseKey = () => ({ year: yearSel.value || '', month: monthSel.value || '', case: caseSel.value || '' });
+  const briefQuery = () => new URLSearchParams(caseKey()).toString();
+  const briefSrc = (download) => `/api/case-brief/file?${briefQuery()}${download ? '&download=1' : ''}`;
+
+  function updateGoLabel() {
+    if (!goBtn) return;
+    goBtn.textContent = isBriefMode()
+      ? (briefState.exists ? 'Replace Existing Brief' : 'Upload Brief')
+      : 'Upload & Categorize File(s)';
+  }
+
+  function openBrief(opener) {
+    if (!briefState.exists) return;
+    openDocViewer({ src: briefSrc(false), name: briefState.name, downloadHref: briefSrc(true), opener });
+  }
+
+  function renderBriefHost() {
+    if (!briefHost) return;
+    const k = caseKey();
+    const show = isBriefMode() && Boolean(k.year && k.month && k.case);
+    briefHost.hidden = !show;
+    briefHost.innerHTML = '';
+    if (!show) return;
+    const row = el('div', 'result-item');
+    if (!briefState.exists) {
+      row.classList.add('mc-brief-empty');
+      row.textContent = 'No brief uploaded for this case';
+      briefHost.append(row);
+      return;
+    }
+    const name = el('div', 'name');
+    name.textContent = briefState.name;
+    const meta = el('span', 'badge');
+    meta.textContent = briefState.size < 1048576
+      ? `${(briefState.size / 1024).toFixed(1)} KB`
+      : `${(briefState.size / 1048576).toFixed(1)} MB`;
+    const icons = el('div', 'icon-row');
+    const view = el('button', 'icon-btn');
+    view.type = 'button';
+    view.title = 'Preview';
+    view.innerHTML = '<i class="fa-solid fa-eye" aria-hidden="true"></i><span class="sr-only">Preview</span>';
+    view.addEventListener('click', () => openBrief(view));
+    const dl = el('a', 'icon-btn');
+    dl.href = briefSrc(true);
+    dl.title = 'Download';
+    dl.innerHTML = '<i class="fa-solid fa-download" aria-hidden="true"></i><span class="sr-only">Download</span>';
+    // "Delete" is what the app's red delete-icon rule keys on.
+    const del = el('button', 'icon-btn');
+    del.type = 'button';
+    del.title = 'Delete';
+    del.innerHTML = '<i class="fa-solid fa-trash" aria-hidden="true"></i><span class="sr-only">Delete</span>';
+    del.addEventListener('click', async () => {
+      const ok = await openConfirm('Delete this case\'s brief? It cannot be recovered.');
+      if (!ok) return;
+      const r = await fetch('/api/case-brief/delete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': _csrfToken() },
+        body: JSON.stringify(caseKey()),
+      });
+      const data = await r.json().catch(() => ({}));
+      if (!data.ok) { alert('Error: ' + (data.msg || 'Could not delete the brief.')); return; }
+      refreshBrief();
+    });
+    icons.append(view, dl, del);
+    row.append(name, meta, icons);
+    briefHost.append(row);
+  }
+
+  async function refreshBrief() {
+    const seq = ++briefSeq;
+    const k = caseKey();
+    let next = { exists: false, size: 0, name: '' };
+    if (k.year && k.month && k.case) {
+      try {
+        const r = await fetch(`/api/case-brief?${briefQuery()}`);
+        const d = await r.json();
+        if (d.ok && d.exists) next = { exists: true, size: d.size, name: d.name };
+      } catch (e) { /* treat as no brief */ }
+    }
+    if (seq !== briefSeq) return;   // a newer case selection won
+    Object.assign(briefState, next);
+    if (briefBtn) {
+      briefBtn.disabled = !briefState.exists;
+      briefBtn.setAttribute('aria-disabled', briefState.exists ? 'false' : 'true');
+      briefBtn.title = briefState.exists ? 'View Brief' : 'No brief uploaded';
+    }
+    renderBriefHost();
+    updateGoLabel();
+  }
+  briefBtn?.addEventListener('click', () => openBrief(briefBtn));
   const nameInput = $('#mc-name-input');
   const nameBtn = $('#mc-name-search');
   const nameResults = $('#mc-name-results');
@@ -3063,6 +3256,7 @@ function manageCaseForm(){
           invoiceBtn.setAttribute('aria-disabled', hasSelection ? 'false' : 'true');
       }
       if (noteBtn) noteBtn.disabled = !hasSelection;
+      refreshBrief();
 
       if (!hasSelection) {
           if (noteBtn) {
@@ -3092,14 +3286,14 @@ function manageCaseForm(){
           // creation) — keep the button enabled but report it clearly.
           delete noteBtn.dataset.hasNote;
           noteBtn.dataset.intent = 'update';
-          noteBtn.textContent = 'View / Edit Note.json';
+          noteBtn.textContent = 'View / Edit Note';
           noteBtn.onclick = () => { alert('Note.json not found for this case.'); };
           return;
       }
 
       noteBtn.dataset.hasNote = '1';
       noteBtn.dataset.intent = 'update';
-      noteBtn.textContent = 'View / Edit Note.json';
+      noteBtn.textContent = 'View / Edit Note';
       noteBtn.onclick = async () => {
           const currentState = await getNoteState(yearSel.value || '', monthSel.value || '', caseSel.value || '');
           if (!currentState.exists) {
@@ -3268,7 +3462,7 @@ function manageCaseForm(){
     const dom = $('#domain')?.value || '';
     const branch = branchOf();
     const subcat = $('#subcategory')?.value || '';
-    const ready = !!dom && (branch ? !!subcat : true);
+    const ready = !!dom && dom !== 'Brief' && (branch ? !!subcat : true);
     const body = $('#mc-proc-body');
     if (body) body.classList.toggle('is-locked', !ready);
   }
@@ -3320,6 +3514,25 @@ function manageCaseForm(){
   const fileList  = $('#file-list');
   let selectedFiles = [];
 
+  // Brief takes one PDF; every other category the usual set, several at once.
+  function syncBriefMode() {
+    const brief = isBriefMode();
+    if (fileInput) {
+      fileInput.accept = brief ? '.pdf' : '.pdf,.docx,.txt,.png,.jpg,.jpeg,.json';
+      fileInput.multiple = !brief;
+    }
+    const dropZone = $('#drop');
+    if (dropZone) {
+      dropZone.textContent = brief
+        ? 'Drag & drop the brief (PDF) here or click to select'
+        : 'Drag & drop files here or click to select';
+    }
+    renderBriefHost();
+    updateGoLabel();
+  }
+  $('#domain')?.addEventListener('change', syncBriefMode);
+  syncBriefMode();
+
   function renderSelected(){
     if (!fileList) return;
     fileList.innerHTML = '';
@@ -3358,6 +3571,17 @@ function manageCaseForm(){
     const cname = caseSel.value || '';
     if (!year || !month || !cname){ alert('Select Year, Month, and Case.'); return; }
     if (!selectedFiles.length){ alert('Select at least one file'); return; }
+    const briefUpload = isBriefMode();
+    if (briefUpload) {
+      if (selectedFiles.length !== 1) { alert('Choose one PDF for the brief.'); return; }
+      if (!/\.pdf$/i.test(selectedFiles[0].name)) { alert('The brief must be a PDF.'); return; }
+      if (briefState.exists) {
+        const ok = await openConfirm(
+          'Replace the existing brief? The current one is overwritten and cannot be recovered.',
+          'Replace Brief');
+        if (!ok) return;
+      }
+    }
 
     // v4.8: the subcategory (chosen above the tabs) IS the main proceeding.
     // Primary files directly under it; Misc files under an interim-application
@@ -3412,9 +3636,14 @@ function manageCaseForm(){
       data = { ok: false, msg: `Upload failed (HTTP ${r.status}).` };
     }
     if (data.ok) {
-      const saved = Array.isArray(data.saved_as) ? data.saved_as.join('\n') : data.saved_as;
-      alert('Saved:\n' + saved);
+      if (briefUpload) {
+        alert(data.replaced ? 'Brief replaced.' : 'Brief uploaded.');
+      } else {
+        const saved = Array.isArray(data.saved_as) ? data.saved_as.join('\n') : data.saved_as;
+        alert('Saved:\n' + saved);
+      }
       selectedFiles = []; if (fileInput) fileInput.value = ''; renderSelected();
+      if (briefUpload) refreshBrief();
     } else {
       alert('Error: ' + (data.msg || 'Upload failed'));
     }
