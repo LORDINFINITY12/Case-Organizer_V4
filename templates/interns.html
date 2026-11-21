@@ -86,6 +86,20 @@
     </main>
   </div>
 
+  <!-- Document viewer: the app's .modal, sized for a page. -->
+  <div class="modal" id="internViewer" hidden aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="internViewerTitle">
+    <div class="modal-content intern-viewer">
+      <div class="modal-head">
+        <h3 id="internViewerTitle">Document</h3>
+        <div class="intern-viewer-actions">
+          <a class="icon-btn" id="internViewerDownload" href="#" title="Download"><i class="fa-solid fa-download" aria-hidden="true"></i><span class="sr-only">Download</span></a>
+          <button class="btn-ghost" id="internViewerClose" type="button" aria-label="Close">&#10005;</button>
+        </div>
+      </div>
+      <div class="intern-viewer-body" id="internViewerBody"></div>
+    </div>
+  </div>
+
   <div class="modal" id="confirmModal" hidden aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="confirmTitle">
     <div class="modal-content">
       <div class="modal-head">

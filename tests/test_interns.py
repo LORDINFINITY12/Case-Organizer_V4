@@ -285,3 +285,21 @@ class TestDelete:
         db.commit()
         admin_client.post(f"/api/interns/{a['id']}/delete", headers=CSRF)
         assert (fsroot / "Interns").is_dir()
+
+
+class TestViewer:
+    def test_page_has_the_viewer_modal(self, auth_client, fsroot):
+        body = auth_client.get("/interns").get_data(as_text=True)
+        assert 'id="internViewer"' in body and 'id="internViewerBody"' in body
+
+    def test_documents_serve_inline_for_the_viewer(self, auth_client, fsroot):
+        """The viewer frames the document, so it must not come back as an
+        attachment (which would download instead of display), and the page
+        must allow same-origin framing."""
+        _create(auth_client, cv=(_pdf(), "cv.pdf"))
+        doc = _list(auth_client)["applicants"][0]["documents"][0]
+        r = auth_client.get(f"/api/interns/documents/{doc['id']}")
+        assert r.status_code == 200
+        assert r.mimetype == "application/pdf"
+        assert "attachment" not in r.headers.get("Content-Disposition", "")
+        assert r.headers.get("X-Frame-Options") in (None, "SAMEORIGIN")
