@@ -303,3 +303,8 @@ class TestViewer:
         assert r.mimetype == "application/pdf"
         assert "attachment" not in r.headers.get("Content-Disposition", "")
         assert r.headers.get("X-Frame-Options") in (None, "SAMEORIGIN")
+
+
+def test_certificate_page_links_back_to_interns(auth_client, fsroot):
+    body = auth_client.get("/certificate").get_data(as_text=True)
+    assert 'href="/interns"' in body and "Back to Interns" in body
