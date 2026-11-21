@@ -5014,28 +5014,69 @@ input[type="number"].year-input {
 }
 .card.big.card-bar .icon { font-size: 34px; }
 
-.intern-card .intern-docs { display: grid; gap: 12px; margin-top: 12px; }
 .intern-drop .results:empty { display: none; }
+.intern-drop .results { margin-top: 8px; }
 .intern-tabs { margin: 4px 0 0; }
 .intern-count { font-weight: 400; opacity: 0.85; }
 
-/* An applicant's expanded details sit directly under their row. */
+/* Documents follow the details grid: two columns (CV | Cover Letter), then
+   a full-width row (LORs) — the same 12px gutter as .form-grid, so the
+   columns line up with the fields above them. */
+.intern-doc-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+    align-items: start;
+}
+.intern-new-docs { margin-top: 12px; }
+
+/* An applicant's expanded details sit directly under their row. Sections are
+   further apart (20px) than the parts inside one (8px), so each heading
+   reads as belonging to what is below it. */
 .intern-detail {
     display: grid;
-    gap: 12px;
-    padding: 14px;
+    gap: 20px;
+    padding: 16px;
     border: 1px solid var(--input-border, #e6e8ef);
     border-radius: 12px;
     background: var(--card);
 }
-.intern-detail .intern-docs { margin-top: 0; }
-.intern-detail .form-actions { margin-top: 0; flex-wrap: wrap; }
-.intern-doc-group { display: grid; gap: 8px; }
+.intern-detail .intern-doc-grid { row-gap: 20px; }
+.intern-section { display: grid; gap: 8px; align-content: start; min-width: 0; }
 .intern-doc-group > .results { margin-top: 0; }
-.intern-doc-title { font-weight: 600; font-size: 0.9rem; }
+
+/* Equal heights side by side: one row per file at a fixed height (an empty
+   slot included), and drop zones that do not grow when their prompt wraps
+   to a second line in a half-width column. */
+.intern-doc-group .result-item { min-height: 52px; }
+.intern-doc-empty { color: var(--muted, #6b7280); }
+.intern-doc-grid .dropzone {
+    min-height: 88px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+/* Title left, its action right, on one line and one height. */
+.intern-section-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    min-height: 38px;
+}
+.intern-section-head > button { flex: none; }
+.intern-doc-title { font-weight: 600; font-size: 0.95rem; }
+
+.intern-detail .form-actions { margin-top: 0; flex-wrap: wrap; }
 .intern-status-actions {
-    padding-top: 12px;
+    padding-top: 16px;
     border-top: 1px solid var(--input-border, #e6e8ef);
 }
 /* Kept apart from the status moves so it is not clicked by mistake. */
 .intern-status-actions .intern-delete { margin-left: auto; }
+
+@media (max-width: 640px) {
+    /* Stack with the rest of the app's form grids at the same width. */
+    .intern-doc-grid { grid-template-columns: 1fr; }
+}

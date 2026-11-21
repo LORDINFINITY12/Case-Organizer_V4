@@ -110,7 +110,7 @@
         <input type="text" id="ia-phone" placeholder="Phone (optional)" maxlength="60" />
         <input type="text" id="ia-college" class="full-span" placeholder="College / University (optional)" maxlength="200" />
       </div>
-      <div class="intern-docs" id="ia-docs"></div>
+      <div class="intern-doc-grid intern-new-docs" id="ia-docs"></div>
       <div class="form-actions">
         <button id="ia-go" class="btn-primary" type="button">Add Applicant</button>
       </div>
@@ -122,6 +122,7 @@
     const cv = fileDrop({ prompt: 'CV — drag & drop or click to select', multiple: false });
     const cover = fileDrop({ prompt: 'Cover Letter — drag & drop or click to select', multiple: false });
     const lor = fileDrop({ prompt: 'Letters of Recommendation — drag & drop or click to select (any number)', multiple: true });
+    lor.node.classList.add('full-span');
     wrap.querySelector('#ia-docs').append(cv.node, cover.node, lor.node);
 
     const go = wrap.querySelector('#ia-go');
@@ -265,18 +266,23 @@
       name: `im-name-${a.id}`, date: `im-date-${a.id}`, email: `im-email-${a.id}`,
       phone: `im-phone-${a.id}`, college: `im-college-${a.id}`,
     };
+    // Every section is a header row — title left, its action right — over
+    // its content, so a button always sits level with what it acts on.
     box.innerHTML = `
-      <div class="form-grid">
-        <input type="text" id="${ids.name}" placeholder="Applicant Name *" maxlength="180" />
-        <input type="date" id="${ids.date}" />
-        <input type="email" id="${ids.email}" placeholder="Email (optional)" maxlength="200" />
-        <input type="text" id="${ids.phone}" placeholder="Phone (optional)" maxlength="60" />
-        <input type="text" id="${ids.college}" class="full-span" placeholder="College / University (optional)" maxlength="200" />
+      <div class="intern-section">
+        <div class="intern-section-head">
+          <div class="intern-doc-title">Details</div>
+          <button type="button" class="btn-secondary" data-act="save">Save Details</button>
+        </div>
+        <div class="form-grid">
+          <input type="text" id="${ids.name}" placeholder="Applicant Name *" maxlength="180" />
+          <input type="date" id="${ids.date}" />
+          <input type="email" id="${ids.email}" placeholder="Email (optional)" maxlength="200" />
+          <input type="text" id="${ids.phone}" placeholder="Phone (optional)" maxlength="60" />
+          <input type="text" id="${ids.college}" class="full-span" placeholder="College / University (optional)" maxlength="200" />
+        </div>
       </div>
-      <div class="form-actions">
-        <button type="button" class="btn-secondary" data-act="save">Save Details</button>
-      </div>
-      <div class="intern-docs"></div>
+      <div class="intern-doc-grid"></div>
       <div class="form-actions intern-status-actions"></div>
     `;
     // Values set via the DOM, never interpolated into markup.
@@ -309,7 +315,7 @@
       }
     });
 
-    const docs = box.querySelector('.intern-docs');
+    const docs = box.querySelector('.intern-doc-grid');
     ['cv', 'cover_letter', 'lor'].forEach((kind) => docs.append(docGroup(a, kind)));
 
     const actions = box.querySelector('.intern-status-actions');
@@ -350,10 +356,14 @@
   }
 
   function docGroup(a, kind) {
-    const group = el('div', 'intern-doc-group');
+    // CV and Cover Letter sit side by side; LORs span both columns — the
+    // same shape as the details grid above (two fields, then a full row).
+    const group = el('div', `intern-doc-group intern-section${kind === 'lor' ? ' full-span' : ''}`);
+    const head = el('div', 'intern-section-head');
     const title = el('div', 'intern-doc-title');
     title.textContent = DOC_LABELS[kind];
-    group.append(title);
+    head.append(title);
+    group.append(head);
 
     const have = a.documents.filter((d) => d.kind === kind);
     const list = el('div', 'results');
@@ -391,7 +401,16 @@
       row.append(name, meta, icons);
       list.append(row);
     });
-    if (have.length) group.append(list);
+    // An empty slot still gets a row, so CV and Cover Letter — side by side —
+    // always line up whether or not each has a file.
+    if (!have.length) {
+      const none = el('div', 'result-item intern-doc-empty');
+      none.textContent = kind === 'lor'
+        ? 'No letters of recommendation uploaded'
+        : `No ${DOC_LABELS[kind]} uploaded`;
+      list.append(none);
+    }
+    group.append(list);
 
     const single = kind !== 'lor';
     const prompt = single
@@ -416,9 +435,8 @@
         upload.disabled = false;
       }
     });
-    const row = el('div', 'form-actions');
-    row.append(upload);
-    group.append(drop.node, row);
+    head.append(upload);
+    group.append(drop.node);
     return group;
   }
 
