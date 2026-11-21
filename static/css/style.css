@@ -142,6 +142,24 @@ input, select, textarea {
     border-radius: 12px;
     cursor: pointer;
 }
+/* Back link: .btn-ghost without its outline — a muted arrow and label that
+   only takes a soft background on hover. The negative margin cancels the
+   padding so the arrow lines up with the page heading's left edge. */
+.btn-ghost.btn-back {
+    border-color: transparent;
+    padding: 6px 10px;
+    margin-left: -10px;
+    font-size: 0.92rem;
+    transition: background 0.15s ease, color 0.15s ease;
+}
+.btn-ghost.btn-back i { transition: transform 0.15s ease; }
+.btn-ghost.btn-back:hover,
+.btn-ghost.btn-back:focus-visible {
+    background: var(--input-bg, #f3f4f6);
+    color: var(--text);
+}
+.btn-ghost.btn-back:hover i { transform: translateX(-2px); }
+:root[data-theme="dark"] .btn-ghost.btn-back { border-color: transparent; }
 .btn-ghost.active {
     background: var(--accent);
     border-color: var(--accent);
