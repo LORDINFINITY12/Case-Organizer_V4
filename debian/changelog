@@ -1,3 +1,27 @@
+case-organizer (4.10) stable; urgency=medium
+
+  * New Interns page, reached from the account menu by admins and staff (intern
+    accounts cannot open it). It follows the home page: two big cards, New
+    Internship Applicant and Manage Interns, each opening its form below, and
+    a full-width bar underneath leading to the internship certificate
+    generator.
+  * New Internship Applicant records the applicant's name, date of application
+    and, optionally, email, phone and college, together with their CV, cover
+    letter and any number of letters of recommendation. Every document is
+    checked before anything is saved, so one bad file never leaves a
+    half-made applicant behind.
+  * Manage Interns sorts applicants into Rejected, In Process and Accepted.
+    New applicants land in In Process. Each applicant opens to show their
+    details for editing, their documents to view, download or remove, and
+    uploads to add or replace them. Replacing a CV or cover letter writes the
+    new file before the old one is removed, so a failed upload never loses the
+    document already on file.
+  * Applicant documents are stored under Interns/ in the storage folder,
+    beside Certificates and Letterheads, one folder per applicant. The case
+    search only looks at year folders, so they never appear among case files.
+
+ -- Swaraj Aggarwal <swaraj1010746160@gmail.com>  Sat, 21 Nov 2026 16:27:04 +0530
+
 case-organizer (4.9.4) stable; urgency=medium
 
   * Legal notices could lose their entire recipient block. The proforma block

@@ -14,7 +14,7 @@ from services.settings import settings_manager
 
 
 # Global schema version for the application database.
-_SCHEMA_VERSION = 11
+_SCHEMA_VERSION = 12
 
 # Reserved internal account used as the sender of automated notifications
 # (e.g. calendar reminder inbox messages posted from the scheduler thread).
@@ -94,6 +94,10 @@ def _ensure_schema(conn: sqlite3.Connection) -> None:
     if current_version < 11:
         _migrate_to_v11(conn)
         current_version = 11
+
+    if current_version < 12:
+        _migrate_to_v12(conn)
+        current_version = 12
 
     if current_version != _SCHEMA_VERSION:
         # Placeholder for future migrations.
@@ -823,6 +827,65 @@ def _migrate_to_v11(conn: sqlite3.Connection) -> None:
     )
     conn.execute(
         "INSERT INTO app_meta(key, value) VALUES('schema_version', '11') "
+        "ON CONFLICT(key) DO UPDATE SET value = excluded.value"
+    )
+
+
+
+def _migrate_to_v12(conn: sqlite3.Connection) -> None:
+    """Internship applicants and the documents filed with them.
+
+    Applicants move between three states — in process (where every new one
+    lands), accepted and rejected.  Documents live on disk under
+    FS_ROOT/Interns/<applicant folder>/ and are tracked here; a CV and a cover
+    letter are one per applicant (the partial unique index), letters of
+    recommendation any number.  ``folder`` is fixed when the applicant is
+    created so renaming them later never orphans their files.
+    """
+    conn.executescript(
+        """
+        CREATE TABLE IF NOT EXISTS intern_applicants (
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            name        TEXT NOT NULL,
+            email       TEXT NOT NULL DEFAULT '',
+            phone       TEXT NOT NULL DEFAULT '',
+            college     TEXT NOT NULL DEFAULT '',
+            applied_on  TEXT NOT NULL,
+            status      TEXT NOT NULL DEFAULT 'in_process'
+                          CHECK(status IN ('in_process','accepted','rejected')),
+            folder      TEXT NOT NULL,
+            created_by  INTEGER REFERENCES users(id) ON DELETE SET NULL,
+            created_at  TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at  TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        );
+        CREATE INDEX IF NOT EXISTS idx_intern_applicants_status
+            ON intern_applicants(status);
+
+        CREATE TABLE IF NOT EXISTS intern_documents (
+            id             INTEGER PRIMARY KEY AUTOINCREMENT,
+            applicant_id   INTEGER NOT NULL
+                             REFERENCES intern_applicants(id) ON DELETE CASCADE,
+            kind           TEXT NOT NULL CHECK(kind IN ('cv','cover_letter','lor')),
+            file_path      TEXT NOT NULL,
+            original_name  TEXT NOT NULL DEFAULT '',
+            uploaded_by    INTEGER REFERENCES users(id) ON DELETE SET NULL,
+            created_at     TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        );
+        CREATE INDEX IF NOT EXISTS idx_intern_documents_applicant
+            ON intern_documents(applicant_id);
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_intern_documents_single
+            ON intern_documents(applicant_id, kind)
+            WHERE kind IN ('cv','cover_letter');
+
+        CREATE TRIGGER IF NOT EXISTS trg_intern_applicants_updated_at
+        AFTER UPDATE ON intern_applicants
+        BEGIN
+            UPDATE intern_applicants SET updated_at = CURRENT_TIMESTAMP WHERE id = NEW.id;
+        END;
+        """
+    )
+    conn.execute(
+        "INSERT INTO app_meta(key, value) VALUES('schema_version', '12') "
         "ON CONFLICT(key) DO UPDATE SET value = excluded.value"
     )
 

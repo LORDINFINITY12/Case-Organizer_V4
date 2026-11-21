@@ -6427,6 +6427,353 @@ def api_certificate_download(cid: int):
 
 
 # ════════════════════════════════════════════════════════════════════
+# INTERNS
+# ════════════════════════════════════════════════════════════════════
+#
+# Internship applicants: one record per applicant holding a CV, a cover
+# letter and any number of letters of recommendation, moved between In
+# Process (where every new applicant lands), Accepted and Rejected.
+#
+# Files live under FS_ROOT/Interns/<id> - <Name>/, beside Certificates,
+# Letterheads and the other non-case libraries.  The case search only walks
+# four-digit year directories, so applicant documents never surface there.
+# The folder is fixed when the applicant is created; renaming them later
+# changes the record, never the path, so nothing is orphaned.
+#
+# Routes: /interns (page), /api/interns[...] (JSON).  Interns themselves are
+# kept out by the intern guard — none of these endpoints is allowlisted.
+# ════════════════════════════════════════════════════════════════════
+
+_INTERN_STATUSES = ("in_process", "accepted", "rejected")
+_INTERN_DOC_LABELS = {"cv": "CV", "cover_letter": "Cover Letter", "lor": "LOR"}
+_INTERN_SINGLE_KINDS = ("cv", "cover_letter")
+# A narrower set than the case store accepts: these are CVs and letters.
+_INTERN_DOC_EXTS = {"pdf", "docx", "png", "jpg", "jpeg"}
+
+
+class InternInputError(ValueError):
+    """User-correctable problem with an applicant submission."""
+
+
+def _interns_dir() -> Path:
+    return FS_ROOT / "Interns"
+
+
+def _intern_date(value: Any) -> str:
+    raw = normalize_ws(value)
+    if not raw:
+        raise InternInputError("Date of application is required.")
+    try:
+        return datetime.strptime(raw, "%Y-%m-%d").strftime("%Y-%m-%d")
+    except ValueError as exc:
+        raise InternInputError("Date of application must be a valid date.") from exc
+
+
+def _intern_details(source: Any) -> Dict[str, str]:
+    """Validated applicant details from a form or a JSON mapping."""
+    name = normalize_ws(source.get("name"))[:180]
+    if not name:
+        raise InternInputError("Applicant name is required.")
+    email = normalize_ws(source.get("email"))[:200]
+    if email and ("@" not in email or " " in email):
+        raise InternInputError("That email address does not look right.")
+    return {
+        "name": name,
+        "email": email,
+        "phone": normalize_ws(source.get("phone"))[:60],
+        "college": normalize_ws(source.get("college"))[:200],
+        "applied_on": _intern_date(source.get("applied_on")),
+    }
+
+
+def _intern_file_error(f) -> Optional[str]:
+    """Why an applicant document cannot be accepted, or None."""
+    if not f or not f.filename:
+        return "No file was chosen."
+    ext = f.filename.rsplit(".", 1)[-1].lower() if "." in f.filename else ""
+    if ext not in _INTERN_DOC_EXTS:
+        return f"{f.filename}: only PDF, Word (.docx) and image files are accepted."
+    return validate_upload(f)
+
+
+def _intern_row(conn: sqlite3.Connection, applicant_id: int):
+    return conn.execute(
+        "SELECT id, name, folder FROM intern_applicants WHERE id = ?", (applicant_id,)
+    ).fetchone()
+
+
+def _intern_doc_path(rel: str) -> Optional[Path]:
+    """Resolve a stored document path, refusing anything outside Interns/."""
+    try:
+        path = _safe_path(FS_ROOT / rel, FS_ROOT)
+        _safe_path(path, _interns_dir())
+    except (ValueError, OSError):
+        return None
+    return path
+
+
+def _intern_save_document(conn: sqlite3.Connection, applicant, kind: str, f) -> None:
+    """Store one document and record it, replacing a CV / cover letter.
+
+    The new file is written beside the old one first and the old record and
+    file are removed only afterwards, so a failed upload can never cost the
+    document that was already there.
+    """
+    folder = _safe_path(FS_ROOT / applicant["folder"], FS_ROOT)
+    folder.mkdir(parents=True, exist_ok=True)
+    ext = f.filename.rsplit(".", 1)[1].lower()
+    label = _INTERN_DOC_LABELS[kind]
+    base = sanitize_case_law_component(f"{label} - {applicant['name']}") or label
+    canonical = _safe_path(folder / f"{base}.{ext}", FS_ROOT)
+    dest = _safe_path(ensure_unique_path(canonical), FS_ROOT)
+    f.save(dest)
+
+    old_paths: List[Path] = []
+    if kind in _INTERN_SINGLE_KINDS:
+        for row in conn.execute(
+            "SELECT id, file_path FROM intern_documents WHERE applicant_id = ? AND kind = ?",
+            (applicant["id"], kind),
+        ).fetchall():
+            old = _intern_doc_path(row["file_path"])
+            if old and old != dest:
+                old_paths.append(old)
+            conn.execute("DELETE FROM intern_documents WHERE id = ?", (row["id"],))
+
+    user = g.get("current_user")
+    cur = conn.execute(
+        "INSERT INTO intern_documents(applicant_id, kind, file_path, original_name, uploaded_by) "
+        "VALUES(?, ?, ?, ?, ?)",
+        (applicant["id"], kind, dest.relative_to(FS_ROOT.resolve()).as_posix(),
+         f.filename[:255], user["id"] if user else None),
+    )
+    doc_id = cur.lastrowid
+    conn.commit()
+
+    for old in old_paths:
+        with suppress(OSError):
+            old.unlink()
+    # With the old file gone, take back the plain name if the new one had to
+    # be suffixed to avoid it.
+    if dest != canonical and not canonical.exists():
+        with suppress(OSError):
+            dest.rename(canonical)
+            conn.execute(
+                "UPDATE intern_documents SET file_path = ? WHERE id = ?",
+                (canonical.relative_to(FS_ROOT.resolve()).as_posix(), doc_id),
+            )
+            conn.commit()
+
+
+def _intern_payload(conn: sqlite3.Connection) -> Dict[str, Any]:
+    applicants = conn.execute(
+        "SELECT id, name, email, phone, college, applied_on, status, created_at "
+        "FROM intern_applicants ORDER BY applied_on DESC, id DESC"
+    ).fetchall()
+    docs: Dict[int, List[Dict[str, Any]]] = {}
+    for d in conn.execute(
+        "SELECT id, applicant_id, kind, file_path, original_name, created_at "
+        "FROM intern_documents ORDER BY kind, id"
+    ).fetchall():
+        path = _intern_doc_path(d["file_path"])
+        exists = bool(path and path.is_file())
+        docs.setdefault(d["applicant_id"], []).append({
+            "id": d["id"],
+            "kind": d["kind"],
+            "name": Path(d["file_path"]).name,
+            "original_name": d["original_name"],
+            "size": path.stat().st_size if exists else None,
+            "missing": not exists,
+            "uploaded_at": d["created_at"],
+        })
+    counts = {s: 0 for s in _INTERN_STATUSES}
+    out = []
+    for a in applicants:
+        counts[a["status"]] = counts.get(a["status"], 0) + 1
+        out.append({**dict(a), "documents": docs.get(a["id"], [])})
+    return {"ok": True, "applicants": out, "counts": counts}
+
+
+# ---- GET /interns — the Interns page ------------------------------------
+@app.get("/interns")
+@require_login
+def interns_page():
+    return render_template("interns.html")
+
+
+# ---- GET /api/interns — every applicant with their documents -------------
+@app.get("/api/interns")
+@require_login_api
+def api_interns_list():
+    try:
+        return jsonify(_intern_payload(get_app_db()))
+    except Exception as exc:
+        log.error("Listing intern applicants failed: %s", exc, exc_info=True)
+        return jsonify({"ok": False, "msg": "Could not load the applicants."}), 500
+
+
+# ---- POST /api/interns — add a new applicant -----------------------------
+@app.post("/api/interns")
+@require_login_api
+def api_interns_create():
+    if not FS_ROOT:
+        return jsonify({"ok": False, "msg": "Storage not configured."}), 400
+    try:
+        details = _intern_details(request.form)
+    except InternInputError as exc:
+        return jsonify({"ok": False, "msg": str(exc)}), 400
+
+    uploads: List[Tuple[str, Any]] = []
+    for kind in _INTERN_SINGLE_KINDS:
+        f = request.files.get(kind)
+        if f and f.filename:
+            uploads.append((kind, f))
+    uploads += [("lor", f) for f in request.files.getlist("lor") if f and f.filename]
+    # Check every document before anything is created, so one bad file does
+    # not leave a half-made applicant behind.
+    for _, f in uploads:
+        err = _intern_file_error(f)
+        if err:
+            return jsonify({"ok": False, "msg": err}), 400
+
+    conn = get_app_db()
+    user = g.get("current_user")
+    folder_path: Optional[Path] = None
+    applicant_id: Optional[int] = None
+    try:
+        cur = conn.execute(
+            "INSERT INTO intern_applicants(name, email, phone, college, applied_on, folder, created_by) "
+            "VALUES(?, ?, ?, ?, ?, '', ?)",
+            (details["name"], details["email"], details["phone"], details["college"],
+             details["applied_on"], user["id"] if user else None),
+        )
+        applicant_id = cur.lastrowid
+        safe_name = sanitize_case_law_component(details["name"]) or "Applicant"
+        folder_path = _safe_path(_interns_dir() / f"{applicant_id} - {safe_name}", FS_ROOT)
+        folder_rel = folder_path.relative_to(FS_ROOT.resolve()).as_posix()
+        conn.execute("UPDATE intern_applicants SET folder = ? WHERE id = ?",
+                     (folder_rel, applicant_id))
+        folder_path.mkdir(parents=True, exist_ok=True)
+        conn.commit()
+        applicant = _intern_row(conn, applicant_id)
+        for kind, f in uploads:
+            _intern_save_document(conn, applicant, kind, f)
+    except (OSError, ValueError, sqlite3.Error) as exc:
+        conn.rollback()
+        log.error("Creating intern applicant failed: %s", exc, exc_info=True)
+        # Documents commit one at a time, so undo explicitly rather than rely
+        # on the cascade: no half-made applicant, no stray files.
+        if applicant_id is not None:
+            with suppress(Exception):
+                conn.execute("DELETE FROM intern_documents WHERE applicant_id = ?", (applicant_id,))
+                conn.execute("DELETE FROM intern_applicants WHERE id = ?", (applicant_id,))
+                conn.commit()
+        if folder_path is not None:
+            shutil.rmtree(folder_path, ignore_errors=True)
+        return jsonify({"ok": False, "msg": "Could not save the applicant."}), 500
+
+    return jsonify({"ok": True, "id": applicant_id})
+
+
+# ---- POST /api/interns/<id> — edit an applicant's details ----------------
+@app.post("/api/interns/<int:applicant_id>")
+@require_login_api
+def api_interns_update(applicant_id: int):
+    conn = get_app_db()
+    if not _intern_row(conn, applicant_id):
+        return jsonify({"ok": False, "msg": "Applicant not found."}), 404
+    try:
+        details = _intern_details(request.get_json(silent=True) or {})
+    except InternInputError as exc:
+        return jsonify({"ok": False, "msg": str(exc)}), 400
+    conn.execute(
+        "UPDATE intern_applicants SET name = ?, email = ?, phone = ?, college = ?, applied_on = ? "
+        "WHERE id = ?",
+        (details["name"], details["email"], details["phone"], details["college"],
+         details["applied_on"], applicant_id),
+    )
+    conn.commit()
+    return jsonify({"ok": True})
+
+
+# ---- POST /api/interns/<id>/status — In Process / Accepted / Rejected ----
+@app.post("/api/interns/<int:applicant_id>/status")
+@require_login_api
+def api_interns_status(applicant_id: int):
+    status = normalize_ws((request.get_json(silent=True) or {}).get("status"))
+    if status not in _INTERN_STATUSES:
+        return jsonify({"ok": False, "msg": "Unknown status."}), 400
+    conn = get_app_db()
+    if not _intern_row(conn, applicant_id):
+        return jsonify({"ok": False, "msg": "Applicant not found."}), 404
+    conn.execute("UPDATE intern_applicants SET status = ? WHERE id = ?", (status, applicant_id))
+    conn.commit()
+    return jsonify({"ok": True, "status": status})
+
+
+# ---- POST /api/interns/<id>/documents — add or replace documents ---------
+@app.post("/api/interns/<int:applicant_id>/documents")
+@require_login_api
+def api_interns_add_documents(applicant_id: int):
+    kind = normalize_ws(request.form.get("kind"))
+    if kind not in _INTERN_DOC_LABELS:
+        return jsonify({"ok": False, "msg": "Unknown document type."}), 400
+    files = [f for f in request.files.getlist("file") if f and f.filename]
+    if not files:
+        return jsonify({"ok": False, "msg": "No file was chosen."}), 400
+    if kind in _INTERN_SINGLE_KINDS and len(files) != 1:
+        return jsonify({"ok": False,
+                        "msg": f"An applicant has one {_INTERN_DOC_LABELS[kind]}; choose one file."}), 400
+    for f in files:
+        err = _intern_file_error(f)
+        if err:
+            return jsonify({"ok": False, "msg": err}), 400
+
+    conn = get_app_db()
+    applicant = _intern_row(conn, applicant_id)
+    if not applicant:
+        return jsonify({"ok": False, "msg": "Applicant not found."}), 404
+    try:
+        for f in files:
+            _intern_save_document(conn, applicant, kind, f)
+    except (OSError, ValueError, sqlite3.Error) as exc:
+        conn.rollback()
+        log.error("Saving intern document failed: %s", exc, exc_info=True)
+        return jsonify({"ok": False, "msg": "Could not save the document."}), 500
+    return jsonify({"ok": True})
+
+
+# ---- POST /api/interns/documents/<id>/delete — remove one document -------
+@app.post("/api/interns/documents/<int:doc_id>/delete")
+@require_login_api
+def api_interns_delete_document(doc_id: int):
+    conn = get_app_db()
+    row = conn.execute("SELECT file_path FROM intern_documents WHERE id = ?", (doc_id,)).fetchone()
+    if not row:
+        return jsonify({"ok": False, "msg": "Document not found."}), 404
+    conn.execute("DELETE FROM intern_documents WHERE id = ?", (doc_id,))
+    conn.commit()
+    path = _intern_doc_path(row["file_path"])
+    if path:
+        with suppress(OSError):
+            path.unlink()
+    return jsonify({"ok": True})
+
+
+# ---- GET /api/interns/documents/<id> — view or download a document -------
+@app.get("/api/interns/documents/<int:doc_id>")
+@require_login_api
+def api_interns_document(doc_id: int):
+    row = get_app_db().execute(
+        "SELECT file_path FROM intern_documents WHERE id = ?", (doc_id,)
+    ).fetchone()
+    path = _intern_doc_path(row["file_path"]) if row else None
+    if not path or not path.is_file():
+        return jsonify({"ok": False, "msg": "Document not found."}), 404
+    download = request.args.get("download") in {"1", "true", "yes"}
+    return send_file(path, as_attachment=download, download_name=path.name, conditional=True)
+
+
+# ════════════════════════════════════════════════════════════════════
 # VAKALATNAMA LIBRARY
 # ════════════════════════════════════════════════════════════════════
 #

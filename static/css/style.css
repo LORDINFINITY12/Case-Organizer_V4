@@ -4993,3 +4993,47 @@ input[type="number"].year-input {
         justify-content: center;
     }
 }
+
+/* ═══════════════════════════════════════════════════════════════════
+   Interns page — the home page's big-card grid plus one full-width bar.
+   Everything else (form cards, dropzones, result rows, the segmented
+   status tabs) reuses existing components unchanged.
+   ═══════════════════════════════════════════════════════════════════ */
+
+/* The certificate link: a .card.big spanning both columns, shorter, with
+   the icon beside the label. On phones .card.big is already a full-width
+   row, so the bar simply becomes the third row. */
+.card.big.card-bar {
+    grid-column: 1 / -1;
+    min-height: 96px;
+    grid-auto-flow: column;
+    place-content: center;
+    gap: 16px;
+    text-decoration: none;
+    color: inherit;
+}
+.card.big.card-bar .icon { font-size: 34px; }
+
+.intern-card .intern-docs { display: grid; gap: 12px; margin-top: 12px; }
+.intern-drop .results:empty { display: none; }
+.intern-tabs { margin: 4px 0 0; }
+.intern-count { font-weight: 400; opacity: 0.85; }
+
+/* An applicant's expanded details sit directly under their row. */
+.intern-detail {
+    display: grid;
+    gap: 12px;
+    padding: 14px;
+    border: 1px solid var(--input-border, #e6e8ef);
+    border-radius: 12px;
+    background: var(--card);
+}
+.intern-detail .intern-docs { margin-top: 0; }
+.intern-detail .form-actions { margin-top: 0; flex-wrap: wrap; }
+.intern-doc-group { display: grid; gap: 8px; }
+.intern-doc-group > .results { margin-top: 0; }
+.intern-doc-title { font-weight: 600; font-size: 0.9rem; }
+.intern-status-actions {
+    padding-top: 12px;
+    border-top: 1px solid var(--input-border, #e6e8ef);
+}
