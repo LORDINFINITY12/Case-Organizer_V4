@@ -338,7 +338,7 @@
           <input type="text" id="${ids.phone}" placeholder="Phone (optional)" maxlength="60" />
           <input type="text" id="${ids.college}" class="full-span" placeholder="College / University (optional)" maxlength="200" />
         </div>
-        <div class="form-actions">
+        <div class="form-actions form-actions-right">
           <button type="button" class="btn-secondary" data-act="save">Save Details</button>
         </div>
       </div>
@@ -494,7 +494,7 @@
         upload.disabled = false;
       }
     });
-    const actions = el('div', 'form-actions');
+    const actions = el('div', 'form-actions form-actions-right');
     actions.append(upload);
     group.append(drop.node, actions);
     return group;
